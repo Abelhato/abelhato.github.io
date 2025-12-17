@@ -1,0 +1,3150 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa de Frota em Tempo Real</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" crossorigin="">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+    :root {
+      color-scheme: light dark;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    body {
+      --bg-app: #f6f8fb;
+      --sidebar-bg: rgba(255, 255, 255, 0.95);
+      --sidebar-border: rgba(15, 23, 42, 0.08);
+      --accent: #f59f00;
+      --text-primary: #0f172a;
+      --text-muted: rgba(15, 23, 42, 0.6);
+      --glass: rgba(15, 23, 42, 0.08);
+      --panel-bg: rgba(255, 255, 255, 0.95);
+      --map-bg: #e5e8f0;
+      --toggle-bg: rgba(15, 23, 42, 0.05);
+      --toggle-color: #0f172a;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-app);
+      color: var(--text-primary);
+      display: flex;
+      transition: background 0.3s ease;
+    }
+
+    body.theme-dark {
+      --bg-app: radial-gradient(circle at top, #0f172a 0%, #020617 55%, #000 100%);
+      --sidebar-bg: rgba(15, 23, 42, 0.92);
+      --sidebar-border: rgba(255, 255, 255, 0.08);
+      --text-primary: #f9fafb;
+      --text-muted: rgba(248, 250, 252, 0.7);
+      --glass: rgba(255, 255, 255, 0.12);
+      --panel-bg: rgba(15, 23, 42, 0.85);
+      --map-bg: #111827;
+      --toggle-bg: rgba(255, 255, 255, 0.08);
+      --toggle-color: #f9fafb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto {
+        --bg-app: radial-gradient(circle at top, #0f172a 0%, #020617 55%, #000 100%);
+        --sidebar-bg: rgba(15, 23, 42, 0.92);
+        --sidebar-border: rgba(255, 255, 255, 0.08);
+        --text-primary: #f9fafb;
+        --text-muted: rgba(248, 250, 252, 0.7);
+        --glass: rgba(255, 255, 255, 0.12);
+        --panel-bg: rgba(15, 23, 42, 0.85);
+        --map-bg: #111827;
+        --toggle-bg: rgba(255, 255, 255, 0.08);
+        --toggle-color: #f9fafb;
+      }
+    }
+
+    #app-shell {
+      position: relative;
+      width: 100%;
+      min-height: 100vh;
+      background: var(--map-bg);
+      overflow: hidden;
+    }
+
+	    #sidebar {
+	      position: absolute;
+	      top: 0;
+	      left: 0;
+	      bottom: 0;
+      width: clamp(220px, 18vw, 280px);
+      max-width: 90vw;
+      padding: 24px 26px 30px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--sidebar-border);
+      box-shadow: 12px 0 36px rgba(5, 10, 25, 0.18);
+	      display: flex;
+	      flex-direction: column;
+	      gap: 22px;
+	      overflow-y: auto;
+	      overscroll-behavior: contain;
+	      -webkit-overflow-scrolling: touch;
+		      z-index: 1500;
+	      transition: transform 0.25s ease, opacity 0.25s ease;
+	    }
+
+	    .sidebar-header {
+	      display: flex;
+	      align-items: flex-start;
+	      justify-content: space-between;
+	      gap: 16px;
+	      flex-wrap: wrap;
+	    }
+
+	    .sidebar-header > div {
+	      padding-left: 56px;
+	    }
+
+    .sidebar-header h1 {
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+	    #sidebar-close,
+	    #sidebar-toggle {
+	      border: none;
+	      border-radius: 50%;
+      background: var(--accent);
+      color: #0f172a;
+      width: 40px;
+      height: 40px;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+	      transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+	    }
+
+	    #sidebar-close {
+	      position: absolute;
+	      top: 24px;
+	      left: 24px;
+		      z-index: 1601;
+	    }
+
+    body.theme-dark #sidebar-close,
+    body.theme-auto #sidebar-close,
+    body.theme-dark #sidebar-toggle,
+    body.theme-auto #sidebar-toggle {
+      background: rgba(249, 250, 251, 0.92);
+      color: #0f172a;
+    }
+
+    #sidebar-close:hover,
+    #sidebar-toggle:hover {
+      transform: scale(1.08);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+      opacity: 0.9;
+    }
+
+    #sidebar p {
+      margin: 6px 0 0;
+      font-size: 0.92rem;
+      color: var(--text-muted);
+    }
+
+    .sidebar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sidebar-section label {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+    #variant-filter-group label {
+      color: var(--text-muted);
+    }
+
+    .sidebar-section select,
+    .sidebar-section input[type="text"] {
+      border-radius: 12px;
+      border: 1px solid var(--glass);
+      padding: 12px 14px;
+      font-size: 0.96rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.95);
+      appearance: none;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+
+    body.theme-dark .sidebar-section select,
+    body.theme-dark .sidebar-section input[type="text"],
+    body.theme-auto .sidebar-section select,
+    body.theme-auto .sidebar-section input[type="text"] {
+      background: rgba(10, 15, 28, 0.8);
+      color: #f8fafc;
+    }
+
+    .sidebar-section select:focus,
+    .sidebar-section input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(244, 159, 0, 0.3);
+    }
+
+    .sidebar-note {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      border-top: 1px solid var(--glass);
+      padding-top: 16px;
+    }
+
+    .kpi-floating-context {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 12px 36px rgba(5, 10, 25, 0.15);
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      z-index: 1003;
+      backdrop-filter: blur(12px);
+    }
+
+    .kpi-panel {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+      width: min(560px, calc(100% - 36px));
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 16px;
+      box-shadow: 0 24px 40px rgba(5, 10, 25, 0.12);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 1002;
+    }
+
+    .kpi-panel .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .kpi-card {
+      background: rgba(246, 248, 251, 0.95);
+      border-radius: 12px;
+      padding: 6px 10px;
+      min-height: 72px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      border: 1px solid rgba(15, 23, 42, 0.05);
+      align-items: center;
+      text-align: center;
+      justify-content: center;
+    }
+
+	    .kpi-card strong {
+	      font-size: 1.4rem;
+	      line-height: 1.15;
+	      width: 100%;
+	    }
+	    .kpi-card .kpi-value {
+	      font-weight: 800;
+	      font-variant-numeric: tabular-nums;
+	    }
+	    .kpi-card .kpi-speed {
+	      display: inline-flex;
+	      justify-content: center;
+	      align-items: baseline;
+	      gap: 4px;
+	      white-space: nowrap;
+	    }
+	    .kpi-card .kpi-speed.has-unit::after {
+	      content: "km/h";
+	      font-size: 0.72em;
+	      font-weight: 700;
+	      color: var(--text-muted);
+	      opacity: 0.75;
+	    }
+    .kpi-card .kpi-label,
+    .kpi-card .kpi-delta,
+    .kpi-card .kpi-meta {
+      width: 100%;
+    }
+
+	    .kpi-delta {
+	      font-size: 0.9rem;
+	      letter-spacing: 0;
+	      text-transform: none;
+	      font-weight: 700;
+	      color: var(--text-muted);
+	    }
+    .kpi-delta.positive {
+      color: #10b981;
+    }
+    .kpi-delta.negative {
+      color: #ef4444;
+    }
+    .kpi-delta.zero {
+      color: var(--text-muted);
+    }
+
+	    .kpi-label {
+	      font-size: 0.7rem;
+	      text-transform: lowercase;
+	      letter-spacing: 0.02em;
+	      color: var(--text-muted);
+	    }
+
+    .kpi-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    body.theme-dark .kpi-panel {
+      background: rgba(15, 23, 42, 0.88);
+    }
+
+    body.theme-dark .kpi-card {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .charts-section {
+      margin-top: 12px;
+    }
+    .charts-section h2 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .chart-card {
+      border-radius: 12px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 12px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      max-width: 320px;
+      min-height: 180px;
+    }
+    .chart-card:hover {
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
+      transform: translateY(-2px);
+    }
+    .chart-card-header {
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chart-card canvas {
+      width: 100% !important;
+      height: 104px !important;
+      display: block;
+    }
+	    .chart-card-help {
+	      font-size: 1.05rem;
+	      font-weight: 700;
+	      letter-spacing: 0;
+	      text-transform: none;
+	      color: var(--text-muted);
+	      align-self: flex-end;
+	      line-height: 1;
+	    }
+    .chart-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 2200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .chart-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .chart-overlay-content {
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 18px;
+      padding: 28px;
+      width: min(760px, 95vw);
+      max-width: 760px;
+      max-height: 85vh;
+      overflow: auto;
+      box-shadow: 0 30px 60px rgba(15, 23, 42, 0.4);
+      position: relative;
+    }
+    .chart-overlay h3 {
+      margin: 0;
+      margin-bottom: 16px;
+      font-size: 1.2rem;
+    }
+    .chart-overlay canvas {
+      width: 100%;
+      height: 280px !important;
+      display: block;
+    }
+    .chart-overlay-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      border: none;
+      background: rgba(0, 0, 0, 0.1);
+      color: #111;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+
+    #map-container {
+      position: relative;
+      height: 100vh;
+      width: 100%;
+      background: var(--map-bg);
+      overflow: hidden;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      height: 100%;
+      width: 100%;
+      background: var(--map-bg);
+    }
+
+    .app-alert {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: #ffe8e6;
+      color: #7f1d1d;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+      z-index: 2300;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      max-width: min(92vw, 680px);
+      text-align: center;
+    }
+
+    .app-alert.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ccc;
+      transition: background 0.3s;
+      flex: 0 0 auto;
+    }
+
+    .status-dot.online { background: #2ecc71; box-shadow: 0 0 8px rgba(46, 204, 113, 0.8); }
+    .status-dot.fetching { background: #f1c40f; animation: pulse 1s infinite; }
+    .status-dot.offline { background: #e74c3c; box-shadow: 0 0 8px rgba(231, 76, 60, 0.7); }
+
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.45; } 100% { opacity: 1; } }
+
+    .kpi-active-value {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    /* Estilos do Popup */
+    .custom-popup .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: 6px; }
+    .custom-popup .leaflet-popup-content { margin: 0; width: 200px !important; }
+    
+    .pop-header { 
+      padding: 10px 12px; 
+      color: white; 
+      font-weight: bold; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+    }
+    .pop-body { padding: 12px; font-size: 13px; color: #444; line-height: 1.5; }
+
+    /* MapLibre popup parity */
+    .custom-popup .maplibregl-popup-content { padding: 0; margin: 0; width: 220px !important; overflow: hidden; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.2); }
+    .custom-popup .maplibregl-popup-tip { display: none; }
+    .custom-popup .maplibregl-popup-close-button { color: white; font-size: 16px; padding: 6px 10px; z-index: 10; }
+    .custom-popup .maplibregl-popup-close-button:hover { background: rgba(0,0,0,0.1); }
+
+    /* Leaflet Tooltips (ícones) */
+    .veh-label {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      color: #333;
+      font-size: 16px;
+      font-weight: 700;
+      transform: translate(-50%, -50%);
+      pointer-events: none !important;
+    }
+
+    .veh-wrapper {
+      width: 34px;
+      height: 42px;
+    }
+
+    .veh-marker {
+      position: relative;
+      width: 34px;
+      height: 42px;
+      transform: translate3d(0, 0, 0);
+      --c: #2ecc71;
+    }
+
+    /* Smooth marker slide on new pings (only when we opt-in via JS). */
+    .leaflet-marker-icon.veh-animating,
+    .maplibregl-marker.veh-animating,
+    .veh-wrapper.veh-animating {
+      will-change: transform;
+      transition: transform var(--veh-move-ms, 1000ms) linear;
+    }
+
+    /* Never animate marker transforms while the user is interacting with the map (pan/zoom),
+       otherwise markers can "drift" a few pixels due to the map engine updating transforms. */
+    .map-interacting .leaflet-marker-icon,
+    .map-interacting .maplibregl-marker,
+    .map-interacting .veh-wrapper {
+      transition: none !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .leaflet-marker-icon.veh-animating,
+      .maplibregl-marker.veh-animating {
+        transition: none !important;
+      }
+    }
+
+    .veh-pin {
+      position: absolute;
+      left: 50%;
+      top: 2px;
+      width: 28px;
+      height: 28px;
+      background: var(--c);
+      border-radius: 50% 50% 50% 0;
+      transform: translateX(-50%) rotate(-45deg);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+    }
+
+    .veh-pin::after {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      top: 5px;
+      left: 5px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 50%;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+    }
+
+    .veh-icon {
+      position: absolute;
+      left: 50%;
+      top: 8px;
+      transform: translateX(-50%);
+      font-size: 14px;
+      color: rgba(26, 26, 26, 0.92);
+      text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+      pointer-events: none;
+    }
+
+    .veh--stale {
+      filter: grayscale(1) saturate(0.2);
+      opacity: 0.55;
+    }
+
+    .veh--inactive {
+      opacity: 0;
+    }
+
+    .veh--faded {
+      opacity: 0.25;
+      filter: grayscale(1) saturate(0.1);
+    }
+
+    .veh--hl {
+      opacity: 1;
+    }
+
+	    #sidebar-toggle {
+	      position: absolute;
+	      top: 24px;
+	      left: 24px;
+      z-index: 1600;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.sidebar-collapsed #sidebar {
+      transform: translateX(-105%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.sidebar-collapsed #sidebar-toggle {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+	    @media (max-width: 900px) {
+	      #sidebar {
+	        position: fixed;
+	        width: min(88vw, 340px);
+	        max-width: 88vw;
+	        border-radius: 0;
+	      }
+
+	      .sidebar-header h1 {
+	        font-size: 1.3rem;
+	      }
+
+	      .charts-section h2 {
+	        font-size: 0.95rem;
+	      }
+
+	      .chart-grid {
+	        grid-template-columns: 1fr;
+	      }
+
+	      .chart-card {
+	        max-width: none;
+	        min-height: 170px;
+	        touch-action: manipulation;
+	      }
+
+	      #map-container {
+	        height: 100dvh;
+	      }
+
+	      .kpi-floating-context {
+	        font-size: 0.9rem;
+	        top: calc(12px + env(safe-area-inset-top));
+	      }
+
+	      #kpi-panel {
+	        top: calc(56px + env(safe-area-inset-top));
+	        width: calc(100% - 16px);
+	        padding: 8px;
+	        gap: 8px;
+	        border-radius: 14px;
+	      }
+
+	      #kpi-panel .kpi-grid {
+	        grid-template-columns: repeat(2, minmax(100px, 1fr));
+	        gap: 6px;
+	      }
+
+	      #kpi-panel .kpi-card {
+	        min-height: 58px;
+	        padding: 5px 6px;
+	      }
+
+	      #kpi-panel .kpi-card strong {
+	        font-size: 1.08rem;
+	      }
+
+	      #kpi-panel .kpi-label {
+	        font-size: 0.64rem;
+	      }
+
+	      #kpi-panel .status-dot {
+	        width: 10px;
+	        height: 10px;
+	      }
+
+		      #sidebar-toggle,
+		      #sidebar-close {
+		        top: calc(12px + env(safe-area-inset-top));
+		        left: calc(12px + env(safe-area-inset-left));
+		      }
+
+		      body:not(.sidebar-collapsed) .kpi-panel,
+		      body:not(.sidebar-collapsed) .kpi-floating-context {
+		        opacity: 0;
+		        pointer-events: none;
+		      }
+		    }
+		  </style>
+</head>
+<body class="theme-auto">
+  <div id="app-shell">
+	    <aside id="sidebar">
+	      <button id="sidebar-close" type="button" aria-label="Fechar filtros">✕</button>
+	      <div class="sidebar-header">
+	        <div>
+	          <h1>🚌 Dashboard Carris</h1>
+	          <p>Feito por Abelhato</p>
+	        </div>
+	      </div>
+      <div class="sidebar-section">
+        <label for="category-filter">🗂️ Categoria</label>
+        <select id="category-filter"></select>
+      </div>
+      <div class="sidebar-section">
+        <label for="route-filter">🛣️ Carreira</label>
+        <input id="route-filter" type="text" list="route-filter-options" placeholder="Pesquise por carreira..." autocomplete="off">
+        <datalist id="route-filter-options"></datalist>
+      </div>
+      <div class="sidebar-section hidden" id="variant-filter-group">
+        <label for="variant-filter">🔀 Variante</label>
+        <select id="variant-filter"></select>
+      </div>
+      <section class="charts-section" aria-label="Tendências da frota">
+        <h2>📈 Tendências rápidas</h2>
+        <div class="chart-grid">
+	          <button class="chart-card" id="chart-speed-card" type="button">
+	            <div class="chart-card-header">
+	              <span>Velocidade Comercial</span>
+	            </div>
+	            <canvas id="chart-speed-preview"></canvas>
+	            <span class="chart-card-help" aria-hidden="true">⤢</span>
+	          </button>
+	          <button class="chart-card" id="chart-volume-card" type="button">
+	            <div class="chart-card-header">
+	              <span>Volume da Frota</span>
+	            </div>
+	            <canvas id="chart-volume-preview"></canvas>
+	            <span class="chart-card-help" aria-hidden="true">⤢</span>
+	          </button>
+        </div>
+      </section>
+      <p class="sidebar-note">
+      </p>
+    </aside>
+    <div id="map-container">
+      <div class="kpi-floating-context" id="kpi-floating-context">
+        <span id="kpi-floating-text">Rede Global</span>
+      </div>
+      <div class="kpi-panel" id="kpi-panel">
+        <div class="kpi-grid">
+	          <article class="kpi-card">
+	            <span class="kpi-label">Última atualização</span>
+	            <strong class="kpi-value" id="kpi-last-update">—</strong>
+	          </article>
+          <article class="kpi-card">
+            <span class="kpi-label">Veículos ativos</span>
+            <strong class="kpi-value kpi-active-value">
+              <span id="status-dot" class="status-dot" aria-hidden="true"></span>
+              <span id="kpi-active-vehicles">—</span>
+            </strong>
+          </article>
+	          <article class="kpi-card">
+	            <span class="kpi-label">Vel. comercial</span>
+	            <strong class="kpi-value kpi-speed" id="kpi-vel-day">—</strong>
+	          </article>
+	          <article class="kpi-card">
+	            <span class="kpi-label">Vel. comercial (1 hora)</span>
+	            <strong class="kpi-value kpi-speed" id="kpi-vel-hour">—</strong>
+	            <span class="kpi-delta" id="kpi-vel-hour-delta">—</span>
+	          </article>
+        </div>
+      </div>
+      <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Mostrar filtros">☰</button>
+      <div id="map"></div>
+      <div class="app-alert" id="app-alert" role="status" aria-live="polite"></div>
+      <div class="chart-overlay" id="chart-overlay" role="dialog" aria-modal="true" aria-label="Gráfico ampliado">
+        <div class="chart-overlay-content">
+          <button class="chart-overlay-close" id="chart-overlay-close" type="button" aria-label="Fechar gráfico ampliado">✕</button>
+          <h3 id="chart-overlay-title">Velocidade Comercial</h3>
+          <canvas id="chart-overlay-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const API_URL = "https://rt.jdcp.workers.dev/";
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const MAP_CENTER = [38.736946, -9.142685];
+    const MAP_ZOOM = 13;
+    const REFRESH_RATE_MS = 5000;
+    // Mimic Streamlit dashboard: on each poll, vehicles with a new ping slide for ~1s, otherwise stay still.
+    const ANIMATION_MS = 1000;
+    const ACTIVE_SECONDS = 300;
+    const INACTIVE_SECONDS = 600;
+
+    const SHAPES_MOCK = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {"linha": "727"},
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [[-9.142, 38.736], [-9.145, 38.740], [-9.150, 38.735]]
+          }
+        }
+      ]
+    };
+
+    const VEHICLES_MOCK = [
+      { id: "2401", lat: 38.7369, lon: -9.1426, linha: "727", bearing: 45, speed: 22, category: "Bus", ts: Date.now() },
+      { id: "305",  lat: 38.7100, lon: -9.1300, linha: "28E", bearing: 180, speed: 12, category: "Elétricos", ts: Date.now() },
+      { id: "1001", lat: 38.7600, lon: -9.1600, linha: "201", bearing: 90, speed: 30, category: "Madrugada", ts: Date.now() }
+    ];
+
+    const OFFLINE_VEHICLES_URL = new URL("static/veiculos.json", location.href).href;
+    let offlineVehiclesCache = null;
+
+    const ROUTE_TRANSLATOR_URL = new URL("tradutor_rotas.csv", location.href).href;
+    const ROUTES_DATA_URL = new URL("routes.txt", location.href).href;
+    const ROUTE_TRANSLATOR = { byId: {}, base: {} };
+    const CATEGORY_FILTER_ALL = "__ALL_CATEGORIES__";
+    const ROUTE_FILTER_ALL = "__ALL_ROUTES__";
+    const VARIANT_FILTER_ALL = "__ALL_VARIANTS__";
+    const ROUTE_GLOBAL_LABEL = "🌐 Rede Completa";
+    const STANDARD_ROUTE_CATEGORIES = [
+      "Autocarros Diurnos",
+      "Carreiras de Bairro",
+      "Elétricos",
+      "Rede Madrugada"
+    ];
+
+    function dedupeList(list) {
+      const seen = new Set();
+      return list
+        .map(item => (item || "").trim())
+        .filter(item => {
+          if (!item) return false;
+          const key = item.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    }
+
+	    function normalizeBaseUrl(raw) {
+	      if (!raw) return null;
+	      const value = raw.trim();
+	      if (!value) return null;
+	      const proto = (typeof location !== "undefined" && location.protocol && location.protocol !== "file:") ? location.protocol : "http:";
+	      const host = (typeof location !== "undefined" && location.hostname) ? location.hostname : "127.0.0.1";
+	      if (/^\d+$/.test(value)) return `${proto}//${host}:${value}`;
+	      if (/^[\w.-]+:\d+$/i.test(value)) return `${proto}//${value}`;
+	      if (/^https?:\/\//i.test(value)) return value;
+	      return null;
+	    }
+
+	    function resolveBackendBases() {
+	      const bases = [];
+	      const override = urlParams.get("backend") || urlParams.get("api_base");
+	      const normalizedOverride = normalizeBaseUrl(override);
+	      if (normalizedOverride) bases.push(normalizedOverride);
+	      const originOk = typeof location !== "undefined" && location.origin && location.origin !== "null" && location.protocol !== "file:";
+	      const hostname = originOk ? location.hostname : "";
+	      const proto = originOk ? location.protocol : "http:";
+	      const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+
+	      // Prefer same-origin first (works when dashboard is served by the API itself,
+	      // or when a reverse proxy exposes both dashboard+API on the same public port).
+	      if (originOk && hostname) {
+	        bases.push(location.origin);
+	        // When the page is opened from a non-loopback host (e.g. mobile accessing http://192.168.x.x:8000),
+	        // 127.0.0.1 would point to the phone itself. Try the same hostname with our known API ports.
+	        bases.push(`${proto}//${hostname}:8002`, `${proto}//${hostname}:8001`);
+	      }
+
+	      // Local development fallback (only when the browser is actually on loopback).
+	      if (isLoopback) {
+	        bases.push("http://127.0.0.1:8002", "http://127.0.0.1:8001");
+	      }
+
+	      return dedupeList(bases);
+	    }
+
+    const BACKEND_BASES = resolveBackendBases();
+    const KPI_BASE_URLS = BACKEND_BASES.length ? BACKEND_BASES : ["http://127.0.0.1:8001", "http://127.0.0.1:8002"];
+    const KPI_CATEGORIES_PATH = "/api/kpis/categorias";
+    const KPI_ENDPOINTS = {
+      categories: KPI_BASE_URLS.map(base => `${base}${KPI_CATEGORIES_PATH}`),
+      routeLegacy: KPI_BASE_URLS.map(base => `${base}/api/kpis`),
+      route: KPI_BASE_URLS.map(base => `${base}/api/kpis/route`),
+      routeVariant: KPI_BASE_URLS.map(base => `${base}/api/kpis/route_variant`),
+      category: KPI_BASE_URLS.map(base => `${base}/api/kpis/category`)
+    };
+    const KPI_CACHE_TTL_MS = 25_000;
+    const KPI_REFRESH_INTERVAL_MS = 30_000;
+    const CHART_PATHS = ["/historico/metricas/resumo", "/historico/metricas"];
+    const CHARTS_ENDPOINTS = KPI_BASE_URLS.flatMap(base => CHART_PATHS.map(path => `${base}${path}`));
+    const LOCAL_BACKENDS = BACKEND_BASES.length ? BACKEND_BASES : ["http://127.0.0.1:8001", "http://127.0.0.1:8002"];
+    // Prefer the upstream realtime GTFS-RT feed for fresher vehicle positions, then fall back to local snapshots.
+    const VEHICLE_ENDPOINTS = dedupeList([
+      API_URL,
+      ...LOCAL_BACKENDS.flatMap(base => ["/api/frota", "/api/json", "/api/vehicles"].map(path => `${base}${path}`)),
+    ]);
+    const CHARTS_CACHE_TTL_MS = 60_000;
+    const CHARTS_MIN_INTERVAL_MS = 35_000;
+    const CHARTS_REFRESH_INTERVAL_MS = 45_000;
+
+    let selectedCategory = CATEGORY_FILTER_ALL;
+    let selectedRoute = ROUTE_FILTER_ALL;
+    let selectedVariant = VARIANT_FILTER_ALL;
+    let lastVehicles = [];
+    const routeOptions = new Map(); // baseId -> { label: string, variants: Map<variantId, label>, categories: Set<string> }
+    const ROUTE_DETAILS = new Map(); // routeId -> { shortName, longName }
+    const BASE_ROUTE_DETAILS = new Map(); // baseId -> { shortName, longName }
+    let routesCatalogLoaded = false;
+
+    const categorySelect = document.getElementById("category-filter");
+    const routeInput = document.getElementById("route-filter");
+    const routeDatalist = document.getElementById("route-filter-options");
+    const variantSelect = document.getElementById("variant-filter");
+    const variantGroup = document.getElementById("variant-filter-group");
+    const statusDot = document.getElementById("status-dot");
+    const sidebarToggle = document.getElementById("sidebar-toggle");
+    const sidebarClose = document.getElementById("sidebar-close");
+    const routeLabelById = new Map();
+    const routeLabelLookup = new Map();
+    const kpiPanel = document.getElementById("kpi-panel");
+    const kpiLastUpdate = document.getElementById("kpi-last-update");
+    const kpiActiveVehicles = document.getElementById("kpi-active-vehicles");
+    const kpiVelDay = document.getElementById("kpi-vel-day");
+    const kpiVelHour = document.getElementById("kpi-vel-hour");
+    const kpiContext = document.getElementById("kpi-context");
+    const kpiFloatingText = document.getElementById("kpi-floating-text");
+    const kpiVelHourDelta = document.getElementById("kpi-vel-hour-delta");
+    const appAlert = document.getElementById("app-alert");
+    const chartSpeedCard = document.getElementById("chart-speed-card");
+    const chartVolumeCard = document.getElementById("chart-volume-card");
+    const chartSpeedCanvas = document.getElementById("chart-speed-preview");
+    const chartVolumeCanvas = document.getElementById("chart-volume-preview");
+    const chartOverlay = document.getElementById("chart-overlay");
+    const chartOverlayTitle = document.getElementById("chart-overlay-title");
+    const chartOverlayCanvas = document.getElementById("chart-overlay-canvas");
+    const chartOverlayClose = document.getElementById("chart-overlay-close");
+    let sidebarCollapsed = false;
+    let categoryKpisCache = { timestamp: 0, data: [] };
+    let routeKpisCache = { timestamp: 0, key: "", row: null };
+    let lastKpiTimestamp = null;
+    let kpiAgeTimer = null;
+    let chartRefreshIntervalId = null;
+    let chartCache = { paramsKey: "", timestamp: 0, summary: null, lineCandidate: null };
+    let lastChartFetchTs = 0;
+    let trendTimeline = [];
+    let previewCharts = { speed: null, volume: null };
+    let overlayChartInstance = null;
+    let currentOverlayType = null;
+    let lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
+    let lastTrendLineCandidate = null;
+    const timeLabelFormatter = new Intl.DateTimeFormat("pt-PT", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    function showAppError(message) {
+      if (!appAlert) return;
+      appAlert.textContent = message;
+      appAlert.classList.add("visible");
+    }
+
+    function clearAppError() {
+      if (!appAlert) return;
+      appAlert.classList.remove("visible");
+    }
+
+    window.addEventListener("error", event => {
+      showAppError(`Erro inesperado: ${event.message}`);
+    });
+    window.addEventListener("unhandledrejection", event => {
+      showAppError(`Erro de promessa: ${event.reason}`);
+    });
+
+    function parseTranslatorCsv(text) {
+      const byId = {};
+      const base = {};
+      if (!text) return { byId, base };
+      const clean = text.replace(/\r/g, "\n");
+      const lines = clean.split("\n");
+      for (let i = 1; i < lines.length; i += 1) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const parts = line.split(/,(.+)/);
+        if (parts.length < 2) continue;
+        const rawId = parts[0].replace(/^\ufeff/, "").trim();
+        const name = parts[1].trim();
+        if (!rawId || !name) continue;
+        byId[rawId] = name;
+        const baseKey = rawId.split("_")[0] || rawId;
+        if (baseKey && !base[baseKey]) base[baseKey] = name;
+      }
+      return { byId, base };
+    }
+
+    async function loadRouteTranslator() {
+      try {
+        const resp = await fetch(ROUTE_TRANSLATOR_URL, { cache: "no-store" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        const parsed = parseTranslatorCsv(text);
+        ROUTE_TRANSLATOR.byId = parsed.byId;
+        ROUTE_TRANSLATOR.base = parsed.base;
+        refreshRouteLabels();
+      } catch (err) {
+        console.warn("Falha ao carregar tradutor de rotas:", err);
+      }
+    }
+
+    async function loadRoutesCatalog() {
+      if (routesCatalogLoaded) return;
+      try {
+        const resp = await fetch(ROUTES_DATA_URL, { cache: "no-store" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        const lines = text.replace(/\r/g, "\n").split("\n");
+        if (!lines.length) return;
+        const header = splitCsvLine(lines[0]).map(h => h.replace(/^\ufeff/, "").trim());
+        const idxRouteId = header.indexOf("route_id");
+        const idxShort = header.indexOf("route_short_name");
+        const idxLong = header.indexOf("route_long_name");
+        let dirty = false;
+        const getPart = (parts, idx) => {
+          if (idx < 0 || idx >= parts.length) return "";
+          return parts[idx] || "";
+        };
+        for (let i = 1; i < lines.length; i += 1) {
+          const rawLine = lines[i];
+          if (!rawLine || !rawLine.trim()) continue;
+          const parts = splitCsvLine(rawLine);
+          const routeId = getPart(parts, idxRouteId).trim();
+          if (!routeId) continue;
+          const shortName = getPart(parts, idxShort).trim();
+          const longName = getPart(parts, idxLong).trim();
+          const baseId = getBaseRouteKey(routeId);
+          if (!baseId) continue;
+          if (registerRoute(baseId, routeId, { shortName, longName })) dirty = true;
+        }
+        routesCatalogLoaded = true;
+        if (dirty) {
+          rebuildRouteSuggestions();
+          updateVariantOptions();
+        }
+      } catch (err) {
+        console.warn("Falha ao carregar routes.txt:", err);
+      }
+    }
+
+    function splitCsvLine(line) {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        if (char === '"' && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+          continue;
+        }
+        if (char === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (char === ',' && !inQuotes) {
+          result.push(current);
+          current = "";
+          continue;
+        }
+        current += char;
+      }
+      result.push(current);
+      return result;
+    }
+
+    function rememberRouteMeta(routeId, shortName, longName) {
+      if (!routeId) return;
+      const shortClean = (shortName || "").trim();
+      const longClean = (longName || "").trim();
+      if (!shortClean && !longClean) return;
+      ROUTE_DETAILS.set(routeId, { shortName: shortClean, longName: longClean });
+      const base = getBaseRouteKey(routeId);
+      if (!base) return;
+      const existing = BASE_ROUTE_DETAILS.get(base) || {};
+      let updated = false;
+      if (shortClean && !existing.shortName) {
+        existing.shortName = shortClean;
+        updated = true;
+      }
+      if (longClean && !existing.longName) {
+        existing.longName = longClean;
+        updated = true;
+      }
+      if (updated || !BASE_ROUTE_DETAILS.has(base)) {
+        BASE_ROUTE_DETAILS.set(base, existing);
+      }
+    }
+
+    function ensureRouteEntry(baseId) {
+      if (!baseId) return null;
+      let entry = routeOptions.get(baseId);
+      let created = false;
+      if (!entry) {
+        entry = { label: "", variants: new Map(), categories: new Set() };
+        routeOptions.set(baseId, entry);
+        created = true;
+      } else {
+        if (!entry.variants) entry.variants = new Map();
+        if (!entry.categories) entry.categories = new Set();
+      }
+      return { entry, created };
+    }
+
+    function registerRoute(baseId, variantId, options = {}) {
+      if (!baseId) return false;
+      const { shortName, longName, label, category } = options;
+      if (shortName || longName) {
+        rememberRouteMeta(variantId || baseId, shortName, longName);
+      }
+      const fallbackLabel = label || shortName || longName || translateRoute(variantId) || translateRoute(baseId) || variantId || baseId;
+      const ensured = ensureRouteEntry(baseId);
+      if (!ensured) return false;
+      const { entry, created } = ensured;
+      let dirty = created;
+      const baseLabel = formatRouteLabel(baseId, fallbackLabel);
+      if (entry.label !== baseLabel) {
+        entry.label = baseLabel;
+        dirty = true;
+      }
+      if (variantId && variantId !== baseId) {
+        const variantLabel = formatVariantLabel(variantId, fallbackLabel);
+        const normalizedVariant = (variantLabel || "").trim();
+        if (normalizedVariant && (!entry.variants.has(variantId) || entry.variants.get(variantId) !== normalizedVariant)) {
+          entry.variants.set(variantId, normalizedVariant);
+          dirty = true;
+        }
+      }
+      const resolvedCategory = category || definirCategoria(shortName || fallbackLabel || baseId);
+      if (resolvedCategory && !entry.categories.has(resolvedCategory)) {
+        entry.categories.add(resolvedCategory);
+        dirty = true;
+      }
+      return dirty;
+    }
+
+    function setSidebarCollapsed(collapsed) {
+      sidebarCollapsed = Boolean(collapsed);
+      document.body.classList.toggle("sidebar-collapsed", sidebarCollapsed);
+      if (sidebarToggle) {
+        sidebarToggle.setAttribute("aria-expanded", String(!sidebarCollapsed));
+      }
+    }
+
+    if (sidebarToggle) {
+      sidebarToggle.addEventListener("click", () => setSidebarCollapsed(false));
+    }
+    if (sidebarClose) {
+      sidebarClose.addEventListener("click", () => setSidebarCollapsed(true));
+    }
+
+    function normalizeRouteKey(value) {
+      if (value == null) return "";
+      return String(value).trim();
+    }
+
+    function getBaseRouteKey(value) {
+      const normalized = normalizeRouteKey(value);
+      if (!normalized) return "";
+      const [base] = normalized.split("_");
+      return base || normalized;
+    }
+
+    function formatRouteLabel(routeId, fallback = "") {
+      const base = getBaseRouteKey(routeId);
+      // For the aggregated base route label, prefer the metadata for the `_0` variant when available.
+      let metaVariantId = routeId;
+      if (routeId && !routeId.includes("_") && base) {
+        const preferred = `${base}_0`;
+        if (ROUTE_DETAILS.has(preferred) || ROUTE_TRANSLATOR.byId[preferred]) {
+          metaVariantId = preferred;
+        }
+      }
+      const metaVariant = metaVariantId ? ROUTE_DETAILS.get(metaVariantId) : null;
+      const metaBase = base ? BASE_ROUTE_DETAILS.get(base) : null;
+      const shortName = (metaVariant?.shortName || metaBase?.shortName || translateRoute(metaVariantId) || translateRoute(routeId) || translateRoute(base) || "").trim();
+      const longName = (metaVariant?.longName || metaBase?.longName || "").trim();
+      const fallbackClean = (fallback || "").trim();
+      const parts = [];
+      if (shortName) parts.push(shortName);
+      if (longName) parts.push(longName);
+      if (!parts.length && fallbackClean) parts.push(fallbackClean);
+      if (!parts.length && base) parts.push(base);
+      return parts.join(" ").trim();
+    }
+
+    function formatVariantLabel(routeId, fallback = "") {
+      // Keep variant labels clean (no "(Var. X)" suffix); use the best known name for that variant id.
+      return formatRouteLabel(routeId, fallback);
+    }
+
+    function refreshRouteLabels() {
+      let dirty = false;
+      routeOptions.forEach((entry, baseId) => {
+        const updatedLabel = formatRouteLabel(baseId);
+        if (entry.label !== updatedLabel) {
+          entry.label = updatedLabel;
+          dirty = true;
+        }
+        if (entry.variants) {
+          entry.variants.forEach((label, variantId) => {
+            const updatedVariantLabel = formatVariantLabel(variantId);
+            if (label !== updatedVariantLabel) {
+              entry.variants.set(variantId, updatedVariantLabel);
+              dirty = true;
+            }
+          });
+        }
+      });
+      if (dirty) {
+        rebuildRouteSuggestions();
+        updateVariantOptions();
+      }
+    }
+
+    function initCategoryFilter() {
+      if (!categorySelect) return;
+      categorySelect.innerHTML = "";
+      categorySelect.appendChild(new Option("Todas", CATEGORY_FILTER_ALL));
+      STANDARD_ROUTE_CATEGORIES.forEach(cat => {
+        categorySelect.appendChild(new Option(cat, cat));
+      });
+      categorySelect.value = CATEGORY_FILTER_ALL;
+      categorySelect.addEventListener("change", () => {
+        selectedCategory = categorySelect.value || CATEGORY_FILTER_ALL;
+        rebuildRouteSuggestions();
+        selectedRoute = ROUTE_FILTER_ALL;
+        syncRouteInputValue();
+        selectedVariant = VARIANT_FILTER_ALL;
+        updateVariantOptions();
+        renderVehicles();
+        refreshKpis(true);
+        refreshCharts(true).catch(() => {});
+      });
+    }
+
+    function handleRouteInputFocus() {
+      if (!routeInput) return;
+      routeInput.dataset.previousRoute = selectedRoute || ROUTE_FILTER_ALL;
+      routeInput.dataset.focusCleared = "true";
+      routeInput.value = "";
+    }
+
+    function findBestRouteSuggestion(query) {
+      if (!routeDatalist || !query) return null;
+      const normalizedQuery = query.trim().toLowerCase();
+      if (!normalizedQuery) return null;
+      let bestOption = null;
+      let bestScore = Number.POSITIVE_INFINITY;
+      Array.from(routeDatalist.options).forEach(option => {
+        const label = (option.value || option.textContent || "").trim();
+        if (!label) return;
+        const lowerLabel = label.toLowerCase();
+        let score = 3;
+        if (lowerLabel === normalizedQuery) {
+          score = 0;
+        } else if (lowerLabel.startsWith(normalizedQuery)) {
+          score = 1;
+        } else if (lowerLabel.includes(normalizedQuery)) {
+          score = 2;
+        }
+        if (score < bestScore) {
+          bestScore = score;
+          bestOption = option;
+        }
+      });
+      if (bestOption) {
+        return (bestOption.value || bestOption.textContent || "").trim() || null;
+      }
+      const firstOption = routeDatalist.querySelector("option");
+      return firstOption ? ((firstOption.value || firstOption.textContent || "").trim() || null) : null;
+    }
+
+    function handleRouteInputKeyDown(event) {
+      if (!routeInput) return;
+      if (event.key !== "Enter") return;
+      const trimmed = routeInput.value?.trim();
+      if (!trimmed) return;
+      const suggestion = findBestRouteSuggestion(trimmed);
+      if (!suggestion) return;
+      event.preventDefault();
+      routeInput.dataset.focusCleared = "false";
+      routeInput.value = suggestion;
+      handleRouteInputCommit();
+    }
+
+    function initRouteFilter() {
+      if (!routeInput || !routeDatalist) return;
+      routeInput.value = ROUTE_GLOBAL_LABEL;
+      routeInput.addEventListener("focus", handleRouteInputFocus);
+      routeInput.addEventListener("keydown", handleRouteInputKeyDown);
+      routeInput.addEventListener("change", handleRouteInputCommit, { passive: true });
+      routeInput.addEventListener("blur", handleRouteInputCommit);
+    }
+
+    function initVariantFilter() {
+      if (!variantSelect) return;
+      variantSelect.innerHTML = "";
+      variantSelect.appendChild(new Option("Todas as variantes", VARIANT_FILTER_ALL));
+      variantSelect.value = VARIANT_FILTER_ALL;
+      variantSelect.addEventListener("change", () => {
+        selectedVariant = variantSelect.value || VARIANT_FILTER_ALL;
+        renderVehicles();
+        refreshKpis(true);
+        refreshCharts(true).catch(() => {});
+      });
+    }
+
+	    function formatUpdateAge(timestamp) {
+	      if (!timestamp) return "—";
+	      const ms = Date.now() - new Date(timestamp).getTime();
+	      if (!Number.isFinite(ms) || ms < 0) return "—";
+	      const seconds = Math.round(ms / 1000);
+	      if (seconds < 60) return `${seconds}s`;
+	      if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+	      return `${Math.round(seconds / 3600)}h`;
+	    }
+
+	    function formatSpeedValue(value) {
+	      if (!Number.isFinite(Number(value))) return null;
+	      const rounded = Math.round(Number(value) * 10) / 10;
+	      return rounded.toFixed(1);
+	    }
+
+    function updateFloatingContext(text) {
+      if (!kpiFloatingText) return;
+      kpiFloatingText.textContent = text || "Categoria: rede global";
+    }
+
+    function startKpiAgeTicker() {
+      if (kpiAgeTimer) return;
+      kpiAgeTimer = setInterval(() => {
+        if (!lastKpiTimestamp) return;
+        if (kpiLastUpdate) {
+          kpiLastUpdate.textContent = formatUpdateAge(lastKpiTimestamp);
+        }
+      }, 1000);
+    }
+
+	    function formatDeltaValue(value) {
+	      if (!Number.isFinite(Number(value))) return null;
+	      const delta = Number(value);
+	      if (delta === 0) return { text: "—", className: "kpi-delta zero" };
+	      const arrow = delta > 0 ? "↑" : "↓";
+	      return { text: `${arrow} ${Math.abs(delta).toFixed(1)} km/h`, className: delta > 0 ? "kpi-delta positive" : "kpi-delta negative" };
+	    }
+
+    function updateKpiDelta(value) {
+      if (!kpiVelHourDelta) return;
+      const formatted = formatDeltaValue(value);
+      if (!formatted) {
+        kpiVelHourDelta.textContent = "—";
+        kpiVelHourDelta.className = "kpi-delta";
+        return;
+      }
+      kpiVelHourDelta.textContent = formatted.text;
+      kpiVelHourDelta.className = formatted.className;
+    }
+
+	    function updateKpiDisplay(row, contextText) {
+	      if (!kpiPanel) return;
+	      lastKpiTimestamp = row && row.timestamp ? row.timestamp : null;
+	      kpiLastUpdate.textContent = lastKpiTimestamp ? formatUpdateAge(lastKpiTimestamp) : "—";
+	      startKpiAgeTicker();
+	      kpiActiveVehicles.textContent = row ? String(Math.round(row.veiculos_ativos ?? 0)) : "—";
+	      const velDayText = row ? formatSpeedValue(row.vel_comercial ?? NaN) : null;
+	      if (kpiVelDay) {
+	        kpiVelDay.textContent = velDayText ?? "—";
+	        kpiVelDay.classList.toggle("has-unit", Boolean(velDayText));
+	      }
+	      const velHourText = row ? formatSpeedValue(row.vel_comercial_1h ?? NaN) : null;
+	      if (kpiVelHour) {
+	        kpiVelHour.textContent = velHourText ?? "—";
+	        kpiVelHour.classList.toggle("has-unit", Boolean(velHourText));
+	      }
+	      if (kpiContext) kpiContext.textContent = contextText || "—";
+	      updateFloatingContext(contextText);
+	      updateKpiDelta(row?.delta_vel_comercial);
+	    }
+
+    function safeNumber(value) {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function getRouteLineCandidates() {
+      const candidates = [];
+      const pushCandidate = value => {
+        if (!value || value === VARIANT_FILTER_ALL || value === ROUTE_FILTER_ALL) return;
+        if (!candidates.includes(value)) candidates.push(value);
+      };
+      // If a specific variant is selected, use it; otherwise prefer the aggregated base route id
+      // so "Todas as variantes" aggregates KPI/chart data (like the Python dashboard).
+      if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
+        pushCandidate(selectedVariant);
+      } else if (selectedRoute && selectedRoute !== ROUTE_FILTER_ALL) {
+        pushCandidate(getBaseRouteKey(selectedRoute));
+      }
+      // Keep some fallbacks for more tolerant backends.
+      pushCandidate(selectedRoute);
+      pushCandidate(getBaseRouteKey(selectedRoute));
+      return candidates;
+    }
+
+    function buildVehicleQueryParams() {
+      const params = {};
+      if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
+        params.categoria = selectedCategory;
+      }
+      const routeCandidates = getRouteLineCandidates();
+      if (routeCandidates.length > 0) {
+        params.linha = routeCandidates[0];
+      }
+      return params;
+    }
+
+    function buildTrendQueryParams(lineCandidate) {
+      const today = new Date().toISOString().split("T")[0];
+      const params = {
+        date: today,
+        hora_inicio: "00:00:00",
+        hora_fim: "23:59:59",
+      };
+      if (lineCandidate) {
+        params.line_id = lineCandidate;
+        params.linha = lineCandidate;
+      }
+      if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
+        params.categoria = selectedCategory;
+      }
+      return params;
+    }
+
+    async function fetchTrendSummary(lineCandidate) {
+      const params = buildTrendQueryParams(lineCandidate);
+      const payload = await fetchFromEndpoints(CHARTS_ENDPOINTS, params).catch(err => {
+        console.warn("Falha ao buscar gráficos:", err);
+        return null;
+      });
+      return normalizeTrendPayload(payload);
+    }
+
+    function parseRowTimestamp(row) {
+      const raw = row?.timestamp_intervalo ?? row?.timestamp_bloco ?? row?.ts_ref ?? row?.timestamp;
+      if (!raw) return null;
+      const dt = new Date(raw);
+      return Number.isFinite(dt.getTime()) ? dt : null;
+    }
+
+    function computeRouteKpiFromRows(rows) {
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      const enriched = rows.map(row => ({ row, ts: parseRowTimestamp(row) })).filter(item => item.ts);
+      if (!enriched.length) return null;
+      enriched.sort((a, b) => a.ts - b.ts);
+      const totalDistance = enriched.reduce((sum, item) => sum + safeNumber(item.row.distancia_total), 0);
+      const totalTime = enriched.reduce(
+        (sum, item) => sum + safeNumber(item.row.tempo_operacao_s ?? item.row.tempo_operacao_seg),
+        0
+      );
+      const velDay = totalTime > 0 ? totalDistance / (totalTime / 3600.0) : null;
+      const nowMs = Date.now();
+      const cutoffHour = nowMs - 60 * 60 * 1000;
+      const lastHourItems = enriched.filter(item => {
+        const t = item.ts.getTime();
+        return t >= cutoffHour && t <= nowMs;
+      });
+      const lastHourSum = lastHourItems.reduce(
+        (sum, item) => sum + safeNumber(item.row.velocidade_media ?? item.row.velocidade_comercial ?? item.row.vel_comercial),
+        0
+      );
+      const velHour =
+        lastHourItems.length > 0 ? lastHourSum / lastHourItems.length : velDay ?? 0;
+      const latest = enriched[enriched.length - 1];
+      const vehicles =
+        safeNumber(
+          latest.row.num_veiculos ??
+          latest.row.Volume_Frota ??
+          latest.row.Volume_Frota_Ativa ??
+          latest.row.volume_frota ??
+          latest.row.volume ??
+          latest.row.Volume ??
+          latest.row.numVeiculos
+        );
+      const deltaVel = (velHour ?? 0) - (velDay ?? velHour ?? 0);
+      return {
+        timestamp: latest.ts.toISOString(),
+        veiculos_ativos: Math.round(vehicles),
+        vel_comercial: Number.isFinite(velDay) ? Number(velDay) : Number(velHour ?? 0),
+        vel_comercial_1h: Number.isFinite(velHour) ? Number(velHour) : Number(velDay ?? 0),
+        delta_vel_comercial: Number.isFinite(deltaVel) ? Number(deltaVel) : 0,
+      };
+    }
+
+    const TREND_BUCKET_MS = 5 * 60 * 1000;
+    const TREND_MAX_SPAN_MINUTES = 25;
+    const TREND_MAX_SPAN_BUCKETS = Math.floor((TREND_MAX_SPAN_MINUTES * 60 * 1000) / TREND_BUCKET_MS);
+
+    function aggregateTrendRows(rows) {
+      if (!Array.isArray(rows) || rows.length === 0) return [];
+      const buckets = new Map();
+      const intervalMs = TREND_BUCKET_MS;
+      rows.forEach(row => {
+        const rawTimestamp = row.timestamp_intervalo || row.timestamp_bloco || row.ts_ref || row.timestamp;
+        if (!rawTimestamp) return;
+        const parsed = new Date(rawTimestamp);
+        if (!Number.isFinite(parsed.getTime())) return;
+        const bucketKey = Math.floor(parsed.getTime() / intervalMs) * intervalMs;
+        const bucket = buckets.get(bucketKey) || {
+          distancia_total: 0,
+          tempo_operacao_s: 0,
+          velocidade_sum: 0,
+          velocidade_count: 0,
+          num_veiculos: 0
+        };
+        bucket.distancia_total += safeNumber(row.distancia_total);
+        bucket.tempo_operacao_s += safeNumber(row.tempo_operacao_s ?? row.tempo_operacao_seg);
+        const rawSpeed = row.velocidade_media ?? row.velocidade_comercial ?? row.vel_comercial;
+        const media = Number(rawSpeed);
+        if (Number.isFinite(media)) {
+          bucket.velocidade_sum += media;
+          bucket.velocidade_count += 1;
+        }
+        const volumeValue =
+          row.num_veiculos ??
+          row.Volume_Frota ??
+          row.Volume_Frota_Ativa ??
+          row.volume_frota ??
+          row.volume ??
+          row.Volume ??
+          row.numVeiculos;
+        bucket.num_veiculos += safeNumber(volumeValue);
+        buckets.set(bucketKey, bucket);
+      });
+      const sorted = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+      const timeline = sorted.map(([timestamp, data]) => {
+        const interval = new Date(Number(timestamp));
+        const meanSpeed = data.velocidade_count > 0 ? data.velocidade_sum / data.velocidade_count : 0;
+        const velocidade = data.tempo_operacao_s > 0
+          ? data.distancia_total / (data.tempo_operacao_s / 3600.0)
+          : meanSpeed;
+        return {
+          interval,
+          velComercial: Number.isFinite(velocidade) ? velocidade : 0,
+          volume: Number.isFinite(data.num_veiculos) ? data.num_veiculos : 0
+        };
+      });
+      return applyRollingAverage(timeline);
+    }
+
+    function applyRollingAverage(entries) {
+      const windowMs = 15 * 60 * 1000;
+      return entries.map((entry, index) => {
+        const currentMs = entry.interval.getTime();
+        let sum = 0;
+        let count = 0;
+        for (let cursor = index; cursor >= 0; cursor -= 1) {
+          const previous = entries[cursor];
+          const delta = currentMs - previous.interval.getTime();
+          if (delta > windowMs) break;
+          const value = previous.velComercial;
+          if (Number.isFinite(value)) {
+            sum += value;
+            count += 1;
+          }
+        }
+        return {
+          ...entry,
+          vel15m: count ? sum / count : entry.velComercial
+        };
+      });
+    }
+
+    function normalizeTimelineEntries(entries) {
+      if (!Array.isArray(entries)) return [];
+      const mapped = entries
+        .map(entry => {
+          const ts = parseRowTimestamp(entry);
+          if (!ts) return null;
+          const baseSpeed = Number(
+            entry.vel_comercial ??
+            entry.velComercial ??
+            entry.velocidade ??
+            entry.velocidade_comercial ??
+            entry.velocidade_media ??
+            entry.velocidade
+          );
+          const vel15 = Number(entry.vel_15m ?? entry.vel15m ?? entry.vel_media_15 ?? entry.vel_media_15m);
+          const volumeRaw =
+            entry.volume ??
+            entry.num_veiculos ??
+            entry.Volume_Frota ??
+            entry.Volume_Frota_Ativa ??
+            entry.volume_frota ??
+            entry.volume ??
+            entry.Volume ??
+            entry.numVeiculos;
+          return {
+            interval: ts,
+            velComercial: Number.isFinite(baseSpeed) ? baseSpeed : 0,
+            vel15m: Number.isFinite(vel15) ? vel15 : null,
+            volume: Number.isFinite(Number(volumeRaw)) ? Number(volumeRaw) : 0
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.interval - b.interval);
+      return mapped;
+    }
+
+    function densifyTrendTimeline(entries) {
+      if (!Array.isArray(entries) || entries.length === 0) return [];
+      const sorted = entries.slice().sort((a, b) => a.interval - b.interval);
+      const byMs = new Map();
+      for (const entry of sorted) {
+        const bucketMs = Math.floor(entry.interval.getTime() / TREND_BUCKET_MS) * TREND_BUCKET_MS;
+        byMs.set(bucketMs, { ...entry, interval: new Date(bucketMs) });
+      }
+      const startMs = Math.floor(sorted[0].interval.getTime() / TREND_BUCKET_MS) * TREND_BUCKET_MS;
+      const endMs = Math.floor(sorted[sorted.length - 1].interval.getTime() / TREND_BUCKET_MS) * TREND_BUCKET_MS;
+      const result = [];
+      for (let t = startMs; t <= endMs; t += TREND_BUCKET_MS) {
+        const existing = byMs.get(t);
+        if (existing) {
+          result.push(existing);
+        } else {
+          result.push({
+            interval: new Date(t),
+            velComercial: null,
+            vel15m: null,
+            volume: null
+          });
+        }
+      }
+      return result;
+    }
+
+    function buildSegmentedLineDatasets({ values, label, color, fill, fillMode, borderWidth = 2, tension = 0.2 }) {
+      const datasets = [];
+      let lastDefinedIndex = null;
+      let segmentStart = null;
+
+      const pushSegment = (startIndex, endIndex) => {
+        if (startIndex == null || endIndex == null || endIndex < startIndex) return;
+        const data = new Array(values.length).fill(null);
+        for (let i = startIndex; i <= endIndex; i += 1) {
+          data[i] = values[i];
+        }
+        datasets.push({
+          label,
+          data,
+          borderColor: color,
+          backgroundColor: fill,
+          borderWidth,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHitRadius: 12,
+          fill: fillMode,
+          tension,
+          spanGaps: true
+        });
+      };
+
+      for (let i = 0; i < values.length; i += 1) {
+        const val = values[i];
+        const isDefined = val != null && Number.isFinite(Number(val));
+        if (!isDefined) continue;
+        if (lastDefinedIndex == null) {
+          segmentStart = i;
+        } else {
+          const gapBuckets = i - lastDefinedIndex - 1;
+          if (gapBuckets > TREND_MAX_SPAN_BUCKETS) {
+            pushSegment(segmentStart, lastDefinedIndex);
+            segmentStart = i;
+          }
+        }
+        lastDefinedIndex = i;
+      }
+
+      if (lastDefinedIndex != null && segmentStart != null) {
+        pushSegment(segmentStart, lastDefinedIndex);
+      }
+
+      return datasets.length ? datasets : [{
+        label,
+        data: values,
+        borderColor: color,
+        backgroundColor: fill,
+        borderWidth,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointHitRadius: 12,
+        fill: fillMode,
+        tension,
+        spanGaps: true
+      }];
+    }
+
+    function ensureRollingTimeline(entries) {
+      if (!Array.isArray(entries) || entries.length === 0) return [];
+      const hasRolling = entries.some(entry => Number.isFinite(entry.vel15m));
+      if (hasRolling) {
+        return entries.map(entry => ({
+          ...entry,
+          vel15m: Number.isFinite(entry.vel15m) ? entry.vel15m : entry.velComercial
+        }));
+      }
+      return applyRollingAverage(entries);
+    }
+
+    function normalizeTrendPayload(payload) {
+      if (!payload) {
+        return { timeline: [], kpi: null, rows: [] };
+      }
+      if (Array.isArray(payload)) {
+        const timelineFromRows = aggregateTrendRows(payload);
+        return {
+          timeline: ensureRollingTimeline(timelineFromRows),
+          kpi: computeRouteKpiFromRows(payload),
+          rows: payload
+        };
+      }
+      const rows = Array.isArray(payload.rows)
+        ? payload.rows
+        : Array.isArray(payload.metricas)
+          ? payload.metricas
+          : [];
+      const timelineRaw = Array.isArray(payload.timeline) ? normalizeTimelineEntries(payload.timeline) : [];
+      const timeline = ensureRollingTimeline(timelineRaw.length ? timelineRaw : aggregateTrendRows(rows));
+      const kpi = payload.kpi || computeRouteKpiFromRows(rows);
+      return { timeline, kpi, rows };
+    }
+
+    function updateTrendTimeline(entries) {
+      trendTimeline = densifyTrendTimeline(ensureRollingTimeline(entries));
+      updatePreviewChartsDisplay();
+      if (currentOverlayType) {
+        renderOverlayChart(currentOverlayType);
+      }
+    }
+
+    function updatePreviewChartsDisplay() {
+      const labels = trendTimeline.map(entry => timeLabelFormatter.format(entry.interval));
+      if (previewCharts.speed) {
+        previewCharts.speed.data.labels = labels;
+        const values = trendTimeline.map(entry =>
+          Number.isFinite(entry.vel15m) ? Number(entry.vel15m.toFixed(1)) : null
+        );
+        previewCharts.speed.data.datasets = buildSegmentedLineDatasets({
+          values,
+          label: "Velocidade Comercial",
+          color: "#ff4b4b",
+          fill: "transparent",
+          fillMode: false,
+          borderWidth: 2,
+          tension: 0.3
+        });
+        previewCharts.speed.update("none");
+      }
+      if (previewCharts.volume) {
+        previewCharts.volume.data.labels = labels;
+        const values = trendTimeline.map(entry =>
+          Number.isFinite(entry.volume) ? Number(entry.volume.toFixed(0)) : null
+        );
+        previewCharts.volume.data.datasets = buildSegmentedLineDatasets({
+          values,
+          label: "Volume da Frota",
+          color: "#f59f00",
+          fill: "rgba(245, 159, 0, 0.25)",
+          fillMode: "start",
+          borderWidth: 2,
+          tension: 0.3
+        });
+        previewCharts.volume.update("none");
+      }
+    }
+
+	    function initPreviewCharts() {
+	      if (window.Chart && chartSpeedCanvas) {
+	        previewCharts.speed = new Chart(chartSpeedCanvas.getContext("2d"), {
+	          type: "line",
+	          data: {
+	            labels: [],
+	            datasets: [{
+	              label: "Velocidade Comercial",
+	              data: [],
+	              borderColor: "#ff4b4b",
+	              backgroundColor: "transparent",
+	              borderWidth: 2,
+	              pointRadius: 0,
+	              fill: false,
+	              tension: 0.3,
+	              spanGaps: true
+	            }]
+	          },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { display: false },
+                y: { display: false, min: 0 }
+              }
+            }
+        });
+      }
+      if (window.Chart && chartVolumeCanvas) {
+        previewCharts.volume = new Chart(chartVolumeCanvas.getContext("2d"), {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [{
+              label: "Volume da Frota",
+              data: [],
+              borderColor: "#f59f00",
+              backgroundColor: "rgba(245, 159, 0, 0.25)",
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: "start",
+              tension: 0.3,
+              spanGaps: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { display: false },
+              y: { display: false }
+            }
+          }
+        });
+      }
+    }
+
+    async function refreshCharts(force = false) {
+      const routeCandidates = getRouteLineCandidates();
+      const chartLineCandidates = [...routeCandidates, null];
+      const now = Date.now();
+
+      if (!force) {
+        if (now - lastChartFetchTs < CHARTS_MIN_INTERVAL_MS && chartCache.summary) {
+          lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? null };
+          lastTrendLineCandidate = chartCache.lineCandidate ?? null;
+          updateTrendTimeline(lastTrendSummary.timeline || []);
+          return lastTrendSummary;
+        }
+      }
+
+      for (const candidate of chartLineCandidates) {
+        const params = buildTrendQueryParams(candidate);
+        const paramsKey = JSON.stringify(params);
+
+        if (!force && paramsKey === chartCache.paramsKey && now - chartCache.timestamp < CHARTS_CACHE_TTL_MS && chartCache.summary) {
+          lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? candidate };
+          lastTrendLineCandidate = chartCache.lineCandidate ?? candidate;
+          updateTrendTimeline(lastTrendSummary.timeline || []);
+          return lastTrendSummary;
+        }
+
+        const summary = await fetchTrendSummary(candidate).catch(err => {
+          showAppError(`Falha nos gráficos: ${err?.message || err}`);
+          return { timeline: [], rows: [], kpi: null };
+        });
+        if (!summary.timeline.length && !summary.rows.length && !summary.kpi) continue;
+
+        chartCache = { paramsKey, summary, timestamp: now, lineCandidate: candidate };
+        lastChartFetchTs = now;
+        lastTrendSummary = { ...summary, lineCandidate: candidate };
+        lastTrendLineCandidate = candidate;
+        updateTrendTimeline(summary.timeline || []);
+        await refreshKpis(true);
+        return summary;
+      }
+
+      if (chartCache.summary) {
+        lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? null };
+        lastTrendLineCandidate = chartCache.lineCandidate ?? null;
+        updateTrendTimeline(lastTrendSummary.timeline || []);
+        return chartCache.summary;
+      }
+
+      lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
+      lastTrendLineCandidate = null;
+      updateTrendTimeline([]);
+      return lastTrendSummary;
+    }
+
+    function startChartRefreshLoop() {
+      if (chartRefreshIntervalId) return;
+      chartRefreshIntervalId = setInterval(() => {
+        refreshCharts().catch(err => showAppError(`Falha nos gráficos: ${err?.message || err}`));
+      }, CHARTS_REFRESH_INTERVAL_MS);
+    }
+
+	    function renderOverlayChart(type) {
+      if (!chartOverlayCanvas || !trendTimeline.length) return;
+      const context = chartOverlayCanvas.getContext("2d");
+      if (!context) return;
+      const labels = trendTimeline.map(entry => timeLabelFormatter.format(entry.interval));
+      const data = trendTimeline.map(entry =>
+        type === "volume"
+          ? Number.isFinite(entry.volume) ? Number(entry.volume.toFixed(0)) : null
+          : Number.isFinite(entry.vel15m) ? Number(entry.vel15m.toFixed(1)) : null
+      );
+	      const color = type === "volume" ? "#f59f00" : "#ff4b4b";
+	      const fill = type === "volume" ? "rgba(245, 159, 0, 0.3)" : "transparent";
+	      const title = type === "volume" ? "Volume da Frota" : "Velocidade Comercial";
+	      const fillMode = type === "volume" ? "start" : false;
+	      if (chartOverlayTitle) chartOverlayTitle.textContent = title;
+	      if (overlayChartInstance) {
+	        overlayChartInstance.destroy();
+	        overlayChartInstance = null;
+	      }
+      overlayChartInstance = new Chart(context, {
+        type: "line",
+        data: {
+          labels,
+	          datasets: buildSegmentedLineDatasets({
+              values: data,
+              label: title,
+              color,
+              fill,
+              fillMode,
+              borderWidth: 2,
+              tension: 0.2
+            })
+	        },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: "nearest", intersect: false, axis: "x" },
+              hover: { mode: "nearest", intersect: false },
+              plugins: {
+                legend: { display: false },
+                tooltip: { mode: "nearest", intersect: false }
+              },
+              scales: {
+                x: {
+                  grid: { display: false },
+                  ticks: { color: "#0f172a" }
+                },
+                y: {
+                  grid: { color: "rgba(15, 23, 42, 0.1)" },
+                  ticks: { color: "#0f172a", beginAtZero: true, padding: 8 },
+                  min: 0
+                }
+              }
+            }
+      });
+    }
+
+    function openChartOverlay(type) {
+      if (!chartOverlay || !trendTimeline.length) return;
+      currentOverlayType = type;
+      chartOverlay.classList.add("visible");
+      renderOverlayChart(type);
+    }
+
+    function closeChartOverlay() {
+      if (chartOverlay) chartOverlay.classList.remove("visible");
+      currentOverlayType = null;
+      if (overlayChartInstance) {
+        overlayChartInstance.destroy();
+        overlayChartInstance = null;
+      }
+    }
+
+    if (chartOverlayCanvas && !chartOverlayCanvas.dataset.tooltipClickBound) {
+      chartOverlayCanvas.dataset.tooltipClickBound = "1";
+      chartOverlayCanvas.addEventListener("click", event => {
+        if (!overlayChartInstance || !window.Chart) return;
+        const points = overlayChartInstance.getElementsAtEventForMode(
+          event,
+          "nearest",
+          { intersect: false },
+          true
+        );
+        if (!points.length) return;
+        const { datasetIndex, index } = points[0];
+        const active = [{ datasetIndex, index }];
+        overlayChartInstance.setActiveElements(active);
+        const pos = window.Chart.helpers?.getRelativePosition
+          ? window.Chart.helpers.getRelativePosition(event, overlayChartInstance)
+          : null;
+        if (overlayChartInstance.tooltip && pos) {
+          overlayChartInstance.tooltip.setActiveElements(active, pos);
+        }
+        overlayChartInstance.update();
+      });
+    }
+
+    if (chartOverlay) {
+      chartOverlay.addEventListener("click", event => {
+        if (event.target === chartOverlay) closeChartOverlay();
+      });
+    }
+
+    if (chartOverlayClose) {
+      chartOverlayClose.addEventListener("click", closeChartOverlay);
+    }
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeChartOverlay();
+    });
+
+    if (chartSpeedCard) {
+      chartSpeedCard.addEventListener("click", () => openChartOverlay("speed"));
+    }
+    if (chartVolumeCard) {
+      chartVolumeCard.addEventListener("click", () => openChartOverlay("volume"));
+    }
+
+    function findCategoryRow(data, category) {
+      if (!Array.isArray(data) || data.length === 0) return null;
+      if (category && category !== CATEGORY_FILTER_ALL) {
+        const match = data.find(item => item.categoria === category);
+        if (match) return match;
+      }
+      return data.find(item => item.categoria === "Global") || data[0];
+    }
+
+    function buildUrlWithParams(endpoint, params) {
+      try {
+        const url = new URL(endpoint);
+        // The upstream GTFS-RT endpoint is a raw feed and does not support our filter query params.
+        // We fetch the full feed and apply filters client-side.
+        if (url.hostname === "rt.jdcp.workers.dev") {
+          url.searchParams.set("_ts", String(Date.now()));
+          return url.toString();
+        }
+        Object.entries(params || {}).forEach(([key, value]) => {
+          if (value != null && value !== "") {
+            url.searchParams.set(key, value);
+          }
+        });
+        return url.toString();
+      } catch (err) {
+        console.warn("URL inválida ignorada:", endpoint, err);
+        return null;
+      }
+    }
+
+    async function fetchFromEndpoints(endpoints, params = {}) {
+      const resolved = (endpoints || [])
+        .map(endpoint => buildUrlWithParams(endpoint, params))
+        .filter(Boolean);
+      if (!resolved.length) throw new Error("Nenhum endpoint válido para chamada.");
+      let lastError = null;
+      for (const url of resolved) {
+        try {
+          const response = await fetch(url, { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return await response.json();
+        } catch (err) {
+          lastError = err;
+          console.warn("Falha ao contactar endpoint", url, err);
+        }
+      }
+      throw lastError || new Error("Todos os endpoints falharam");
+    }
+
+    async function fetchCategoryKpis(force = false) {
+      if (!kpiPanel) return [];
+      const now = Date.now();
+      if (!force && now - categoryKpisCache.timestamp < KPI_CACHE_TTL_MS) {
+        return categoryKpisCache.data || [];
+      }
+      try {
+        const payload = await fetchFromEndpoints(KPI_ENDPOINTS.categories);
+        const data = Array.isArray(payload) ? payload : [];
+        categoryKpisCache = { timestamp: now, data };
+        return data;
+      } catch (err) {
+        console.warn("Falha ao carregar KPIs de categoria:", err);
+        return categoryKpisCache.data || [];
+      }
+    }
+
+    async function fetchRouteKpi(lineId, force = false) {
+      if (!kpiPanel) return null;
+      const now = Date.now();
+      const key = JSON.stringify({ scope: "route", lineId: lineId || null, categoria: selectedCategory || null });
+      if (!force && routeKpisCache.row && routeKpisCache.key === key && (now - routeKpisCache.timestamp) < REFRESH_RATE_MS) {
+        return routeKpisCache.row;
+      }
+      try {
+        if (!lineId) return null;
+        const encoded = encodeURIComponent(String(lineId));
+        const endpoints = KPI_ENDPOINTS.route.map(base => `${base}/${encoded}`);
+        const params = { active_window_min: 10 };
+        if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) params.categoria = selectedCategory;
+        const payload = await fetchFromEndpoints(endpoints, params);
+        const row = Array.isArray(payload) ? (payload[0] || null) : payload;
+        routeKpisCache = { timestamp: now, key, row };
+        return row;
+      } catch (err) {
+        console.warn("Falha ao carregar KPI da rota (novo endpoint), a tentar legacy:", err);
+        try {
+          const legacyParams = { active_window_min: 10 };
+          legacyParams.linha = lineId;
+          if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) legacyParams.categoria = selectedCategory;
+          const payload = await fetchFromEndpoints(KPI_ENDPOINTS.routeLegacy, legacyParams);
+          const row = Array.isArray(payload) ? (payload[0] || null) : payload;
+          routeKpisCache = { timestamp: now, key, row };
+          return row;
+        } catch (legacyErr) {
+          console.warn("Falha ao carregar KPI da rota (legacy):", legacyErr);
+          return routeKpisCache.row || null;
+        }
+      }
+    }
+
+    async function fetchRouteVariantKpi(variantId, force = false) {
+      if (!kpiPanel) return null;
+      const now = Date.now();
+      const key = JSON.stringify({ scope: "route_variant", variantId: variantId || null, categoria: selectedCategory || null });
+      if (!force && routeKpisCache.row && routeKpisCache.key === key && (now - routeKpisCache.timestamp) < REFRESH_RATE_MS) {
+        return routeKpisCache.row;
+      }
+      try {
+        if (!variantId) return null;
+        const encoded = encodeURIComponent(String(variantId));
+        const endpoints = KPI_ENDPOINTS.routeVariant.map(base => `${base}/${encoded}`);
+        const params = { active_window_min: 10 };
+        if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) params.categoria = selectedCategory;
+        const payload = await fetchFromEndpoints(endpoints, params);
+        const row = Array.isArray(payload) ? (payload[0] || null) : payload;
+        routeKpisCache = { timestamp: now, key, row };
+        return row;
+      } catch (err) {
+        console.warn("Falha ao carregar KPI da variante:", err);
+        return routeKpisCache.row || null;
+      }
+    }
+
+    async function fetchCategoryKpi(category, force = false) {
+      if (!kpiPanel) return null;
+      const now = Date.now();
+      const key = JSON.stringify({ scope: "category", category: category || null });
+      if (!force && routeKpisCache.row && routeKpisCache.key === key && (now - routeKpisCache.timestamp) < KPI_CACHE_TTL_MS) {
+        return routeKpisCache.row;
+      }
+      try {
+        if (!category) return null;
+        const encoded = encodeURIComponent(String(category));
+        const endpoints = KPI_ENDPOINTS.category.map(base => `${base}/${encoded}`);
+        const params = { active_window_min: 10 };
+        const payload = await fetchFromEndpoints(endpoints, params);
+        const row = Array.isArray(payload) ? (payload[0] || null) : payload;
+        routeKpisCache = { timestamp: now, key, row };
+        return row;
+      } catch (err) {
+        console.warn("Falha ao carregar KPI da categoria (novo endpoint):", err);
+        return routeKpisCache.row || null;
+      }
+    }
+
+    function buildRouteContextText() {
+      const baseLabel = routeLabelById.get(selectedRoute) || selectedRoute || "Carreira";
+      if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
+        const variantEntry = routeOptions.get(selectedRoute)?.variants?.get(selectedVariant);
+        if (variantEntry) return `${variantEntry}`;
+        return `${baseLabel} • ${selectedVariant}`;
+      }
+      return `${baseLabel}`;
+    }
+
+    async function refreshKpis(force = false) {
+      if (!kpiPanel) return;
+      const routeCandidates = getRouteLineCandidates();
+      const computedRow =
+        lastTrendSummary?.kpi ||
+        computeRouteKpiFromRows(lastTrendSummary?.rows || []);
+      const label =
+        selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL
+          ? `${selectedCategory}`
+          : "Categoria: rede global";
+      if (routeCandidates.length > 0) {
+        const contextText = buildRouteContextText();
+        const hasRouteData = lastTrendLineCandidate != null && routeCandidates.includes(lastTrendLineCandidate);
+        // Prefer the new scoped KPI endpoints (variant > route).
+        let realtimeKpi = null;
+        if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
+          realtimeKpi = await fetchRouteVariantKpi(selectedVariant, force);
+        } else {
+          realtimeKpi = await fetchRouteKpi(routeCandidates[0], force);
+        }
+        if (realtimeKpi && computedRow) {
+          updateKpiDisplay(
+            {
+              ...computedRow,
+              veiculos_ativos: realtimeKpi.veiculos_ativos ?? computedRow.veiculos_ativos,
+              timestamp: realtimeKpi.timestamp ?? computedRow.timestamp,
+              vel_comercial: realtimeKpi.vel_comercial ?? computedRow.vel_comercial,
+              vel_comercial_1h: realtimeKpi.vel_comercial_1h ?? computedRow.vel_comercial_1h,
+              delta_vel_comercial: realtimeKpi.delta_vel_comercial ?? computedRow.delta_vel_comercial
+            },
+            contextText
+          );
+          return;
+        }
+        if (realtimeKpi) {
+          updateKpiDisplay(realtimeKpi, contextText);
+          return;
+        }
+        if (hasRouteData && computedRow) {
+          updateKpiDisplay(computedRow, contextText);
+          return;
+        }
+      }
+      // If no route is selected, prefer the scoped category/global KPI endpoints (more accurate + fresher timestamps).
+      if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
+        const categoryKpi = await fetchCategoryKpi(selectedCategory, force);
+        if (categoryKpi) {
+          updateKpiDisplay(categoryKpi, `${selectedCategory}`);
+          return;
+        }
+      } else {
+        // "Rede global" should use the global category endpoint, not the chart-derived KPI.
+        const globalKpi = await fetchCategoryKpi("global", force);
+        if (globalKpi) {
+          updateKpiDisplay(globalKpi, "Rede Global");
+          return;
+        }
+      }
+      if (computedRow) {
+        updateKpiDisplay(computedRow, label);
+        return;
+      }
+      const data = await fetchCategoryKpis(force);
+      const row = findCategoryRow(data, selectedCategory);
+      updateKpiDisplay(row, label);
+    }
+
+    function handleRouteInputCommit() {
+      if (!routeInput) return;
+      const focusCleared = routeInput.dataset.focusCleared === "true";
+      routeInput.dataset.focusCleared = "false";
+      const value = routeInput.value || "";
+      const trimmedValue = value.trim();
+      if (!trimmedValue && focusCleared) {
+        const prevRoute = routeInput.dataset.previousRoute || selectedRoute || ROUTE_FILTER_ALL;
+        selectedRoute = prevRoute;
+        syncRouteInputValue();
+        return;
+      }
+      const resolved = resolveRouteInputValue(value);
+      selectedRoute = resolved;
+      if (resolved === ROUTE_FILTER_ALL) {
+        routeInput.value = ROUTE_GLOBAL_LABEL;
+      } else {
+        routeInput.value = routeLabelById.get(resolved) || value;
+      }
+      selectedVariant = VARIANT_FILTER_ALL;
+      updateVariantOptions();
+      renderVehicles();
+      refreshCharts(true).catch(() => {});
+      refreshKpis(true);
+    }
+
+    function resolveRouteInputValue(raw) {
+      const value = (raw || "").trim();
+      if (!value || value.toLowerCase() === ROUTE_GLOBAL_LABEL.toLowerCase()) {
+        return ROUTE_FILTER_ALL;
+      }
+      const lower = value.toLowerCase();
+      if (routeLabelLookup.has(lower)) {
+        return routeLabelLookup.get(lower);
+      }
+      if (routeOptions.has(value)) return value;
+      for (const [baseId, data] of routeOptions.entries()) {
+        const label = (data.label || "").toLowerCase();
+        if (label && label === lower) return baseId;
+      }
+      return ROUTE_FILTER_ALL;
+    }
+
+    function syncRouteInputValue() {
+      if (!routeInput) return;
+      if (selectedRoute === ROUTE_FILTER_ALL) {
+        routeInput.value = ROUTE_GLOBAL_LABEL;
+      } else {
+        routeInput.value = routeLabelById.get(selectedRoute) || selectedRoute;
+      }
+    }
+
+    function updateVariantOptions() {
+      if (!variantSelect || !variantGroup) return;
+      variantSelect.innerHTML = "";
+      variantSelect.appendChild(new Option("Todas as variantes", VARIANT_FILTER_ALL));
+      variantSelect.value = VARIANT_FILTER_ALL;
+      if (!selectedRoute || selectedRoute === ROUTE_FILTER_ALL) {
+        variantGroup.classList.add("hidden");
+        selectedVariant = VARIANT_FILTER_ALL;
+        return;
+      }
+      const entry = routeOptions.get(selectedRoute);
+      if (!entry) {
+        variantGroup.classList.add("hidden");
+        selectedVariant = VARIANT_FILTER_ALL;
+        return;
+      }
+      const variantEntries = entry.variants ? Array.from(entry.variants.entries()) : [];
+      if (variantEntries.length === 0) {
+        variantGroup.classList.add("hidden");
+        selectedVariant = VARIANT_FILTER_ALL;
+        return;
+      }
+      if (variantEntries.length === 1) {
+        variantGroup.classList.add("hidden");
+        selectedVariant = variantEntries[0][0];
+        return;
+      }
+      variantEntries.sort((a, b) => a[1].localeCompare(b[1], "pt-PT", { numeric: true, sensitivity: "base" }));
+      variantEntries.forEach(([value, label]) => {
+        variantSelect.appendChild(new Option(label, value));
+      });
+      const hasSelected = variantEntries.some(([value]) => value === selectedVariant);
+      if (hasSelected) {
+        variantSelect.value = selectedVariant;
+      } else {
+        selectedVariant = VARIANT_FILTER_ALL;
+        variantSelect.value = VARIANT_FILTER_ALL;
+      }
+      variantGroup.classList.remove("hidden");
+    }
+
+    function normalizeOptionKey(value) {
+      return normalizeRouteKey(value);
+    }
+
+    function updateRouteOptionsFromVehicles(list) {
+      let dirty = false;
+      list.forEach(v => {
+        const variantId = normalizeOptionKey(v.routeId || v.routeLabel);
+        if (!variantId) return;
+        const baseId = getBaseRouteKey(variantId);
+        if (!baseId) return;
+        const routeCategory = v.categoryResolved || v.category;
+        if (registerRoute(baseId, variantId, { label: v.routeLabel, category: routeCategory })) dirty = true;
+      });
+      if (dirty) {
+        rebuildRouteSuggestions();
+        updateVariantOptions();
+      }
+    }
+
+    function routeMatchesSelectedCategory(entry) {
+      if (selectedCategory === CATEGORY_FILTER_ALL) return true;
+      if (!entry || !entry.categories) return false;
+      if (entry.categories.size === 0) return false;
+      return entry.categories.has(selectedCategory);
+    }
+
+    function rebuildRouteSuggestions() {
+      if (!routeDatalist) return;
+      const entries = [];
+      routeOptions.forEach((data, baseId) => {
+        if (!routeMatchesSelectedCategory(data)) return;
+        const baseLabel = data.label || baseId;
+        entries.push({ id: baseId, label: baseLabel });
+      });
+      const collator = new Intl.Collator("pt-PT", { numeric: true, sensitivity: "base" });
+      entries.sort((a, b) => collator.compare(a.label || a.id, b.label || b.id));
+
+      routeDatalist.innerHTML = "";
+      routeLabelById.clear();
+      routeLabelLookup.clear();
+      routeLabelById.set(ROUTE_FILTER_ALL, ROUTE_GLOBAL_LABEL);
+      routeLabelLookup.set(ROUTE_GLOBAL_LABEL.toLowerCase(), ROUTE_FILTER_ALL);
+
+      const seenLabels = new Set();
+      entries.forEach(({ id, label }) => {
+        const text = ((label || id) ?? "").trim();
+        if (!text) return;
+        const key = text.toLowerCase();
+        if (!seenLabels.has(key)) {
+          const option = document.createElement("option");
+          option.value = text;
+          routeDatalist.appendChild(option);
+          seenLabels.add(key);
+        }
+        routeLabelById.set(id, text);
+        if (!routeLabelLookup.has(key)) {
+          routeLabelLookup.set(key, id);
+        }
+      });
+    }
+
+    function translateRoute(routeId) {
+      const raw = normalizeRouteKey(routeId);
+      if (!raw) return "";
+      if (ROUTE_TRANSLATOR.byId[raw]) return ROUTE_TRANSLATOR.byId[raw];
+      const base = raw.split("_")[0] || raw;
+      const alt0 = `${base}_0`;
+      const alt1 = `${base}_1`;
+      if (ROUTE_TRANSLATOR.byId[alt0]) return ROUTE_TRANSLATOR.byId[alt0];
+      if (ROUTE_TRANSLATOR.byId[alt1]) return ROUTE_TRANSLATOR.byId[alt1];
+      return ROUTE_TRANSLATOR.base[base] || raw;
+    }
+
+    function definirCategoria(routeIdOrName) {
+      const translated = translateRoute(routeIdOrName);
+      const fallback = routeIdOrName != null ? String(routeIdOrName) : "";
+      const candidate = (translated || fallback).toUpperCase();
+      const normalized = candidate.replace(/[^A-Z0-9]/g, "");
+      if (normalized.endsWith("E")) return "Elétricos";
+      if (normalized.endsWith("B")) return "Carreiras de Bairro";
+      if (/^2\d{2}$/.test(normalized)) return "Rede Madrugada";
+      return "Autocarros Diurnos";
+    }
+
+    function vehicleIconMarkup(style) {
+      return `<div class="veh-marker" style="--c:${style.color}">
+        <div class="veh-pin"></div>
+        <i class="fa ${style.icon} veh-icon"></i>
+      </div>`;
+    }
+
+    function popupHtml(v, style) {
+      const label = v.routeLabel || v.linha || "—";
+      const tsValue = Number(v.ts ?? v.timestamp ?? Date.now());
+      const tsMs = tsValue > 1e12 ? tsValue : tsValue * 1000;
+      const updated = Number.isFinite(tsMs) ? new Date(tsMs) : new Date();
+      return `
+        <div class="pop-header" style="background-color: ${style.color}">
+          <span style="font-size: 1.2em"> ${label}</span>
+          <span style="opacity: 0.8">#${v.id}</span>
+        </div>
+        <div class="pop-body">
+          <div style="margin-bottom:4px"><b>Velocidade:</b> ${Math.round(v.speed || 0)} km/h</div>
+          <div><b>Atualizado:</b> ${updated.toLocaleTimeString()}</div>
+        </div>
+      `;
+    }
+
+    function normalizeCoordinates(v) {
+      const position = v?.position || v?.posicao || {};
+      const lat = parseFloat(v.lat ?? v.latitude ?? position.lat ?? position.latitude);
+      const lon = parseFloat(v.lon ?? v.longitude ?? position.lon ?? position.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) return [lon, lat];
+      return null;
+    }
+
+    function clamp01(x) {
+      if (!Number.isFinite(x)) return 0;
+      if (x < 0) return 0;
+      if (x > 1) return 1;
+      return x;
+    }
+
+    function smoothstep(t) {
+      return t * t * (3 - 2 * t);
+    }
+
+    function normalizeTimestampSeconds(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return NaN;
+      if (num > 1e12) return num / 1000;
+      if (num > 1e10) return num / 1000;
+      return num;
+    }
+
+    function resolveRouteId(vehicle) {
+      return vehicle?.routeId ?? vehicle?.route_id ?? vehicle?.route ?? vehicle?.linha ?? vehicle?.line ?? "";
+    }
+
+    function decorateVehicle(vehicle) {
+      if (!vehicle) return vehicle;
+      const enriched = { ...vehicle };
+      const routeRaw = normalizeRouteKey(resolveRouteId(vehicle));
+      const label = formatRouteLabel(routeRaw || vehicle.linha, vehicle.linha);
+      const category = definirCategoria(routeRaw || label || vehicle.category);
+      enriched.routeId = routeRaw;
+      enriched.routeLabel = label || routeRaw;
+      enriched.linha = enriched.routeLabel || enriched.linha || "";
+      enriched.categoryResolved = category;
+      enriched.category = category;
+      return enriched;
+    }
+
+    function featureToVehicle(feature, index) {
+      if (!feature || feature.type !== "Feature") return null;
+      const geom = feature.geometry;
+      if (!geom) return null;
+
+      let coords = geom.coordinates;
+      if (geom.type !== "Point" && Array.isArray(coords) && Array.isArray(coords[0])) coords = coords[0];
+      if (!Array.isArray(coords) || coords.length < 2) return null;
+
+      const lat = Number(coords[1]);
+      const lon = Number(coords[0]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+      const props = feature.properties || {};
+      const fallbackId = `offline-${index}`;
+      const rawId = props.id_veiculo ?? props.id ?? props.vehicle_id ?? fallbackId;
+      const toNumber = (value, fallback = 0) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : fallback;
+      };
+      const routeId = props.route_id ?? props.route ?? props.linha ?? props.line ?? "";
+      const tsValue = props.timestamp ?? props.ts ?? props.time ?? Date.now();
+
+      return {
+        id: String(rawId),
+        lat,
+        lon,
+        linha: routeId,
+        routeId,
+        bearing: toNumber(props.heading ?? props.bearing ?? props.azimuth ?? props.course ?? 0, 0),
+        speed: toNumber(props.velocidade ?? props.speed ?? props.velocity ?? 0, 0),
+        category: props.category ?? props.tipo ?? "",
+        ts: tsValue
+      };
+    }
+
+    async function loadOfflineVehicles() {
+      if (offlineVehiclesCache) return offlineVehiclesCache;
+      try {
+        const response = await fetch(OFFLINE_VEHICLES_URL);
+        if (!response.ok) throw new Error("404");
+        const data = await response.json();
+        const features = Array.isArray(data?.features) ? data.features : [];
+        offlineVehiclesCache = features.map(featureToVehicle).filter(Boolean);
+      } catch (e) {
+        offlineVehiclesCache = VEHICLES_MOCK;
+      }
+      return offlineVehiclesCache || VEHICLES_MOCK;
+    }
+
+    const CATEGORY_STYLES = {
+      "Autocarros Diurnos": { color: "#2ecc71", icon: "fa-bus" },
+      "Carreiras de Bairro": { color: "#8e44ad", icon: "fa-home" },
+      "Elétricos": { color: "#f39c12", icon: "fa-train" },
+      "Rede Madrugada": { color: "#2980b9", icon: "fa-moon-o" }
+    };
+    const DEFAULT_CATEGORY_STYLE = CATEGORY_STYLES["Autocarros Diurnos"];
+
+    function getStyle(vehicle) {
+      const cat = vehicle?.categoryResolved || vehicle?.category;
+      return CATEGORY_STYLES[cat] || DEFAULT_CATEGORY_STYLE;
+    }
+
+    // --- LEAFLET ADAPTER ---
+    class LeafletAdapter {
+      constructor() {
+        this.map = L.map('map', { zoomControl: false, preferCanvas: true, inertia: true }).setView(MAP_CENTER, MAP_ZOOM);
+        this.markers = new Map();
+        this.isInteracting = false;
+        this.animationDuration = Math.max(300, Math.min(ANIMATION_MS, REFRESH_RATE_MS - 150));
+        L.control.zoom({ position: 'topright' }).addTo(this.map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OSM &copy; CARTO',
+          subdomains: 'abcd',
+          maxZoom: 19,
+          detectRetina: true,
+          updateWhenIdle: true,
+          updateWhenZooming: false,
+          keepBuffer: 4
+        }).addTo(this.map);
+
+        const startInteraction = () => {
+          this.isInteracting = true;
+          const container = this.map.getContainer?.();
+          if (container) container.classList.add("map-interacting");
+          this.clearAllTransitions();
+        };
+        const endInteraction = () => {
+          this.isInteracting = false;
+          const container = this.map.getContainer?.();
+          if (container) container.classList.remove("map-interacting");
+          // Ensure no lingering transitions after an interaction ends.
+          this.clearAllTransitions();
+        };
+        this.map.on("zoomstart movestart dragstart", startInteraction);
+        this.map.on("zoomend moveend dragend", endInteraction);
+
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css';
+        document.head.appendChild(link);
+      }
+
+      clearAllTransitions() {
+        for (const entry of this.markers.values()) {
+          if (entry?.transitionTimer) {
+            clearTimeout(entry.transitionTimer);
+            entry.transitionTimer = null;
+          }
+          const el = entry?.marker?.getElement?.();
+          if (el) {
+            el.classList.remove("veh-animating");
+            el.style.removeProperty("--veh-move-ms");
+          }
+        }
+      }
+
+      slideMarkerTo(entry, lat, lon) {
+        if (!entry?.marker) return;
+        const marker = entry.marker;
+        const el = marker.getElement?.();
+        if (!el || this.isInteracting || this.animationDuration <= 0) {
+          marker.setLatLng([lat, lon]);
+          return;
+        }
+
+        if (entry.transitionTimer) {
+          clearTimeout(entry.transitionTimer);
+          entry.transitionTimer = null;
+        }
+
+        el.style.setProperty("--veh-move-ms", `${this.animationDuration}ms`);
+        el.classList.add("veh-animating");
+        // Defer the position update so the transition can apply.
+        requestAnimationFrame(() => marker.setLatLng([lat, lon]));
+        entry.transitionTimer = setTimeout(() => {
+          const el2 = marker.getElement?.();
+          if (el2) {
+            el2.classList.remove("veh-animating");
+            el2.style.removeProperty("--veh-move-ms");
+          }
+          entry.transitionTimer = null;
+        }, this.animationDuration + 80);
+      }
+
+      setShapes(geojson) {
+        if (this.shapesLayer) this.map.removeLayer(this.shapesLayer);
+        this.shapesLayer = L.geoJSON(geojson || SHAPES_MOCK, {
+          style: { color: "#3498db", weight: 4, opacity: 0.5 }
+        }).addTo(this.map);
+      }
+
+      makeDivIcon(style) {
+        return L.divIcon({
+          html: vehicleIconMarkup(style),
+          className: "",
+          iconSize: [34, 42],
+          iconAnchor: [17, 42],
+          popupAnchor: [0, -36]
+        });
+      }
+
+      applyStyleToMarker(entry, style) {
+        if (!entry?.marker || !style) return;
+        const el = entry.marker.getElement?.();
+        if (!el) return;
+        const inner = el.querySelector?.('.veh-marker');
+        if (inner) {
+          inner.style.setProperty("--c", style.color);
+          const icon = inner.querySelector?.('.veh-icon');
+          if (icon) icon.className = `fa ${style.icon} veh-icon`;
+        }
+      }
+
+      updateVehicles(vehicleList) {
+        const EPS = 1e-7;
+        const activeIDs = new Set();
+        vehicleList.forEach(v => {
+          if (!v || v.id == null) return;
+          const coords = normalizeCoordinates(v);
+          if (!coords) return;
+          const [lon, lat] = coords;
+          const style = getStyle(v);
+          const vid = String(v.id);
+          activeIDs.add(vid);
+          const serverTsSec = normalizeTimestampSeconds(v.ts ?? v.timestamp ?? v.time ?? Date.now());
+
+          let entry = this.markers.get(vid);
+          if (!entry) {
+            const marker = L.marker([lat, lon], {
+              icon: this.makeDivIcon(style),
+              riseOnHover: true,
+              keyboard: false
+            }).addTo(this.map);
+            marker.bindPopup(popupHtml(v, style), { className: 'custom-popup' });
+            entry = {
+              marker,
+              styleKey: `${style.color}|${style.icon}`,
+              lat,
+              lon,
+              serverTsSec,
+              lastServerTsSec: serverTsSec,
+              transitionTimer: null
+            };
+            this.markers.set(vid, entry);
+          } else {
+            const prevTs = entry.lastServerTsSec;
+            const hasNewTs = Number.isFinite(serverTsSec) && (!Number.isFinite(prevTs) || serverTsSec > prevTs);
+            const coordsChanged = !Number.isFinite(entry.lon) || !Number.isFinite(entry.lat) ||
+              Math.abs(entry.lon - lon) > EPS || Math.abs(entry.lat - lat) > EPS;
+            if (hasNewTs || coordsChanged) {
+              entry.lastServerTsSec = serverTsSec;
+              entry.serverTsSec = serverTsSec;
+              entry.lat = lat;
+              entry.lon = lon;
+              this.slideMarkerTo(entry, lat, lon);
+            }
+            const nextStyleKey = `${style.color}|${style.icon}`;
+            if (entry.styleKey !== nextStyleKey) {
+              entry.styleKey = nextStyleKey;
+              this.applyStyleToMarker(entry, style);
+              entry.marker.setPopupContent(popupHtml(v, style));
+            }
+            if (entry.marker.isPopupOpen()) {
+              entry.marker.setPopupContent(popupHtml(v, style));
+            }
+          }
+          entry.data = v;
+        });
+
+        for (const [vid, entry] of this.markers.entries()) {
+          if (!activeIDs.has(vid)) {
+            if (entry?.transitionTimer) clearTimeout(entry.transitionTimer);
+            entry.marker.remove();
+            this.markers.delete(vid);
+          }
+        }
+        return activeIDs.size;
+      }
+
+      setVisibleIds(visibleIds) {
+        let count = 0;
+        for (const [vid, entry] of this.markers.entries()) {
+          const el = entry?.marker?.getElement?.();
+          if (!el) continue;
+          const shouldShow = visibleIds.has(vid);
+          el.style.display = shouldShow ? "" : "none";
+          if (shouldShow) count += 1;
+        }
+        return count;
+      }
+    }
+
+    // --- MAPLIBRE ADAPTER (Principal) ---
+    class MapLibreAdapter {
+      constructor() {
+        this.map = null;
+        this.markers = new Map();
+        this.isInteracting = false;
+        this.animationDuration = Math.max(300, Math.min(ANIMATION_MS, REFRESH_RATE_MS - 150));
+        this.visualTickMs = 1000;
+        this.visualIntervalId = null;
+        this.ready = this.init();
+      }
+
+      async init() {
+        this.map = new maplibregl.Map({
+          container: "map",
+          style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+          center: [MAP_CENTER[1], MAP_CENTER[0]],
+          zoom: MAP_ZOOM,
+          attributionControl: false
+        });
+        this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+        await new Promise(resolve => this.map.once("load", resolve));
+
+        const startInteraction = () => {
+          this.isInteracting = true;
+          const container = this.map.getContainer?.();
+          if (container) container.classList.add("map-interacting");
+          this.clearAllTransitions();
+        };
+        const endInteraction = () => {
+          this.isInteracting = false;
+          const container = this.map.getContainer?.();
+          if (container) container.classList.remove("map-interacting");
+          // Ensure no lingering transitions after an interaction ends.
+          this.clearAllTransitions();
+        };
+        this.map.on("zoomstart", startInteraction);
+        this.map.on("movestart", startInteraction);
+        this.map.on("dragstart", startInteraction);
+        this.map.on("zoomend", endInteraction);
+        this.map.on("moveend", endInteraction);
+        this.map.on("dragend", endInteraction);
+
+        this.visualIntervalId = setInterval(() => this.tickVisuals(), this.visualTickMs);
+      }
+
+      createMarker(id, coords, style, vehicle, serverTsSec) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "veh-wrapper";
+        wrapper.innerHTML = vehicleIconMarkup(style);
+        const inner = wrapper.querySelector('.veh-marker');
+        const marker = new maplibregl.Marker({ element: wrapper, anchor: "bottom" })
+          .setLngLat(coords)
+          .addTo(this.map);
+        const popup = new maplibregl.Popup({ offset: 18, className: "custom-popup" }).setHTML(popupHtml(vehicle, style));
+        marker.setPopup(popup);
+        const state = {
+          id,
+          marker,
+          inner,
+          popup,
+          lon: coords[0],
+          lat: coords[1],
+          serverTsSec,
+          lastServerTsSec: serverTsSec,
+          data: vehicle,
+          transitionTimer: null
+        };
+        this.markers.set(id, state);
+        this.applyStyle(state, style);
+        this.updateMarkerVisual(state);
+        return state;
+      }
+
+      clearAllTransitions() {
+        for (const state of this.markers.values()) {
+          if (state?.transitionTimer) {
+            clearTimeout(state.transitionTimer);
+            state.transitionTimer = null;
+          }
+          const el = state?.marker?.getElement?.();
+          if (el) {
+            el.classList.remove("veh-animating");
+            el.style.removeProperty("--veh-move-ms");
+          }
+        }
+      }
+
+      slideMarkerTo(state, coords) {
+        const markerEl = state?.marker?.getElement?.();
+        if (!markerEl || this.isInteracting || this.animationDuration <= 0) {
+          state.marker.setLngLat(coords);
+          return;
+        }
+
+        if (state.transitionTimer) {
+          clearTimeout(state.transitionTimer);
+          state.transitionTimer = null;
+        }
+
+        markerEl.style.setProperty("--veh-move-ms", `${this.animationDuration}ms`);
+        markerEl.classList.add("veh-animating");
+        requestAnimationFrame(() => state.marker.setLngLat(coords));
+        state.transitionTimer = setTimeout(() => {
+          const el2 = state.marker.getElement?.();
+          if (el2) {
+            el2.classList.remove("veh-animating");
+            el2.style.removeProperty("--veh-move-ms");
+          }
+          state.transitionTimer = null;
+        }, this.animationDuration + 80);
+      }
+
+      updateMarker(state, coords, style, vehicle, serverTsSec) {
+        const EPS = 1e-7;
+        const prevTs = state.lastServerTsSec;
+        const hasNewTs = Number.isFinite(serverTsSec) && (!Number.isFinite(prevTs) || serverTsSec > prevTs);
+        const coordsChanged = !Number.isFinite(state.lon) || !Number.isFinite(state.lat) ||
+          Math.abs(state.lon - coords[0]) > EPS || Math.abs(state.lat - coords[1]) > EPS;
+
+        if (hasNewTs || coordsChanged) {
+          state.lastServerTsSec = serverTsSec;
+          state.lon = coords[0];
+          state.lat = coords[1];
+          this.slideMarkerTo(state, coords);
+        }
+
+        state.serverTsSec = serverTsSec;
+        state.data = vehicle;
+        this.applyStyle(state, style);
+        if (state.popup && typeof state.popup.isOpen === "function" && state.popup.isOpen()) {
+          state.popup.setHTML(popupHtml(vehicle, style));
+        }
+        this.updateMarkerVisual(state, Date.now() / 1000);
+      }
+
+      applyStyle(state, style) {
+        const inner = state.inner;
+        if (!inner) return;
+        inner.style.setProperty("--c", style.color);
+        const icon = inner.querySelector('.veh-icon');
+        if (icon) icon.className = `fa ${style.icon} veh-icon`;
+      }
+
+      updateMarkerVisual(state, nowSec = Date.now() / 1000) {
+        const inner = state.inner;
+        if (!inner) return;
+        const pingAge = Number.isFinite(state.serverTsSec) ? nowSec - state.serverTsSec : Infinity;
+        const isInactive = pingAge > INACTIVE_SECONDS;
+        const isStale = pingAge > ACTIVE_SECONDS && !isInactive;
+        inner.classList.toggle("veh--stale", isStale);
+        inner.classList.toggle("veh--inactive", isInactive);
+      }
+
+      updateVehicles(vehicleList) {
+        if (!this.map) return 0;
+        const activeIDs = new Set();
+        vehicleList.forEach(v => {
+          if (!v || v.id == null) return;
+          const coords = normalizeCoordinates(v);
+          if (!coords) return;
+          const style = getStyle(v);
+          const vid = String(v.id);
+          activeIDs.add(vid);
+          const serverTsSec = normalizeTimestampSeconds(v.ts ?? v.timestamp ?? v.time ?? Date.now());
+          let state = this.markers.get(vid);
+          if (!state) {
+            state = this.createMarker(vid, coords, style, v, serverTsSec);
+          } else {
+            this.updateMarker(state, coords, style, v, serverTsSec);
+          }
+        });
+
+        for (const [vid, state] of this.markers.entries()) {
+          if (!activeIDs.has(vid)) {
+            if (state?.transitionTimer) clearTimeout(state.transitionTimer);
+            state.marker.remove();
+            if (state.popup) state.popup.remove();
+            this.markers.delete(vid);
+          }
+        }
+        return activeIDs.size;
+      }
+
+      tickVisuals() {
+        if (!this.map) return;
+        const nowSec = Date.now() / 1000;
+        for (const state of this.markers.values()) {
+          this.updateMarkerVisual(state, nowSec);
+        }
+      }
+
+      setVisibleIds(visibleIds) {
+        let count = 0;
+        for (const [vid, state] of this.markers.entries()) {
+          const el = state?.marker?.getElement?.();
+          if (!el) continue;
+          const shouldShow = visibleIds.has(vid);
+          el.style.display = shouldShow ? "" : "none";
+          if (shouldShow) count += 1;
+        }
+        return count;
+      }
+    }
+
+    // --- Inicialização ---
+    function createAdapter() {
+      const rendererPref = (urlParams.get('renderer') || "").toLowerCase();
+      const hasMapLibre = typeof maplibregl !== "undefined";
+      const hasLeaflet = typeof L !== "undefined";
+
+      // Prefer MapLibre (WebGL) for smoother zoom/interaction with many markers.
+      if (rendererPref === "leaflet" && hasLeaflet) return new LeafletAdapter();
+      if (rendererPref === "maplibre" && hasMapLibre) return new MapLibreAdapter();
+
+      if (hasMapLibre) {
+        try {
+          return new MapLibreAdapter();
+        } catch (err) {
+          console.warn("MapLibre falhou, alternando para Leaflet:", err);
+        }
+      }
+      if (hasLeaflet) return new LeafletAdapter();
+      throw new Error("Nenhum renderer de mapa disponível (MapLibre ou Leaflet).");
+    }
+
+	    let adapter;
+	    try {
+	      adapter = createAdapter();
+	    } catch (err) {
+	      showAppError(`Falha ao inicializar o mapa: ${err?.message || err}`);
+	      adapter = {
+	        ready: Promise.resolve(),
+	        updateVehicles: () => 0,
+	        setVisibleIds: () => 0
+	      };
+	    }
+
+    function filterVehicles(list) {
+      return list.filter(v => {
+        if (selectedCategory !== CATEGORY_FILTER_ALL) {
+          const resolved = v.categoryResolved || v.category || "";
+          if (resolved !== selectedCategory) return false;
+        }
+        if (selectedRoute !== ROUTE_FILTER_ALL) {
+          const variantKey = normalizeOptionKey(v.routeId || v.routeLabel);
+          const baseKey = getBaseRouteKey(variantKey);
+          if (selectedVariant !== VARIANT_FILTER_ALL) {
+            if (!variantKey || variantKey !== selectedVariant) return false;
+          } else if (!baseKey || (baseKey !== selectedRoute && variantKey !== selectedRoute)) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    function updateStatus(state) {
+      if (!statusDot) return;
+      statusDot.className = `status-dot ${state}`;
+    }
+
+    async function renderVehicles() {
+      const baseList = Array.isArray(lastVehicles) ? lastVehicles : [];
+      if (adapter.ready instanceof Promise) await adapter.ready;
+      // Keep markers for the full feed so switching filters is instant (show/hide instead of destroy/recreate).
+      adapter.updateVehicles(baseList);
+      const filtered = filterVehicles(baseList);
+      const visibleIds = new Set(filtered.map(v => String(v.id)));
+      const visibleCount = typeof adapter.setVisibleIds === "function"
+        ? adapter.setVisibleIds(visibleIds)
+        : filtered.length;
+      return visibleCount;
+    }
+
+    function normalizeVehicles(data) {
+       let list = [];
+       if (Array.isArray(data)) list = data;
+       else if (data?.features) list = data.features;
+       else if (data?.entity) list = data.entity;
+
+       const normalized = list.map((item, idx) => {
+          if (item && item.vehicle) {
+            const veh = item.vehicle;
+            const vehInfo = veh.vehicle || {};
+            const pos = veh.position || {};
+            const trip = veh.trip || {};
+            const speedMs = Number(pos.speed);
+            return {
+              id: vehInfo.id ?? vehInfo.label ?? `gtfs-${idx}`,
+              lat: pos.latitude,
+              lon: pos.longitude,
+              routeId: trip.routeId ?? trip.tripId ?? "",
+              linha: trip.routeId ?? "",
+              speed: Number.isFinite(speedMs) ? speedMs * 3.6 : 0,
+              ts: veh.timestamp ?? pos.timestamp ?? Date.now()
+            };
+          }
+          if (item?.type === "Feature") return featureToVehicle(item, idx);
+          return item;
+       }).filter(v => v && v.lat);
+       return normalized.map(decorateVehicle);
+    }
+
+    async function fetchData() {
+      updateStatus("fetching");
+      const vehicleParams = buildVehicleQueryParams();
+      try {
+        const payload = await fetchFromEndpoints(VEHICLE_ENDPOINTS, vehicleParams);
+        const vehicles = normalizeVehicles(payload);
+        lastVehicles = vehicles;
+        updateRouteOptionsFromVehicles(vehicles);
+        await renderVehicles();
+        updateStatus("online");
+        refreshKpis().catch(() => {});
+        clearAppError();
+      } catch (err) {
+        console.warn("Offline mode:", err);
+        showAppError(`Falha a obter veículos: ${err?.message || err}`);
+        const fallback = await loadOfflineVehicles();
+        const vehicles = normalizeVehicles(fallback);
+        lastVehicles = vehicles;
+        updateRouteOptionsFromVehicles(vehicles);
+        await renderVehicles();
+        updateStatus("offline");
+        refreshKpis().catch(() => {});
+      }
+    }
+
+    function startPolling() {
+      let timerId = null;
+      const loop = async () => {
+        const started = performance.now();
+        await fetchData();
+        const elapsed = performance.now() - started;
+        const delay = Math.max(0, REFRESH_RATE_MS - elapsed);
+        timerId = setTimeout(loop, delay);
+      };
+      if (timerId) clearTimeout(timerId);
+      loop();
+    }
+
+    function startKpiRefreshLoop() {
+      setInterval(() => {
+        // Force refresh to bypass caches so KPIs update even if other polling loops are quiet.
+        refreshKpis(true).catch(() => {});
+      }, KPI_REFRESH_INTERVAL_MS);
+    }
+
+	    setSidebarCollapsed(window.matchMedia && window.matchMedia("(max-width: 900px)").matches);
+	    initCategoryFilter();
+	    initRouteFilter();
+	    initVariantFilter();
+	    initPreviewCharts();
+
+    (async () => {
+      await Promise.allSettled([loadRouteTranslator(), loadRoutesCatalog()]);
+      await refreshCharts(true).catch(() => {});
+      startChartRefreshLoop();
+      startKpiRefreshLoop();
+      startPolling();
+    })();
+
+  </script>
+</body>
+</html>
