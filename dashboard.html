@@ -512,7 +512,11 @@
       display: flex; 
       justify-content: space-between; 
       align-items: center;
+      gap: 10px;
     }
+    .pop-header__left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .pop-title { font-size: 0.96rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pop-header__actions { display: inline-flex; align-items: center; gap: 8px; }
     .pop-body { padding: 12px; font-size: 13px; color: #444; line-height: 1.5; }
 
     /* MapLibre popup parity */
@@ -711,17 +715,82 @@
       transform-origin: center;
       will-change: transform, opacity, filter;
       animation: none;
-      transition: opacity 260ms ease, transform 260ms ease, filter 200ms ease;
+      transition: opacity 320ms ease, transform 360ms cubic-bezier(0.2, 0.9, 0.2, 1), filter 220ms ease;
     }
     .stop-marker.stop--hidden {
       opacity: 0;
-      transform: scale(0.5);
+      transform: scale(0.78);
       animation: none;
     }
     .stop-marker.stop--shown {
       opacity: 1;
       transform: scale(1);
       animation: none;
+    }
+
+    /* Contentores das mini-pills sobre as paragens */
+    .stop-label-container {
+      pointer-events: none; /* Permite clicar na paragem por baixo */
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      opacity: 0;
+      transform: translateY(6px) scale(0.94);
+      transition: opacity 260ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .stop-label-container.stop-label--shown {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .stop-label-container.stop-label--hidden {
+      opacity: 0;
+      transform: translateY(10px) scale(0.92);
+    }
+
+    .stop-label-pills {
+      display: flex;
+      gap: 2px;
+      justify-content: center;
+      flex-wrap: wrap;
+      max-width: 60px; /* Mantém as pills compactas */
+      opacity: 0;
+      transform: translateY(6px) scale(0.94);
+      transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.9, 0.2, 1);
+      will-change: opacity, transform;
+    }
+    .stop-label-pills.stop-label-pills--visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .stop-label-pill-mini {
+      padding: 1px 3px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 900;
+      line-height: 1;
+      color: white;
+      border: 1px solid rgba(0,0,0,0.15);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      white-space: nowrap;
+      text-shadow: 0 0.5px 1px rgba(0,0,0,0.3);
+    }
+    body.theme-dark .stop-label-pill,
+    body.theme-auto .stop-label-pill {
+      background: rgba(15, 23, 42, 0.92);
+      color: #f8fafc;
+      border-color: rgba(248, 250, 252, 0.12);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.32);
+    }
+    body.theme-dark .stop-label-pill__pill,
+    body.theme-auto .stop-label-pill__pill {
+      border-color: var(--pill-border, rgba(248, 250, 252, 0.16));
+      box-shadow: none;
+    }
+    body.stop-labels-visible .stop-label-pill {
+      opacity: 1;
+      transform: translate(-50%, -2px) scale(1);
     }
     .stop-marker .stop-arrow {
       position: absolute;
@@ -924,6 +993,10 @@
     .hidden {
       display: none !important;
     }
+
+    /* Keep popups above everything */
+    .leaflet-pane.leaflet-popup-pane { z-index: 4000 !important; }
+    .maplibregl-popup { z-index: 4000 !important; }
 
 	    @media (max-width: 900px) {
 	      #sidebar {
@@ -1169,7 +1242,7 @@
     };
     const ZONE_ROUTE_BASES = {
       Centro: new Set([
-        "12E", "24háE", "25E", "28E", "51E", "52E", "53E", "54E", "55E",
+        "12E", "24E", "25E", "28E", "51E", "52E", "53E", "54E", "55E",
         "702", "706", "709", "712", "713", "730", "734", "737", "740",
         "773", "774", "790", "797"
       ]),
@@ -1210,19 +1283,11 @@
         });
     }
 
-    // Always send the ngrok bypass header so the warning screen is skipped.
-    const NGROK_SKIP_HEADER_VALUE = "69420";
-    function withNgrokBypass(options = {}) {
-      const headers = new Headers(options.headers || {});
-      headers.set("ngrok-skip-browser-warning", NGROK_SKIP_HEADER_VALUE);
-      return { ...options, headers };
-    }
-
-		    function normalizeBaseUrl(raw) {
-		      if (!raw) return null;
-		      const value = raw.trim();
-		      if (!value) return null;
-		      const proto = (typeof location !== "undefined" && location.protocol && location.protocol !== "file:") ? location.protocol : "http:";
+	    function normalizeBaseUrl(raw) {
+	      if (!raw) return null;
+	      const value = raw.trim();
+	      if (!value) return null;
+	      const proto = (typeof location !== "undefined" && location.protocol && location.protocol !== "file:") ? location.protocol : "http:";
 	      const host = (typeof location !== "undefined" && location.hostname) ? location.hostname : "127.0.0.1";
 	      if (/^\d+$/.test(value)) return `${proto}//${host}:${value}`;
 	      if (/^[\w.-]+:\d+$/i.test(value)) return `${proto}//${value}`;
@@ -1231,7 +1296,7 @@
 	    }
 
 	    function resolveBackendBases() {
-	      const bases = ["https://tyron-uncondensational-prepossessingly.ngrok-free.dev"];
+	      const bases = [];
 	      const override = urlParams.get("backend") || urlParams.get("api_base");
 	      const normalizedOverride = normalizeBaseUrl(override);
 	      if (normalizedOverride) bases.push(normalizedOverride);
@@ -1382,13 +1447,14 @@
 
     async function loadRouteTranslator() {
       try {
-        const resp = await fetch(ROUTE_TRANSLATOR_URL, withNgrokBypass({ cache: "no-store" }));
+        const resp = await fetch(ROUTE_TRANSLATOR_URL, { cache: "no-store" });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const text = await resp.text();
         const parsed = parseTranslatorCsv(text);
         ROUTE_TRANSLATOR.byId = parsed.byId;
         ROUTE_TRANSLATOR.base = parsed.base;
         refreshRouteLabels();
+        refreshRouteTaxonomy();
       } catch (err) {
         console.warn("Falha ao carregar tradutor de rotas:", err);
       }
@@ -1397,7 +1463,7 @@
     async function loadRoutesCatalog() {
       if (routesCatalogLoaded) return;
       try {
-        const resp = await fetch(ROUTES_DATA_URL, withNgrokBypass({ cache: "no-store" }));
+        const resp = await fetch(ROUTES_DATA_URL, { cache: "no-store" });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const text = await resp.text();
         const lines = text.replace(/\r/g, "\n").split("\n");
@@ -1427,6 +1493,7 @@
         if (dirty) {
           rebuildRouteSuggestions();
           updateVariantOptions();
+          refreshRouteTaxonomy();
         }
       } catch (err) {
         console.warn("Falha ao carregar routes.txt:", err);
@@ -1524,16 +1591,23 @@
       }
       const resolvedCategory = category || definirCategoria(shortName || fallbackLabel || baseId);
       const baseCategory = definirCategoria(baseId);
-      const categoriesToAdd = new Set([resolvedCategory, baseCategory].filter(Boolean));
-      categoriesToAdd.forEach(cat => {
-        if (!entry.categories.has(cat)) {
-          entry.categories.add(cat);
-          dirty = true;
-        }
-      });
+      const nextCategories = new Set([resolvedCategory, baseCategory].filter(Boolean));
+      const categoriesChanged =
+        !entry.categories ||
+        entry.categories.size !== nextCategories.size ||
+        Array.from(nextCategories).some(cat => !entry.categories.has(cat));
+      if (categoriesChanged) {
+        entry.categories = nextCategories;
+        dirty = true;
+      }
       const resolvedZone = definirZona(shortName || fallbackLabel || baseId);
-      if (resolvedZone && !entry.zones.has(resolvedZone)) {
-        entry.zones.add(resolvedZone);
+      const nextZones = new Set(resolvedZone ? [resolvedZone] : []);
+      const zonesChanged =
+        !entry.zones ||
+        entry.zones.size !== nextZones.size ||
+        Array.from(nextZones).some(zone => !entry.zones.has(zone));
+      if (zonesChanged) {
+        entry.zones = nextZones;
         dirty = true;
       }
       return dirty;
@@ -1589,6 +1663,13 @@
       return parts.join(" ").trim();
     }
 
+    function resolvePublicRouteLabel(value) {
+      const raw = normalizeRouteKey(value);
+      const base = getBaseRouteKey(raw);
+      // Prefer the label already loaded do routes.txt; fallback to formatted label, otherwise raw.
+      return routeLabelById.get(base) || routeLabelById.get(raw) || formatRouteLabel(raw, raw);
+    }
+
     function formatVariantLabel(routeId, fallback = "") {
       // Keep variant labels clean (no "(Var. X)" suffix); use the best known name for that variant id.
       return formatRouteLabel(routeId, fallback);
@@ -1615,6 +1696,51 @@
       if (dirty) {
         rebuildRouteSuggestions();
         updateVariantOptions();
+      }
+    }
+
+    function refreshRouteTaxonomy() {
+      let dirty = false;
+      routeOptions.forEach((entry, baseId) => {
+        const labels = [];
+        const baseLabel = formatRouteLabel(baseId, entry.label || baseId);
+        if (baseLabel) labels.push(baseLabel);
+        labels.push(translateRoute(baseId), baseId);
+        if (entry?.variants) {
+          entry.variants.forEach((label, variantId) => {
+            if (label) labels.push(label);
+            labels.push(translateRoute(variantId), variantId);
+          });
+        }
+
+        const nextCategories = new Set();
+        const nextZones = new Set();
+        labels.forEach(label => {
+          const cat = definirCategoria(label);
+          if (cat) nextCategories.add(cat);
+          const zone = definirZona(label);
+          if (zone) nextZones.add(zone);
+        });
+
+        const categoriesChanged =
+          !entry.categories ||
+          entry.categories.size !== nextCategories.size ||
+          Array.from(nextCategories).some(cat => !entry.categories.has(cat));
+        const zonesChanged =
+          !entry.zones ||
+          entry.zones.size !== nextZones.size ||
+          Array.from(nextZones).some(zone => !entry.zones.has(zone));
+        if (categoriesChanged) {
+          entry.categories = nextCategories;
+          dirty = true;
+        }
+        if (zonesChanged) {
+          entry.zones = nextZones;
+          dirty = true;
+        }
+      });
+      if (dirty) {
+        rebuildRouteSuggestions();
       }
     }
 
@@ -1740,11 +1866,12 @@
         return;
       }
       const html = entries.map(({ id, label }) => {
-        const style = pillStyleForRoute(id || label);
-        const { code } = parseRouteCodeParts(id || label);
-        const pillText = code || id || label;
+        const displayLabel = label || id;
+        const style = pillStyleForRoute(displayLabel);
+        const { code } = parseRouteCodeParts(displayLabel);
+        const pillText = code || displayLabel || id;
         const regex = code ? new RegExp(`^${escapeRegex(code)}\\s*`, "i") : null;
-        const restLabel = regex ? (label.replace(regex, "").trim() || label) : label;
+        const restLabel = regex ? (displayLabel.replace(regex, "").trim() || displayLabel) : displayLabel;
         const safeLabel = escapeHtml(restLabel);
         const safeId = escapeHtml(id);
         const pill = `<span class="route-pill" aria-hidden="true" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(pillText)}</span>`;
@@ -1787,12 +1914,12 @@
       routeSelectedPill.classList.add("hidden");
       return;
     }
-    const label = routeLabelById.get(selectedRoute) || selectedRoute;
-    const { code } = parseRouteCodeParts(selectedRoute || label);
-    const pillText = code || selectedRoute || label;
-    const style = pillStyleForRoute(selectedRoute || label);
+    const displayLabel = resolvePublicRouteLabel(selectedRoute);
+    const { code } = parseRouteCodeParts(displayLabel);
+    const pillText = code || displayLabel || selectedRoute;
+    const style = pillStyleForRoute(displayLabel);
     const regex = code ? new RegExp(`^${escapeRegex(code)}\\s*`, "i") : null;
-    const restLabel = regex ? (label.replace(regex, "").trim() || label) : label;
+    const restLabel = regex ? (displayLabel.replace(regex, "").trim() || displayLabel) : displayLabel;
     const safeRest = escapeHtml(restLabel);
     routeSelectedText.innerHTML = `<span class="route-pill route-pill--inline" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(pillText)}</span> <span class="route-title-rest" title="${safeRest}">${safeRest}</span>`;
     routeSelectedPill.classList.remove("hidden");
@@ -1828,17 +1955,7 @@
       window.addEventListener("scroll", updateRoutePreviewPositionDebounced, { passive: true });
       if (routeClear) {
         routeClear.addEventListener("click", () => {
-          selectedRoute = ROUTE_FILTER_ALL;
-          selectedVariant = VARIANT_FILTER_ALL;
-          syncRouteInputValue();
-          updateVariantOptions();
-          renderVehicles();
-          refreshRouteOverlay(true).catch(() => {});
-          refreshGlobalStops(true).catch(() => {});
-          refreshCharts(true).catch(() => {});
-          refreshKpis(true);
-          updateRouteClearVisibility();
-          renderSelectedRoutePill();
+          clearRouteSelection();
         });
       }
       if (routeSelectedPill) {
@@ -2635,7 +2752,7 @@
       let lastError = null;
       for (const url of resolved) {
         try {
-          const response = await fetch(url, withNgrokBypass({ ...opts, cache: "no-store" }));
+          const response = await fetch(url, { cache: "no-store", signal: opts.signal });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           return await response.json();
         } catch (err) {
@@ -2744,23 +2861,23 @@
     }
 
     function buildRouteContext() {
-      const baseLabel = routeLabelById.get(selectedRoute) || selectedRoute || "Carreira";
+      const baseLabel = resolvePublicRouteLabel(selectedRoute) || "Carreira";
       let displayLabel = baseLabel;
       let routeIdForPill = selectedRoute;
       if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
         const variantEntry = routeOptions.get(selectedRoute)?.variants?.get(selectedVariant);
-        if (variantEntry) displayLabel = `${variantEntry}`;
-        else displayLabel = `${baseLabel} • ${selectedVariant}`;
+        displayLabel = variantEntry || formatRouteLabel(selectedVariant, baseLabel) || baseLabel;
         routeIdForPill = selectedVariant || selectedRoute;
       }
-      const { code } = parseRouteCodeParts(routeIdForPill || displayLabel);
+      const { code } = parseRouteCodeParts(displayLabel || routeIdForPill);
       if (!code) return { text: displayLabel, html: null };
-      const style = pillStyleForRoute(routeIdForPill || displayLabel);
+      const style = pillStyleForRoute(displayLabel || routeIdForPill);
       const regex = new RegExp(`^${escapeRegex(code)}\\s*`, "i");
-      const rest = displayLabel.replace(regex, "").trim();
+      const rest = (displayLabel || "").replace(regex, "").trim();
       const pillHtml = `<span class="route-pill route-pill--inline" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(code)}</span>`;
       const html = rest ? `${pillHtml} <span class="route-title-rest">${escapeHtml(rest)}</span>` : pillHtml;
-      return { text: displayLabel, html };
+      const text = rest ? `${code} ${rest}` : code;
+      return { text, html };
     }
 
     async function refreshKpis(force = false) {
@@ -2946,6 +3063,7 @@
       if (dirty) {
         rebuildRouteSuggestions();
         updateVariantOptions();
+        refreshRouteTaxonomy();
       }
     }
 
@@ -2995,22 +3113,45 @@
     function translateRoute(routeId) {
       const raw = normalizeRouteKey(routeId);
       if (!raw) return "";
-      if (ROUTE_TRANSLATOR.byId[raw]) return ROUTE_TRANSLATOR.byId[raw];
-      const base = raw.split("_")[0] || raw;
-      const alt0 = `${base}_0`;
-      const alt1 = `${base}_1`;
-      if (ROUTE_TRANSLATOR.byId[alt0]) return ROUTE_TRANSLATOR.byId[alt0];
-      if (ROUTE_TRANSLATOR.byId[alt1]) return ROUTE_TRANSLATOR.byId[alt1];
-      return ROUTE_TRANSLATOR.base[base] || raw;
+      const base = getBaseRouteKey(raw);
+      const metaVariant = raw ? ROUTE_DETAILS.get(raw) : null;
+      const metaBase = base ? BASE_ROUTE_DETAILS.get(base) : null;
+      if (metaVariant?.shortName) return metaVariant.shortName;
+      if (metaBase?.shortName) return metaBase.shortName;
+      return raw;
     }
 
     function parseRouteCodeParts(routeIdOrName) {
-      const translated = translateRoute(routeIdOrName);
+      const rawLabel = String(routeIdOrName ?? "").trim();
+      const normalizedInput = normalizeRouteKey(rawLabel);
+      // Preferir código que apareça no início do texto (antes de espaços/pontuação) para não capturar letras da descrição.
+      const leading = rawLabel.match(/^\s*([0-9]{1,3}[A-Z]?)(?=[^0-9A-Z]|$)/i);
+      if (leading) {
+        const code = leading[1].toUpperCase();
+        const digits = code.match(/(\d{1,3})/);
+        const codeBase = (/^\d{3}[01]$/.test(code)) ? code.slice(0, 3) : (digits ? digits[1] : code);
+        return { code, codeBase };
+      }
+      // If already parece um código curto (ex.: "208", "35B") e sem sufixo, não deixar metadata/tradutor interferir.
+      if (normalizedInput && !normalizedInput.includes("_")) {
+        const simpleMatch = normalizedInput.match(/^([0-9]{1,3}[A-Z]?)/i);
+        if (simpleMatch && simpleMatch[0].length === normalizedInput.length) {
+          const code = simpleMatch[1].toUpperCase();
+          const digits = code.match(/(\d{1,3})/);
+          const codeBase = (code.match(/^\d{3}[01]$/)) ? code.slice(0, 3) : (digits ? digits[1] : code);
+          return { code, codeBase };
+        }
+      }
+      const base = getBaseRouteKey(normalizedInput);
+      const metaVariant = normalizedInput ? ROUTE_DETAILS.get(normalizedInput) : null;
+      const metaBase = base ? BASE_ROUTE_DETAILS.get(base) : null;
+      const translated = translateRoute(normalizedInput || base);
+      const metaShort = (metaVariant?.shortName || metaBase?.shortName || "").trim();
       const fallback = routeIdOrName != null ? String(routeIdOrName) : "";
-      const candidate = (translated || fallback).toUpperCase();
-      const normalized = candidate.replace(/[^A-Z0-9]/g, "");
-      const match = normalized.match(/(\d{1,3}[A-Z]?)/); // allow codes that are not at the start of the string
-      const code = match ? match[1] : normalized;
+      const candidate = (metaShort || translated || fallback).toUpperCase();
+      const normalizedCandidate = candidate.replace(/[^A-Z0-9]/g, "");
+      const match = normalizedCandidate.match(/(\d{1,3}[A-Z]?)/); // allow codes that are not at the start of the string
+      const code = match ? match[1] : normalizedCandidate;
       const codeBase = (() => {
         if (/^\d{3}[01]$/.test(code)) return code.slice(0, 3);
         const digits = code.match(/(\d{1,3})/);
@@ -3051,19 +3192,44 @@
       </div>`;
     }
 
+    function stripRouteCodeFromLabel(label) {
+      const text = (label || "").trim();
+      if (!text) return "";
+      const { code } = parseRouteCodeParts(text);
+      if (!code) return text;
+      const pattern = new RegExp(`^${escapeRegex(code)}\\s*[-–—:]?\\s*`, "i");
+      if (!pattern.test(text)) return text;
+      const cleaned = text.replace(pattern, "").trim();
+      if (!cleaned && text.replace(/\s+/g, "").toUpperCase() === code.toUpperCase()) return "";
+      return cleaned || text;
+    }
+
     function popupHtml(v, style) {
       const label = v.routeLabel || v.linha || "—";
       const dirId = getDirectionId(v);
       const dirLabel = directionDisplayLabel(v?.routeId || v?.linha || "", dirId);
+      const { code } = parseRouteCodeParts(label);
+      const zoneInfo = resolveRouteZone(label);
+      const headerColor = zoneInfo.color || style.color;
+      const headerFg = readableTextColor(headerColor, "#ffffff");
+      const safeLabel = escapeHtml(label);
+      const titleText = stripRouteCodeFromLabel(label);
+      const safeTitle = escapeHtml(titleText || "—");
+      const safeDirLabel = dirLabel ? escapeHtml(dirLabel) : "";
+      const pill = `<span class="route-pill route-pill--clickable popup-route-link" data-route-label="${safeLabel}" title="Filtrar pela carreira" style="--pill-bg:${headerFg === '#0f172a' ? '#ffffff' : 'rgba(255,255,255,0.14)'};--pill-fg:${headerFg};--pill-border:rgba(255,255,255,0.18)">${escapeHtml(code || label)}</span>`;
       return `
-        <div class="pop-header" style="background-color: ${style.color}">
-          <span style="font-size: 1.2em"> ${label}</span>
-          <span style="opacity: 0.8">#${v.id}</span>
+        <div class="pop-header" style="background-color: ${headerColor}; color:${headerFg}">
+          <div class="pop-header__left">
+            ${pill}
+            <span class="pop-title" title="${safeTitle}">${safeTitle}</span>
+          </div>
+          <div class="pop-header__actions">
+            <span style="opacity: 0.8">#${v.id}</span>
+          </div>
         </div>
         <div class="pop-body">
-          ${dirLabel ? `<div style="margin-bottom:4px"><b>${dirLabel}</b></div>` : ""}
+          ${safeDirLabel ? `<div style="margin-bottom:4px"><b>${safeDirLabel}</b></div>` : ""}
           <div style="margin-bottom:4px"><b>Velocidade:</b> ${Math.round(v.speed || 0)} km/h</div>
-          ${dirLabel ? "" : (dirId === 0 || dirId === 1) ? `<div><b>Direção:</b> Sentido ${dirId}</div>` : ""}
         </div>
       `;
     }
@@ -3103,8 +3269,8 @@
       if (!vehicle) return vehicle;
       const enriched = { ...vehicle };
       const routeRaw = normalizeRouteKey(resolveRouteId(vehicle));
-      const label = formatRouteLabel(routeRaw || vehicle.linha, vehicle.linha);
-      const category = definirCategoria(routeRaw || label || vehicle.category);
+      const label = resolvePublicRouteLabel(routeRaw || vehicle.linha);
+      const category = definirCategoria(label || routeRaw || vehicle.category);
       enriched.routeId = routeRaw;
       enriched.routeLabel = label || routeRaw;
       enriched.linha = enriched.routeLabel || enriched.linha || "";
@@ -3161,7 +3327,7 @@
     async function loadOfflineVehicles() {
       if (offlineVehiclesCache) return offlineVehiclesCache;
       try {
-        const response = await fetch(OFFLINE_VEHICLES_URL, withNgrokBypass());
+        const response = await fetch(OFFLINE_VEHICLES_URL);
         if (!response.ok) throw new Error("404");
         const data = await response.json();
         const features = Array.isArray(data?.features) ? data.features : [];
@@ -3221,10 +3387,11 @@
         || (base && ROUTE_DETAILS.get(`${base}_0`))
         || null;
       const pair = splitRouteDestinations(meta?.longName || "");
-      if (!pair) return `Sentido ${directionId}`;
+      if (!pair) return "Sentido: —";
       const idx = normalizeDirectionForDisplay(directionId) === 0 ? 0 : 1;
       const dest = pair[idx];
-      return `Sentido ${directionId} → ${dest}`;
+      const text = (dest || "").trim();
+      return `Sentido: ${text || "—"}`;
     }
 
     function getDirectionId(vehicle) {
@@ -3621,6 +3788,11 @@
 	        } catch (e) {}
 	      }
 
+      _setLayerPaint(layerId, paintProp, value) {
+        if (!this.map) return;
+        try { this.map.setPaintProperty(layerId, paintProp, value); } catch (e) {}
+      }
+
       initOverlayLayers() {
         if (!this.map) return;
         this._routeStopsCircleOpacity = 0.98;
@@ -3759,6 +3931,10 @@
               "icon-opacity": ["interpolate", ["linear"], ["zoom"], 10.5, 0, 12, 0.14, 13.5, this._globalStopsIconOpacity]
             }
           });
+        }
+        // Route labels above stops are rendered via DOM markers for richer pill styling; keep this layer disabled.
+        if (this.map.getLayer("global-stops-routes")) {
+          try { this.map.removeLayer("global-stops-routes"); } catch (e) {}
         }
 
         // Smooth fade when we toggle paint properties (used on data refresh).
@@ -3929,6 +4105,7 @@
           // Prefer backend-provided tangent; fallback to neighbor estimate only if missing.
           const angle = Number.isFinite(angleRaw) ? angleRaw : local;
           const routes = Array.isArray(s?.routes) ? s.routes : [];
+          const routesLabel = routes.map(r => String(r || "").trim()).filter(Boolean).slice(0, 6).join(" · ");
           if (stopId && routes.length) stopRoutesCache.set(stopId, routes);
           const finalColors = ["#ffd400"]; // brighter uniform yellow ring
           const comboKey = finalColors.length ? finalColors.join("|") : "default";
@@ -3943,6 +4120,7 @@
               stop_name: s?.stop_name || "",
               direction_angle: Number.isFinite(angle) ? angle : 0,
               routes,
+              routes_label: routesLabel,
               colors: finalColors,
               fill: "#ffffff",
               border: primaryColor,
@@ -3966,14 +4144,24 @@
           f.properties.icon = imgId;
           f.properties.iconId = imgId;
         }
+        const targetCircle = Number(this._globalStopsCircleOpacity ?? 0.98);
+        const targetIcon = Number(this._globalStopsIconOpacity ?? 0.92);
+        const shouldFadeStops = (prevCount === 0 && features.length > 0) || Math.abs(features.length - prevCount) >= 4;
+
         this.globalStopFeatures = features;
         this._applyOverlayData();
-	        this._lastGlobalStopsCount = features.length;
+        this._lastGlobalStopsCount = features.length;
 
-        // Smooth fade in/out on refresh.
-        this._fadeLayerPaint("global-stops", "circle-opacity", Number(this._globalStopsCircleOpacity ?? 0.98));
-        this._fadeLayerPaint("global-stops-symbol", "icon-opacity", Number(this._globalStopsCircleOpacity ?? 0.98));
-        this._fadeLayerPaint("global-stops-triangles", "icon-opacity", Number(this._globalStopsIconOpacity ?? 0.92));
+        // Smooth fade in/out on refresh; avoid flashing when only small updates occur.
+        if (shouldFadeStops) {
+          this._fadeLayerPaint("global-stops", "circle-opacity", targetCircle);
+          this._fadeLayerPaint("global-stops-symbol", "icon-opacity", targetCircle);
+          this._fadeLayerPaint("global-stops-triangles", "icon-opacity", targetIcon);
+        } else {
+          this._setLayerPaint("global-stops", "circle-opacity", targetCircle);
+          this._setLayerPaint("global-stops-symbol", "icon-opacity", targetCircle);
+          this._setLayerPaint("global-stops-triangles", "icon-opacity", targetIcon);
+        }
       }
 
       createMarker(id, coords, style, vehicle, serverTsSec) {
@@ -4450,21 +4638,13 @@
 	      try {
 	        if (adapter.ready instanceof Promise) await adapter.ready;
 	        if (!adapter?.map) return;
-	        const stopSizeForZoom = (z) => {
-	          if (!Number.isFinite(z)) return 10;
-          // Start almost invisible near the LOD threshold and grow gradually with zoom.
-	          const base = STOPS_MIN_ZOOM;
-	          const t = Math.max(0, z - base);
-	          const px = Math.round(5 + t * 3.8); // z=base => ~5px, each zoom adds ~3-4px
-	          return Math.max(5, Math.min(32, px));
-	        };
 	        const applyStopMarkerSize = () => {
 	          try {
 	            const z = Number(adapter.map.getZoom?.());
-	            const px = stopSizeForZoom(z);
-	            document.documentElement.style.setProperty("--map-zoom-size", `${px}px`);
-	          } catch (e) {}
-	        };
+            const px = stopPixelSizeForZoom(z);
+            document.documentElement.style.setProperty("--map-zoom-size", `${px}px`);
+          } catch (e) {}
+        };
 	        // Leaflet supports multiple events in a single string; MapLibre doesn't.
 	        if (adapter instanceof LeafletAdapter) {
 	          const handleStopsUpdate = () => scheduleRefreshStops(false);
@@ -4481,11 +4661,16 @@
 	          adapter.map.on("zoomend", () => {
 	            handleStopsUpdate();
 	            applyStopMarkerSize();
+	            updateMapLibreStopLabels();
 	          });
-	          adapter.map.on("moveend", handleStopsUpdate);
+	          adapter.map.on("moveend", () => {
+	            handleStopsUpdate();
+	            updateMapLibreStopLabels();
+	          });
 	          adapter.map.on("movestart", cancelGlobalStopsFetch);
 	          adapter.map.on("zoomstart", cancelGlobalStopsFetch);
 	          applyStopMarkerSize();
+	          updateMapLibreStopLabels();
 	        }
 	      } catch (err) {}
 	    }
@@ -4498,16 +4683,31 @@
 	    let overlayInflight = null;
 
     // Stop marker tuning: LOD threshold and transition timing (CSS uses ~260ms).
-    const STOPS_MIN_ZOOM = 12.5;
-    const STOP_ANIMATION_MS = 260;
-    const STOP_REMOVE_DELAY_MS = STOP_ANIMATION_MS + 60;
-    const GLOBAL_STOPS_LIMIT = 520;
-    const GLOBAL_STOPS_LIMIT_MIN = 260;
-    const GLOBAL_STOPS_KEY_PRECISION = 1e5;
+    const STOPS_MIN_ZOOM = 13;
+    const STOP_ANIMATION_MS = 320;
+    const STOP_REMOVE_DELAY_MS = STOP_ANIMATION_MS + 80;
+    const GLOBAL_STOPS_LIMIT = 1200;
+    const GLOBAL_STOPS_LIMIT_MIN = 600;
+    const GLOBAL_STOPS_KEY_PRECISION = 1e4;
+    const GLOBAL_STOPS_CACHE_TTL_MS = 120_000;
 	    const globalStopsCache = new Map(); // key -> { ts, payload }
     let globalStopsAbort = null;
-	    let globalStopsKey = null;
-	    const renderedStopsMap = new Map(); // stopKey -> { marker, lat, lon, angleDeg }
+    let globalStopsKey = null;
+    let lastRenderedGlobalStopsKey = null;
+    const renderedStopsMap = new Map(); // stopKey -> { marker, lat, lon, angleDeg }
+    const mapLibreStopLabelMarkers = new Map();
+    const STOP_LABEL_ZOOM_THRESHOLD = 15.2; // Zoom onde as pills começam a aparecer
+    const STOP_LABEL_FADE_MS = 260;
+    let mapLibreStopsFadeTimer = null;
+
+
+
+    function stopPixelSizeForZoom(z) {
+      if (!Number.isFinite(z)) return 9;
+      const t = Math.max(0, z - STOPS_MIN_ZOOM);
+      const px = Math.round(4 + t * 3.8);
+      return Math.max(4, Math.min(32, px));
+    }
 
     function roundBoundsForStops(bounds, factor = GLOBAL_STOPS_KEY_PRECISION) {
       if (!bounds) return null;
@@ -4528,6 +4728,143 @@
       return Math.round(val);
     }
 
+    function stopKeyForStop(s) {
+      const stopId = (s?.stop_id || "").trim();
+      if (stopId) return `id:${stopId}`;
+      const lat = Number(s?.stop_lat);
+      const lon = Number(s?.stop_lon);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) return `c:${lat.toFixed(6)},${lon.toFixed(6)}`;
+      return null;
+    }
+
+    function stopLabelPillsHtml() { return ""; }
+
+    function resetMapLibreStopOpacity() {
+      if (!(adapter instanceof MapLibreAdapter) || !adapter.map) return;
+      const map = adapter.map;
+      const circle = Number(adapter._globalStopsCircleOpacity ?? 0.98);
+      const icon = Number(adapter._globalStopsIconOpacity ?? 0.92);
+      try { map.setPaintProperty("global-stops", "circle-opacity", circle); } catch (e) {}
+      try { map.setPaintProperty("global-stops-symbol", "icon-opacity", circle); } catch (e) {}
+      try { map.setPaintProperty("global-stops-triangles", "icon-opacity", icon); } catch (e) {}
+    }
+
+    function fadeOutMapLibreStops() {
+      if (!(adapter instanceof MapLibreAdapter) || !adapter.map) return;
+      const map = adapter.map;
+      if (mapLibreStopsFadeTimer) {
+        clearTimeout(mapLibreStopsFadeTimer);
+        mapLibreStopsFadeTimer = null;
+      }
+      try { map.setPaintProperty("global-stops", "circle-opacity", 0); } catch (e) {}
+      try { map.setPaintProperty("global-stops-symbol", "icon-opacity", 0); } catch (e) {}
+      try { map.setPaintProperty("global-stops-triangles", "icon-opacity", 0); } catch (e) {}
+      mapLibreStopsFadeTimer = setTimeout(() => {
+        try { adapter.setGlobalStops({ stops: [] }); } catch (e) {}
+        clearMapLibreStopLabels();
+        mapLibreStopsFadeTimer = null;
+      }, STOP_REMOVE_DELAY_MS + 40);
+    }
+
+    function clearMapLibreStopLabels() {
+      for (const marker of mapLibreStopLabelMarkers.values()) {
+        try {
+          const el = marker.getElement?.();
+          if (el) {
+            el.classList.remove("stop-label--shown");
+            el.classList.add("stop-label--hidden");
+          }
+          setTimeout(() => {
+            try { marker.remove?.(); } catch (e) {}
+          }, STOP_LABEL_FADE_MS + 40);
+        } catch (e) {}
+      }
+      mapLibreStopLabelMarkers.clear();
+    }
+
+    function updateMapLibreStopLabels() {
+      const m = (adapter instanceof MapLibreAdapter) ? adapter.map : (adapter?.getMap?.());
+      if (!m || !(adapter instanceof MapLibreAdapter)) return;
+      const zoom = Number(m.getZoom?.());
+
+      if (!Number.isFinite(zoom) || zoom < STOP_LABEL_ZOOM_THRESHOLD) {
+        clearMapLibreStopLabels();
+        return;
+      }
+
+      const features = m.queryRenderedFeatures?.({ layers: ["global-stops"] }) || [];
+      const currentIds = new Set();
+
+      features.forEach(f => {
+        const stopId = f?.properties?.stop_id;
+        if (!stopId) return;
+        currentIds.add(stopId);
+
+        if (!mapLibreStopLabelMarkers.has(stopId)) {
+          const container = document.createElement("div");
+          container.className = "stop-label-container stop-label--hidden";
+
+          const marker = new maplibregl.Marker({
+            element: container,
+            anchor: "bottom",
+            offset: [0, -10]
+          })
+            .setLngLat(f.geometry?.coordinates || [0, 0])
+            .addTo(m);
+
+          mapLibreStopLabelMarkers.set(stopId, marker);
+          requestAnimationFrame(() => {
+            container.classList.remove("stop-label--hidden");
+            container.classList.add("stop-label--shown");
+          });
+          renderStopPillsAsync(stopId, container);
+        } else {
+          const el = mapLibreStopLabelMarkers.get(stopId)?.getElement?.();
+          if (el) {
+            el.classList.remove("stop-label--hidden");
+            el.classList.add("stop-label--shown");
+          }
+        }
+      });
+
+      for (const [id, marker] of mapLibreStopLabelMarkers.entries()) {
+        if (!currentIds.has(id)) {
+          const el = marker.getElement?.();
+          if (el) {
+            el.classList.remove("stop-label--shown");
+            el.classList.add("stop-label--hidden");
+          }
+          setTimeout(() => {
+            try { marker.remove(); } catch (e) {}
+            mapLibreStopLabelMarkers.delete(id);
+          }, STOP_LABEL_FADE_MS + 40);
+        }
+      }
+    }
+
+    async function renderStopPillsAsync(stopId, container) {
+      try {
+        const routes = await ensureStopRoutes(stopId);
+        if (!routes || routes.length === 0 || !container) return;
+        const displayRoutes = routes;
+        const pillsHtml = displayRoutes.map(routeLabel => {
+          const { code } = parseRouteCodeParts(routeLabel);
+          const style = pillStyleForRoute(routeLabel);
+          const bg = style?.bg || "#444";
+          const fg = style?.fg || "#fff";
+          const border = style?.border || "rgba(0,0,0,0.2)";
+          return `<span class="stop-label-pill-mini" style="background-color:${bg}; color:${fg}; border-color:${border}">${code}</span>`;
+        }).join("");
+        container.innerHTML = `<div class="stop-label-pills">${pillsHtml}</div>`;
+        const pillsEl = container.querySelector?.(".stop-label-pills");
+        if (pillsEl) {
+          requestAnimationFrame(() => pillsEl.classList.add("stop-label-pills--visible"));
+        }
+      } catch (err) {
+        console.warn("Erro ao carregar rotas para pill:", stopId);
+      }
+    }
+
     function cancelGlobalStopsFetch() {
       if (globalStopsAbort) {
         try { globalStopsAbort.abort(); } catch (e) {}
@@ -4536,7 +4873,7 @@
     }
 
     const scheduleRefreshStops = (() => {
-      const debounced = debounce((force = false) => refreshGlobalStops(force).catch(() => {}), 170);
+      const debounced = debounce((force = false) => refreshGlobalStops(force).catch(() => {}), 220);
       return (force = false) => {
         cancelGlobalStopsFetch();
         debounced(force);
@@ -4579,19 +4916,11 @@
     function routeCategoryForId(routeId) {
       const normalized = normalizeOptionKey(routeId);
       const base = getBaseRouteKey(normalized);
-      const preferred = base ? `${base}_0` : "";
-      const meta = (normalized && ROUTE_DETAILS.get(normalized))
-        || (preferred && ROUTE_DETAILS.get(preferred))
-        || (base && BASE_ROUTE_DETAILS.get(base))
-        || null;
-      const shortName = (meta?.shortName || translateRoute(normalized) || translateRoute(preferred) || translateRoute(base) || "").trim();
-      // Important: direction palettes depend on the public short name (e.g. 15E),
-      // not on internal ids like `168_0`.
-      const category = definirCategoria(shortName || normalized || base);
+      const displayLabel = resolvePublicRouteLabel(normalized);
+      const category = definirCategoria(displayLabel || normalized || base);
       const baseCategory = definirCategoria(base || normalized);
-      // 2XX nighttime routes can carry reused daytime labels (e.g., 26B); prefer base id category.
-      if (baseCategory === "Rede Madrugada" && category !== "Rede Madrugada") return baseCategory;
-      return category;
+      // If short name exists, trust it first; only fall back to base category when we couldn't classify.
+      return category || baseCategory;
     }
 
     function routeDirectionColor(routeId, directionId) {
@@ -4743,6 +5072,18 @@
       return { zone: zone || null, color: color || null };
     }
 
+    function readableTextColor(bg, fallback = "#ffffff") {
+      if (!bg || typeof bg !== "string") return fallback;
+      const hex = bg.replace("#", "").trim();
+      if (hex.length !== 6) return fallback;
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      if ([r, g, b].some(v => Number.isNaN(v))) return fallback;
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > 0.65 ? "#0f172a" : "#ffffff";
+    }
+
     function pillStyleForRoute(label) {
       const { zone, color } = resolveRouteZone(label);
       const cat = categoryForRouteLabel(label) || definirCategoria(label);
@@ -4830,6 +5171,33 @@
       refreshCharts(true).catch(() => {});
       refreshKpis(true);
       setSidebarCollapsed(true);
+    }
+
+    function handlePopupRouteActions() {
+      document.addEventListener("click", (event) => {
+        const link = event.target.closest(".popup-route-link");
+        if (link) {
+          event.preventDefault();
+          const label = link.dataset.routeLabel || link.textContent || "";
+          const baseId = baseIdForPublicRouteLabel(label) || resolveRouteInputValue(label);
+          if (baseId && baseId !== ROUTE_FILTER_ALL) applyRouteSelection(baseId);
+          return;
+        }
+      });
+    }
+
+    function clearRouteSelection() {
+      selectedRoute = ROUTE_FILTER_ALL;
+      selectedVariant = VARIANT_FILTER_ALL;
+      syncRouteInputValue();
+      updateVariantOptions();
+      renderVehicles();
+      refreshRouteOverlay(true).catch(() => {});
+      refreshGlobalStops(true).catch(() => {});
+      refreshCharts(true).catch(() => {});
+      refreshKpis(true);
+      updateRouteClearVisibility();
+      renderSelectedRoutePill();
     }
 
 	    function wireStopPopupPills(containerEl) {
@@ -4934,26 +5302,17 @@
           return Math.min(da, 360 - da);
         };
 
-        const keyForStop = (s) => {
-          const stopId = (s?.stop_id || "").trim();
-          if (stopId) return `id:${stopId}`;
-          const lat = Number(s?.stop_lat);
-          const lon = Number(s?.stop_lon);
-          if (Number.isFinite(lat) && Number.isFinite(lon)) return `c:${lat.toFixed(6)},${lon.toFixed(6)}`;
-          return null;
-        };
-
         for (let idx = 0; idx < stops.length; idx++) {
           const s = stops[idx];
           const lat = Number(s?.stop_lat);
           const lon = Number(s?.stop_lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
           const stopId = (s?.stop_id || "").trim();
-          const routes = Array.isArray(s?.routes) ? s.routes : [];
+          const routes = (Array.isArray(s?.routes) ? s.routes : []);
           if (stopId && routes.length) stopRoutesCache.set(stopId, routes);
           const primaryColor = "#ffd400";
           const arrowColor = "#000000";
-          const key = keyForStop(s);
+          const key = stopKeyForStop(s);
           if (!key) continue;
           nextKeys.add(key);
 
@@ -5011,6 +5370,7 @@
             if (inner) inner.style.setProperty("--stop-ang", `${nextAngle}deg`);
             existing.angleDeg = nextAngle;
           }
+          // No labels to update
         }
 
         for (const [key, entry] of renderedStopsMap.entries()) {
@@ -5031,10 +5391,15 @@
 
       if (adapter instanceof MapLibreAdapter) {
         if (belowLod) {
-          adapter.setGlobalStops({ stops: [] });
+          fadeOutMapLibreStops();
           return;
         }
+        if (mapLibreStopsFadeTimer) {
+          clearTimeout(mapLibreStopsFadeTimer);
+          mapLibreStopsFadeTimer = null;
+        }
         adapter.setGlobalStops(payload);
+        resetMapLibreStopOpacity();
       }
     }
 
@@ -5046,7 +5411,9 @@
         cancelGlobalStopsFetch();
         if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer);
         if (adapter instanceof MapLibreAdapter) adapter.setGlobalStops({ stops: [] });
+        if (adapter instanceof MapLibreAdapter) clearMapLibreStopLabels();
         globalStopsKey = null;
+        lastRenderedGlobalStopsKey = null;
         return;
       }
 
@@ -5058,7 +5425,9 @@
           // remove global stops by re-rendering empty list
           renderGlobalStops({ stops: [] });
         }
+        if (adapter instanceof MapLibreAdapter) clearMapLibreStopLabels();
         globalStopsKey = null;
+        lastRenderedGlobalStopsKey = null;
         return;
       }
 
@@ -5067,15 +5436,18 @@
       const roundedBounds = roundBoundsForStops(b, GLOBAL_STOPS_KEY_PRECISION);
       const effLimit = dynamicGlobalStopsLimit(z);
       const key = JSON.stringify({ ...(roundedBounds || {}), z: Math.round(z * 10) / 10, limit: effLimit });
-      if (!force && globalStopsKey === key) return;
+      const sameViewport = globalStopsKey === key;
       globalStopsKey = key;
 
       const now = Date.now();
       const cached = globalStopsCache.get(key);
-      if (!force && cached && (now - cached.ts) < 60_000) {
-        renderGlobalStops(cached.payload);
+      const cachedFresh = cached && (now - cached.ts) < GLOBAL_STOPS_CACHE_TTL_MS;
+      if (!force && cachedFresh) {
+        if (lastRenderedGlobalStopsKey !== key) renderGlobalStops(cached.payload);
+        lastRenderedGlobalStopsKey = key;
         return;
       }
+      if (!force && sameViewport && globalStopsAbort) return;
 
       cancelGlobalStopsFetch();
       const controller = new AbortController();
@@ -5095,9 +5467,14 @@
           const data = { stops };
           globalStopsCache.set(key, { ts: now, payload: data });
           renderGlobalStops(data);
+          lastRenderedGlobalStopsKey = key;
         } catch (err) {
           if (controller.signal.aborted) return;
           console.warn("Falha ao carregar paragens (rede global):", err);
+          if (cached?.payload) {
+            renderGlobalStops(cached.payload);
+            lastRenderedGlobalStopsKey = key;
+          }
         } finally {
           if (globalStopsAbort === controller) globalStopsAbort = null;
         }
@@ -5233,6 +5610,7 @@
       startChartRefreshLoop();
       startKpiRefreshLoop();
       startPolling();
+      handlePopupRouteActions();
     })();
 
   </script>
