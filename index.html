@@ -80,6 +80,8 @@
         --surface-2: rgba(15, 23, 42, 0.82);
         --border-strong: rgba(255, 255, 255, 0.12);
         --shadow-strong: 0 24px 50px rgba(0, 0, 0, 0.32);
+        --chart-axis-color: #f9fafb;
+        --chart-grid-color: rgba(255, 255, 255, 0.18);
       }
     }
 
@@ -311,6 +313,14 @@
     @media (min-width: 901px) {
       .floating-search.visible { display: none !important; }
     }
+    body.theme-dark .floating-search,
+    body.theme-auto .floating-search {
+      background: var(--sidebar-bg);
+    }
+    body.theme-dark .floating-search .floating-route-input,
+    body.theme-auto .floating-search .floating-route-input {
+      background: var(--surface-1);
+    }
     @media (max-width: 900px) {
       .kpi-floating-context {
         width: min(98vw, 560px);
@@ -429,19 +439,19 @@
 
     .kpi-panel .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(140px, 1fr));
-      gap: 4px;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 2px;
       justify-items: stretch;
     }
 
     .kpi-card {
       background: var(--surface-2);
-      border-radius: 12px;
-      padding: 6px 8px;
-      min-height: 68px;
+      border-radius: 10px;
+      padding: 4px 6px;
+      min-height: 58px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 1px;
       border: 1px solid rgba(15, 23, 42, 0.05);
       align-items: center;
       text-align: center;
@@ -449,8 +459,8 @@
     }
 
 	    .kpi-card strong {
-	      font-size: 1.4rem;
-	      line-height: 1.15;
+	      font-size: 1.25rem;
+	      line-height: 1.1;
 	      width: 100%;
 	    }
 	    .kpi-card .kpi-value {
@@ -466,11 +476,19 @@
 	    }
 	    .kpi-card .kpi-speed.has-unit::after {
 	      content: "km/h";
-	      font-size: 0.72em;
-	      font-weight: 700;
-	      color: var(--text-muted);
-	      opacity: 0.75;
-	    }
+      font-size: 0.72em;
+      font-weight: 700;
+      color: var(--text-muted);
+      opacity: 0.75;
+    }
+    body.theme-dark .chart-card-header span,
+    body.theme-auto .chart-card-header span {
+      color: #f9fafb;
+    }
+    body.theme-dark .chart-card .chart-card-help,
+    body.theme-auto .chart-card .chart-card-help {
+      color: #f9fafb;
+    }
     .kpi-card .kpi-label,
     .kpi-card .kpi-delta,
     .kpi-card .kpi-meta {
@@ -558,6 +576,15 @@
       justify-content: space-between;
       align-items: center;
     }
+    body.theme-dark .chart-card,
+    body.theme-auto .chart-card {
+      background: rgba(15, 23, 42, 0.82);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    body.theme-dark .chart-card-header,
+    body.theme-auto .chart-card-header {
+      color: #f9fafb;
+    }
     .chart-card canvas {
       width: 100% !important;
       height: 104px !important;
@@ -591,18 +618,21 @@
       pointer-events: auto;
     }
     .chart-overlay-content {
+      --overlay-tint: #f59f00;
+      --overlay-tint-soft: rgba(245, 159, 0, 0.12);
+      --overlay-tint-ultra: rgba(15, 23, 42, 0.02);
       background: var(--surface-1);
       border-radius: 18px;
       padding: 28px;
-      width: min(760px, 95vw);
-      max-width: 760px;
-      max-height: 90vh;
+      width: min(1040px, 96vw);
+      max-width: 1040px;
+      max-height: 92vh;
       overflow: auto;
       box-shadow: var(--shadow-strong);
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
     }
     .chart-overlay h3 {
       margin: 0;
@@ -622,24 +652,171 @@
       gap: 8px;
       flex-wrap: wrap;
     }
+    .chart-overlay-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 0;
+    }
+    .chart-overlay-visual {
+      background: radial-gradient(120% 120% at 20% 18%, var(--overlay-tint-soft), var(--overlay-tint-ultra));
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      padding: 12px 12px 10px;
+      box-shadow: var(--shadow-strong);
+    }
     .chart-overlay canvas {
       width: 100%;
       max-width: none;
-      height: clamp(320px, 46vh, 440px) !important;
-      min-height: 320px;
+      height: clamp(300px, 42vh, 400px) !important;
+      min-height: 300px;
       flex: 0 0 auto;
       display: block;
       margin: 0 auto;
     }
     @media (min-height: 900px) {
       .chart-overlay canvas {
-        height: clamp(360px, 50vh, 520px) !important;
-        min-height: 360px;
+        height: clamp(320px, 46vh, 460px) !important;
+        min-height: 320px;
       }
     }
-    .chart-overlay-extra { margin-top: 4px; max-height: 38vh; overflow: auto; }
-    .overlay-subtitle { margin: 0 0 10px; font-size: 1rem; }
-    .overlay-table-wrapper { overflow: auto; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-1); max-height: 260px; }
+    .chart-overlay-content.volume-layout {
+      gap: 18px;
+    }
+    .chart-overlay-content.volume-layout .chart-overlay-body {
+      display: grid;
+      grid-template-columns: minmax(380px, 1.15fr) minmax(320px, 1fr);
+      align-items: stretch;
+      gap: 18px;
+      min-height: 0;
+    }
+    .overlay-tabs {
+      display: none;
+      gap: 8px;
+      align-items: center;
+    }
+    .overlay-tab {
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex: 1 1 0;
+      text-align: center;
+    }
+    .overlay-tab.active {
+      background: var(--overlay-tab-active-bg, rgba(245, 159, 0, 0.16));
+      border-color: var(--overlay-tab-border, rgba(245, 159, 0, 0.4));
+      color: var(--overlay-tab-fg, #8d5a00);
+      box-shadow: inset 0 0 0 1px var(--overlay-tab-border, rgba(245, 159, 0, 0.3));
+    }
+    .chart-overlay-content.volume-layout .chart-overlay-visual {
+      height: 100%;
+      background: radial-gradient(120% 120% at 18% 16%, var(--overlay-tint-soft), var(--overlay-tint-ultra));
+      border-color: rgba(245, 159, 0, 0.26);
+    }
+    .chart-overlay-content.volume-layout.volume-tight .chart-overlay-body {
+      display: flex;
+      flex-direction: column;
+    }
+    .chart-overlay-extra {
+      margin-top: 4px;
+      max-height: 40vh;
+      overflow: auto;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      padding: 10px 10px 8px;
+      background: var(--surface-1);
+    }
+    .chart-overlay-content.volume-layout .chart-overlay-extra {
+      margin: 0;
+      max-height: none;
+      height: 100%;
+      box-shadow: var(--shadow-strong);
+      border-radius: 16px;
+      background: linear-gradient(160deg, var(--overlay-tint-soft), transparent 46%),
+        var(--surface-1);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 14px;
+    }
+    .chart-overlay-content.volume-layout.volume-tight .chart-overlay-extra {
+      height: auto;
+      max-height: 38vh;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs {
+      gap: 12px;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs .overlay-tabs {
+      display: flex;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs .chart-overlay-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs .chart-overlay-visual,
+    .chart-overlay-content.volume-layout.mobile-tabs .chart-overlay-extra {
+      display: none;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs.show-chart .chart-overlay-visual {
+      display: block;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs.show-chart .chart-overlay-extra {
+      display: none;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs.show-table .chart-overlay-visual {
+      display: none;
+    }
+    .chart-overlay-content.volume-layout.mobile-tabs.show-table .chart-overlay-extra {
+      display: flex;
+      max-height: calc(70vh - 40px);
+    }
+    .overlay-extra-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .chart-overlay-content.volume-layout .overlay-extra-heading {
+      position: sticky;
+      top: 0;
+      padding-bottom: 6px;
+      background: var(--surface-1);
+      z-index: 2;
+    }
+    .overlay-pill {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: var(--overlay-pill-bg, rgba(245, 159, 0, 0.16));
+      border: 1px solid var(--overlay-pill-border, rgba(245, 159, 0, 0.35));
+    }
+    .overlay-subtitle { margin: 0; font-size: 1rem; }
+    .overlay-table-wrapper {
+      overflow: auto;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      background: var(--surface-1);
+      max-height: 260px;
+    }
+    .chart-overlay-content.volume-layout .overlay-table-wrapper {
+      max-height: none;
+      flex: 1;
+      min-height: 0;
+      border: none;
+      background: transparent;
+    }
+    .chart-overlay-content.volume-layout.volume-tight .overlay-extra-heading {
+      position: static;
+      padding-bottom: 4px;
+    }
     .overlay-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
     .overlay-table th, .overlay-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border-strong); }
     .overlay-table th { background: var(--surface-2); position: sticky; top: 0; z-index: 1; }
@@ -648,6 +825,56 @@
     .overlay-status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     .overlay-status-dot.active { background: #2ecc71; box-shadow: 0 0 8px rgba(46, 204, 113, 0.6); }
     .overlay-status-dot.inactive { background: #e74c3c; box-shadow: 0 0 8px rgba(231, 76, 60, 0.6); }
+    .overlay-sort {
+      border: none;
+      background: none;
+      padding: 0;
+      margin: 0;
+      font: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      color: inherit;
+      justify-content: flex-start;
+      width: 100%;
+      text-align: left;
+    }
+    .overlay-sort .sort-icon {
+      font-size: 0.8rem;
+      opacity: 0.55;
+    }
+    .overlay-sort.active .sort-icon {
+      opacity: 1;
+    }
+    .overlay-sort:focus-visible {
+      outline: 2px solid var(--overlay-tint, var(--accent));
+      outline-offset: 3px;
+      border-radius: 6px;
+    }
+    @media (max-width: 1024px) {
+      .chart-overlay-content {
+        max-height: 90vh;
+      }
+      .chart-overlay-content.volume-layout .chart-overlay-body {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 768px) {
+      .chart-overlay-content {
+        width: 100vw;
+        max-width: 100vw;
+        padding: 16px;
+        border-radius: 14px;
+      }
+      .chart-overlay-visual {
+        margin-inline: -2px;
+      }
+      .chart-overlay canvas {
+        height: clamp(280px, 50vh, 380px) !important;
+        min-height: 260px;
+      }
+    }
     .chart-overlay-close {
       position: absolute;
       top: 12px;
@@ -727,7 +954,7 @@
     }
 
     /* Estilos do Popup */
-    .custom-popup .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: 6px; }
+    .custom-popup .leaflet-popup-content-wrapper { background: transparent; padding: 0; overflow: hidden; border-radius: 6px; }
     .custom-popup .leaflet-popup-content { margin: 0; width: 200px !important; }
     
     .pop-header { 
@@ -745,13 +972,15 @@
     .pop-body { padding: 12px; font-size: 13px; color: #444; line-height: 1.5; }
 
     /* MapLibre popup parity */
-    .custom-popup .maplibregl-popup-content { padding: 0; margin: 0; width: 220px !important; overflow: hidden; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.2); }
+    .custom-popup .maplibregl-popup-content { background: transparent; padding: 0; margin: 0; width: 220px !important; overflow: hidden; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.2); }
     .custom-popup .maplibregl-popup-tip { display: none; }
 
     /* Stop popup pills */
     .stop-popup {
       padding: 12px 12px 14px;
-      background: rgba(255, 255, 255, 0.98);
+      background: var(--surface-1);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
     }
     .stop-popup__title {
       font-weight: 800;
@@ -778,6 +1007,143 @@
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
+    }
+    .stop-schedule {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stop-schedule__row {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 4px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px solid var(--glass);
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      width: 100%;
+      line-height: 1.1;
+    }
+    .stop-schedule__list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .stop-schedule__time {
+      font-variant-numeric: tabular-nums;
+      min-width: 44px;
+      margin-left: auto;
+      text-align: right;
+      padding-right: 4px;
+    }
+    .stop-schedule__eta {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .pill--tiny {
+      padding: 1px 4px;
+      font-size: 0.72rem;
+      border-radius: 999px;
+      line-height: 1;
+      letter-spacing: -0.01em;
+    }
+    .route-pill--active {
+      box-shadow: 0 0 0 2px rgba(245, 159, 0, 0.3);
+      border-color: var(--accent);
+    }
+    .stop-schedule__meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex-wrap: wrap;
+    }
+    .stop-schedule__dir {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .stop-schedule__empty,
+    .stop-schedule__loading {
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      padding: 6px 2px;
+    }
+    body.theme-dark .stop-schedule__row,
+    body.theme-auto .stop-schedule__row {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+    }
+    .mobile-stop-card {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: 28px;
+      z-index: 1600;
+      background: var(--surface-1);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      box-shadow: var(--shadow-strong);
+      padding: 12px 14px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .mobile-stop-card.visible { display: flex; }
+    .mobile-stop-card__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .mobile-stop-card__title {
+      font-weight: 800;
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+    .mobile-stop-card__meta {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .mobile-stop-card__pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .mobile-stop-card__close {
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      font-size: 0.96rem;
+      cursor: pointer;
+      box-shadow: var(--shadow-strong);
+    }
+    body.mobile-stop-open .kpi-panel,
+    body.mobile-stop-open .kpi-floating-context {
+      display: none !important;
+    }
+
+    @media (max-width: 900px) {
+      body:not(.sidebar-collapsed) .maplibregl-popup,
+      body:not(.sidebar-collapsed) .leaflet-popup,
+      body:not(.sidebar-collapsed) .custom-popup,
+      body:not(.sidebar-collapsed) .mobile-stop-card,
+      body:not(.sidebar-collapsed) .kpi-floating-context {
+        display: none !important;
+      }
     }
     .route-preview {
       position: fixed;
@@ -896,15 +1262,36 @@
       color: rgba(15, 23, 42, 0.55);
       box-shadow: none;
     }
-    body.theme-dark .stop-popup {
-      background: rgba(15, 23, 42, 0.92);
-    }
-    body.theme-dark .stop-popup__title { color: rgba(255,255,255,0.92); }
-    body.theme-dark .stop-popup__meta,
-    body.theme-dark .stop-popup__section { color: rgba(255,255,255,0.62); }
-    body.theme-dark .pill {
-      border-color: var(--pill-border, rgba(255,255,255,0.16));
-      color: var(--pill-fg, rgba(15, 23, 42, 0.95));
+
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .stop-popup,
+      body.theme-dark .stop-popup {
+        background: var(--surface-1);
+        color: #f8fafc;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+      }
+      body.theme-auto .stop-popup__title,
+      body.theme-dark .stop-popup__title {
+        color: #f8fafc;
+      }
+      body.theme-auto .stop-popup__meta,
+      body.theme-dark .stop-popup__meta,
+      body.theme-auto .stop-popup__section,
+      body.theme-dark .stop-popup__section {
+        color: rgba(248, 250, 252, 0.7);
+      }
+      body.theme-auto .pill,
+      body.theme-dark .pill {
+        border-color: var(--pill-border, rgba(255, 255, 255, 0.16));
+        box-shadow: none;
+      }
+      body.theme-auto .stop-schedule__row,
+      body.theme-dark .stop-schedule__row {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #f8fafc;
+      }
     }
 
     /* Route/global stops */
@@ -994,7 +1381,7 @@
       font-size: 9px;
       font-weight: 900;
       line-height: 1;
-      color: white;
+      color: #0f172a;
       border: 1px solid rgba(0,0,0,0.15);
       box-shadow: 0 1px 2px rgba(0,0,0,0.2);
       white-space: nowrap;
@@ -1083,6 +1470,11 @@
       border-color: var(--pill-border, rgba(255, 255, 255, 0.16));
       color: var(--pill-fg, #0b1220);
       box-shadow: none;
+    }
+    body.theme-dark .stop-schedule__row {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
     }
     .custom-popup .maplibregl-popup-close-button { color: white; font-size: 16px; padding: 6px 10px; z-index: 10; }
     .custom-popup .maplibregl-popup-close-button:hover { background: rgba(0,0,0,0.1); }
@@ -1384,8 +1776,19 @@
 	            <span class="kpi-label">Vel. comercial (1 hora)</span>
 	            <strong class="kpi-value kpi-speed" id="kpi-vel-hour">—</strong>
 	            <span class="kpi-delta" id="kpi-vel-hour-delta">—</span>
-	          </article>
+          </article>
         </div>
+      </div>
+      <div class="mobile-stop-card" id="mobile-stop-card" aria-live="polite">
+        <div class="mobile-stop-card__header">
+          <div>
+            <div class="mobile-stop-card__title" id="mobile-stop-title">Paragem</div>
+            <div class="mobile-stop-card__meta" id="mobile-stop-meta">—</div>
+          </div>
+          <button class="mobile-stop-card__close" id="mobile-stop-close" type="button" aria-label="Fechar paragem">×</button>
+        </div>
+        <div class="mobile-stop-card__pills" id="mobile-stop-pills"></div>
+        <div class="stop-schedule" id="mobile-stop-schedule"></div>
       </div>
       <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Mostrar filtros">☰</button>
       <div id="map"></div>
@@ -1394,26 +1797,37 @@
         <div class="chart-overlay-content">
           <button class="chart-overlay-close" id="chart-overlay-close" type="button" aria-label="Fechar gráfico ampliado">✕</button>
           <h3 id="chart-overlay-title">Velocidade Comercial</h3>
-          <canvas id="chart-overlay-canvas"></canvas>
-          <div class="chart-overlay-extra" id="chart-overlay-extra" hidden>
-            <h4 class="overlay-subtitle">Veículos detetados</h4>
-            <div class="overlay-table-wrapper">
-              <table class="overlay-table">
-                <thead>
-                  <tr>
-                    <th>Veículo</th>
-                    <th>Modelo</th>
-                    <th>Primeiro ping</th>
-                    <th>Último ping</th>
-                    <th>Distância (km)</th>
-                    <th>Viagens</th>
-                    <th>Estado</th>
+          <div class="chart-overlay-body">
+            <div class="overlay-tabs" id="overlay-tabs" aria-label="Alternar entre gráfico e tabela">
+              <button class="overlay-tab active" id="overlay-tab-chart" type="button">Gráfico</button>
+              <button class="overlay-tab" id="overlay-tab-table" type="button">Veículos</button>
+            </div>
+            <div class="chart-overlay-visual">
+              <canvas id="chart-overlay-canvas"></canvas>
+            </div>
+            <div class="chart-overlay-extra" id="chart-overlay-extra" hidden>
+              <div class="overlay-extra-heading">
+                <h4 class="overlay-subtitle">Veículos detetados</h4>
+                <span class="overlay-pill">Hoje</span>
+              </div>
+              <div class="overlay-table-wrapper">
+                <table class="overlay-table">
+                  <thead>
+                    <tr>
+                    <th><button class="overlay-sort" data-sort="id" type="button">Veículo <span class="sort-icon">↕</span></button></th>
+                    <th><button class="overlay-sort" data-sort="model" type="button">Modelo <span class="sort-icon">↕</span></button></th>
+                    <th><button class="overlay-sort" data-sort="first" type="button">Primeiro ping <span class="sort-icon">↕</span></button></th>
+                    <th><button class="overlay-sort active" data-sort="last" type="button">Último ping <span class="sort-icon">↓</span></button></th>
+                    <th><button class="overlay-sort" data-sort="dist" type="button">Distância (km) <span class="sort-icon">↕</span></button></th>
+                    <th><button class="overlay-sort" data-sort="trips" type="button">Viagens <span class="sort-icon">↕</span></button></th>
+                    <th><button class="overlay-sort" data-sort="active" type="button">Estado <span class="sort-icon">↕</span></button></th>
                   </tr>
                 </thead>
-                <tbody id="overlay-vehicle-rows">
-                  <tr><td colspan="7" class="overlay-empty">A carregar…</td></tr>
-                </tbody>
-              </table>
+                  <tbody id="overlay-vehicle-rows">
+                    <tr><td colspan="7" class="overlay-empty">A carregar…</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -1425,7 +1839,7 @@
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-	    const API_URL = "https://rt.jdcp.workers.dev/";
+    const API_URL = "https://4belhato.trade/";
 	    const urlParams = new URLSearchParams(window.location.search);
 	    const ACTIVE_WINDOW_MIN = (() => {
 	      const raw = (urlParams.get("active_window_min") || urlParams.get("activeWindowMin") || "").trim();
@@ -1557,7 +1971,7 @@
 	    }
 
 	    function resolveBackendBases() {
-	      const bases = ["https://tyron-uncondensational-prepossessingly.ngrok-free.dev"];
+	      const bases = ["https://4belhato.trade"];
 	      const override = urlParams.get("backend") || urlParams.get("api_base");
 	      const normalizedOverride = normalizeBaseUrl(override);
 	      if (normalizedOverride) bases.push(normalizedOverride);
@@ -1599,7 +2013,7 @@
     const CHARTS_ENDPOINTS = KPI_BASE_URLS.flatMap(base => CHART_PATHS.map(path => `${base}${path}`));
     const LOCAL_BACKENDS = BACKEND_BASES.length ? BACKEND_BASES : ["http://127.0.0.1:8001", "http://127.0.0.1:8002"];
     // Realtime feed used for vehicle positions (only). KPIs/charts use backend APIs separately.
-    const VEHICLE_ENDPOINT = API_URL;
+    const VEHICLE_ENDPOINT = "https://rt.jdcp.workers.dev/";
     const CHARTS_CACHE_TTL_MS = 60_000;
     const CHARTS_MIN_INTERVAL_MS = 35_000;
     const CHARTS_REFRESH_INTERVAL_MS = 45_000;
@@ -1652,8 +2066,13 @@
     const chartSpeedCanvas = document.getElementById("chart-speed-preview");
     const chartVolumeCanvas = document.getElementById("chart-volume-preview");
     const chartOverlay = document.getElementById("chart-overlay");
+    const chartOverlayContent = document.querySelector(".chart-overlay-content");
     const chartOverlayTitle = document.getElementById("chart-overlay-title");
     const chartOverlayExtra = document.getElementById("chart-overlay-extra");
+    const chartOverlayVisual = document.querySelector(".chart-overlay-visual");
+    const overlayTabChart = document.getElementById("overlay-tab-chart");
+    const overlayTabTable = document.getElementById("overlay-tab-table");
+    const overlaySortButtons = document.querySelectorAll(".overlay-sort");
     const chartOverlayVehicleRows = document.getElementById("overlay-vehicle-rows");
     const chartOverlayCanvas = document.getElementById("chart-overlay-canvas");
     const floatingSearch = document.getElementById("floating-search");
@@ -1675,6 +2094,8 @@
     let currentOverlayType = null;
     let lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
     let lastTrendLineCandidate = null;
+    let volumeTableRows = [];
+    let volumeTableSort = { key: "last", dir: "desc" };
     const timeLabelFormatter = new Intl.DateTimeFormat("pt-PT", {
       hour: "2-digit",
       minute: "2-digit",
@@ -2897,18 +3318,48 @@
       return num.toFixed(2);
     }
 
+    function kmValueForSort(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return NaN;
+      if (num > 10_000) return num / 1000;
+      if (num > 1_000) return num / 1000;
+      return num;
+    }
+
     function statusDotHtml(isActive) {
       const cls = isActive ? "active" : "inactive";
       const label = isActive ? "Ativo" : "Inativo";
       return `<span class="overlay-status-dot ${cls}" title="${label}" aria-label="${label}"></span>`;
     }
 
+    function compareNullable(a, b) {
+      const aNull = a == null || Number.isNaN(a);
+      const bNull = b == null || Number.isNaN(b);
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    }
+
+    function isDarkThemeActive() {
+      const body = document.body;
+      if (!body) return false;
+      if (body.classList.contains("theme-dark")) return true;
+      if (body.classList.contains("theme-auto")) {
+        return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      }
+      return false;
+    }
+
     function getChartColors() {
       const styles = getComputedStyle(document.body);
-      const axis = (styles.getPropertyValue("--chart-axis-color") || "#0f172a").trim();
-      const grid = (styles.getPropertyValue("--chart-grid-color") || "rgba(15, 23, 42, 0.12)").trim();
-      const tooltipBg = (styles.getPropertyValue("--panel-bg") || "rgba(255,255,255,0.95)").trim();
-      const tooltipFg = (styles.getPropertyValue("--text-primary") || "#0f172a").trim();
+      const dark = isDarkThemeActive();
+      const axis = (styles.getPropertyValue("--chart-axis-color") || (dark ? "#f9fafb" : "#0f172a")).trim();
+      const grid = (styles.getPropertyValue("--chart-grid-color") || (dark ? "rgba(255, 255, 255, 0.18)" : "rgba(15, 23, 42, 0.12)")).trim();
+      const tooltipBg = (styles.getPropertyValue("--panel-bg") || (dark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.95)")).trim();
+      const tooltipFg = (styles.getPropertyValue("--text-primary") || (dark ? "#f9fafb" : "#0f172a")).trim();
       return { axis, grid, tooltipBg, tooltipFg };
     }
 
@@ -2967,50 +3418,194 @@
       return { id, model, first: firstTs, last: lastTs, dist, trips };
     }
 
+    function mergeVehicleRows(rows, startMs, endMs) {
+      const byId = new Map();
+      rows.forEach(row => {
+        if (!row || !row.id) return;
+        if (startMs != null && endMs != null) {
+          const inRangeFirst = row.first != null && row.first >= startMs && row.first < endMs;
+          const inRangeLast = row.last != null && row.last >= startMs && row.last < endMs;
+          if (!inRangeFirst && !inRangeLast) return;
+        }
+        const key = String(row.id);
+        const existing = byId.get(key);
+        if (!existing) {
+          byId.set(key, { ...row });
+          return;
+        }
+        const merged = { ...existing };
+        const numDist = Number(row.dist);
+        const numTrips = Number(row.trips);
+        merged.model = merged.model || row.model || "";
+        if (row.first != null && (merged.first == null || row.first < merged.first)) merged.first = row.first;
+        if (row.last != null && (merged.last == null || row.last > merged.last)) merged.last = row.last;
+        if (Number.isFinite(numDist)) {
+          const existingDist = Number(merged.dist);
+          if (!Number.isFinite(existingDist) || numDist > existingDist) merged.dist = row.dist;
+        }
+        if (Number.isFinite(numTrips)) {
+          const existingTrips = Number(merged.trips);
+          if (!Number.isFinite(existingTrips) || numTrips > existingTrips) merged.trips = row.trips;
+        }
+        byId.set(key, merged);
+      });
+      return Array.from(byId.values());
+    }
+
+    function buildLiveVehiclesById(lineIds = []) {
+      const map = new Map();
+      if (!Array.isArray(lastVehicles) || !lastVehicles.length) return map;
+      const ids = Array.isArray(lineIds) ? lineIds.map(normalizeOptionKey) : [];
+      const allowedVariants = new Set(ids.filter(Boolean));
+      const allowedBases = new Set();
+      if (selectedVariant === VARIANT_FILTER_ALL) {
+        ids.forEach(id => {
+          const base = getBaseRouteKey(id);
+          if (base) allowedBases.add(base);
+        });
+        const baseSelected = getBaseRouteKey(selectedRoute);
+        if (baseSelected) allowedBases.add(baseSelected);
+      }
+      const activeCutoff = Date.now() - 10 * 60 * 1000;
+      for (const v of lastVehicles) {
+        const vid = v?.id ?? v?.vehicle_id ?? v?.vehicleId ?? v?.vehicle;
+        if (!vid) continue;
+        const variantKey = normalizeOptionKey(v?.routeId || v?.routeLabel || v?.linha || "");
+        const baseKey = getBaseRouteKey(variantKey);
+        const matchVariant = allowedVariants.size === 0 || (variantKey && allowedVariants.has(variantKey));
+        const matchBase = allowedBases.size === 0 || (baseKey && allowedBases.has(baseKey));
+        if (!matchVariant && !matchBase) continue;
+        const tsMs = normalizeTimestampMs(v?.ts ?? v?.timestamp ?? v?.serverTsSec ?? v?.server_ts ?? v?.time ?? null);
+        if (!Number.isFinite(tsMs)) continue;
+        const active = tsMs >= activeCutoff;
+        map.set(String(vid), { tsMs, active });
+      }
+      return map;
+    }
+
+    function sortedVolumeRows() {
+      const rows = Array.isArray(volumeTableRows) ? [...volumeTableRows] : [];
+      const { key, dir } = volumeTableSort;
+      const factor = dir === "asc" ? 1 : -1;
+      rows.sort((a, b) => {
+        switch (key) {
+          case "id":
+            return factor * compareNullable((a.id || "").toString().localeCompare((b.id || "").toString(), "pt-PT", { numeric: true }));
+          case "model":
+            return factor * compareNullable((a.model || "").toString().localeCompare((b.model || "").toString(), "pt-PT", { numeric: true }));
+          case "first":
+            return factor * compareNullable(a.first ?? null, b.first ?? null);
+          case "last":
+            return factor * compareNullable(a.last ?? null, b.last ?? null);
+          case "dist":
+            return factor * compareNullable(a.distKm ?? null, b.distKm ?? null);
+          case "trips":
+            return factor * compareNullable(a.tripsNum ?? null, b.tripsNum ?? null);
+          case "active":
+            return factor * compareNullable(a.active ? 1 : 0, b.active ? 1 : 0);
+          default:
+            return 0;
+        }
+      });
+      return rows;
+    }
+
+    function renderVolumeTableRows() {
+      if (!chartOverlayVehicleRows) return;
+      const rows = sortedVolumeRows();
+      if (!rows.length) {
+        chartOverlayVehicleRows.innerHTML = `<tr><td colspan="7" class="overlay-empty">Sem dados desta carreira para hoje.</td></tr>`;
+        return;
+      }
+      const html = rows.map(row => {
+        const active = row.active;
+        return `<tr>
+          <td>${escapeHtml(row.id || "—")}</td>
+          <td>${escapeHtml(row.model || "—")}</td>
+          <td>${escapeHtml(formatTimeOnly(row.first))}</td>
+          <td>${escapeHtml(formatTimeOnly(row.last))}</td>
+          <td>${escapeHtml(formatKm(row.dist))}</td>
+          <td>${escapeHtml(row.trips != null ? String(row.trips) : "—")}</td>
+          <td>${statusDotHtml(active)}</td>
+        </tr>`;
+      }).join("");
+      chartOverlayVehicleRows.innerHTML = html;
+    }
+
+    function setVolumeSort(key) {
+      if (!key) return;
+      if (volumeTableSort.key === key) {
+        volumeTableSort.dir = volumeTableSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        volumeTableSort = { key, dir: key === "id" || key === "first" ? "asc" : "desc" };
+      }
+      renderVolumeTableRows();
+      updateVolumeSortButtons();
+    }
+
+    function updateVolumeSortButtons() {
+      if (!overlaySortButtons || !overlaySortButtons.length) return;
+      const { key, dir } = volumeTableSort;
+      overlaySortButtons.forEach(btn => {
+        const active = btn.dataset.sort === key;
+        btn.classList.toggle("active", active);
+        const icon = btn.querySelector(".sort-icon");
+        if (icon) icon.textContent = active ? (dir === "asc" ? "↑" : "↓") : "↕";
+      });
+    }
+
     function renderVolumeOverlayTable() {
       if (!chartOverlayExtra || !chartOverlayVehicleRows) return;
       const lineIds = resolveOverlayVariantIds();
       if (!lineIds.length) {
         chartOverlayExtra.hidden = true;
+        if (chartOverlayContent) chartOverlayContent.classList.remove("volume-layout");
+        if (chartOverlayContent) chartOverlayContent.classList.remove("volume-tight");
+        resetOverlayTint();
+        volumeTableRows = [];
+        if (chartOverlayVehicleRows) {
+          chartOverlayVehicleRows.innerHTML = `<tr><td colspan="7" class="overlay-empty">Sem dados desta seleção.</td></tr>`;
+        }
         return;
       }
       chartOverlayExtra.hidden = false;
+      if (chartOverlayContent) chartOverlayContent.classList.add("volume-layout");
+      applyVolumeOverlayTint();
+      updateVolumeOverlayLayout();
       chartOverlayVehicleRows.innerHTML = `<tr><td colspan="7" class="overlay-empty">A carregar…</td></tr>`;
       const today = new Date().toISOString().split("T")[0];
       const startMs = normalizeTimestampMs(`${today}T00:00:00`);
       const endMs = startMs != null ? startMs + 24 * 60 * 60 * 1000 : null;
+      const liveById = buildLiveVehiclesById(lineIds);
+      const activeCutoff = Date.now() - 10 * 60 * 1000;
       return Promise.all(lineIds.map(id => fetchRouteDayVehicles(id, today))).then(results => {
         const rows = results.flat();
         const normalized = rows.map(normalizeVehicleDayRow).filter(Boolean);
-        const unique = [];
-        const seen = new Set();
-        normalized.forEach(row => {
-          if (seen.has(row.id)) return;
-          if (startMs != null && endMs != null) {
-            const inRangeFirst = row.first != null && row.first >= startMs && row.first < endMs;
-            const inRangeLast = row.last != null && row.last >= startMs && row.last < endMs;
-            if (!inRangeFirst && !inRangeLast) return;
-          }
-          seen.add(row.id);
-          unique.push(row);
-        });
-        if (!unique.length) {
+        const merged = mergeVehicleRows(normalized, startMs, endMs);
+        if (!merged.length) {
           chartOverlayVehicleRows.innerHTML = `<tr><td colspan="7" class="overlay-empty">Sem dados desta carreira para hoje.</td></tr>`;
           return;
         }
-        const html = unique.map(row => {
-          const active = row.last != null && row.last >= (Date.now() - 10 * 60 * 1000);
-          return `<tr>
-            <td>${escapeHtml(row.id || "—")}</td>
-            <td>${escapeHtml(row.model || "—")}</td>
-            <td>${escapeHtml(formatTimeOnly(row.first))}</td>
-            <td>${escapeHtml(formatTimeOnly(row.last))}</td>
-            <td>${escapeHtml(formatKm(row.dist))}</td>
-            <td>${escapeHtml(row.trips != null ? String(row.trips) : "—")}</td>
-            <td>${statusDotHtml(active)}</td>
-          </tr>`;
-        }).join("");
-        chartOverlayVehicleRows.innerHTML = html;
+        volumeTableRows = merged.map(row => {
+          const live = liveById.get(String(row.id));
+          const liveLast = live?.tsMs;
+          const finalLast = Number.isFinite(liveLast)
+            ? Math.max(row.last ?? -Infinity, liveLast)
+            : row.last;
+          const active = live?.active ?? (finalLast != null && finalLast >= activeCutoff);
+          const distKm = kmValueForSort(row.dist);
+          const tripsNum = Number(row.trips);
+          return {
+            ...row,
+            last: finalLast,
+            active,
+            distKm: Number.isFinite(distKm) ? distKm : null,
+            tripsNum: Number.isFinite(tripsNum) ? tripsNum : null
+          };
+        });
+        renderVolumeTableRows();
+        updateVolumeSortButtons();
+        updateVolumeOverlayLayout();
       }).catch(err => {
         console.warn("Falha ao carregar veículos do dia:", err);
         chartOverlayVehicleRows.innerHTML = `<tr><td colspan="7" class="overlay-empty">Erro ao carregar dados.</td></tr>`;
@@ -3186,6 +3781,10 @@
       if (!chartOverlayCanvas) return;
       const context = chartOverlayCanvas.getContext("2d");
       if (!context) return;
+      if (type === "volume") {
+        updateVolumeOverlayLayout();
+        applyVolumeOverlayTint();
+      }
       const { axis, grid, tooltipBg, tooltipFg } = getChartColors();
       if (!trendTimeline.length) {
         if (chartOverlayTitle) chartOverlayTitle.textContent = "Sem dados";
@@ -3207,17 +3806,19 @@
         const num = Number(value);
         return Number.isFinite(num) ? num.toFixed(1) : value;
       };
-      const color = type === "volume" ? "#f59f00" : "#ff4b4b";
-      const fill = type === "volume" ? "rgba(245, 159, 0, 0.3)" : "transparent";
+      const zoneTint = type === "volume" ? (resolveOverlayZoneInfo().color || "#f59f00") : null;
+      const color = type === "volume" ? (normalizeHexColor(zoneTint) || "#f59f00") : "#ff4b4b";
+      const fill = type === "volume" ? hexToRgba(color, 0.22) : "transparent";
       const title = type === "volume" ? "Volume da Frota" : "Velocidade Comercial";
       const fillMode = type === "volume" ? "start" : false;
       const valueUnit = type === "volume" ? "veículos" : "km/h";
       const compactTicks = type === "volume";
+      const volumeTight = type === "volume" && chartOverlayContent?.classList.contains("volume-tight");
       const xTickOpts = {
         color: axis,
-        maxTicksLimit: compactTicks ? 4 : 5,
+        maxTicksLimit: volumeTight ? 3 : (compactTicks ? 4 : 5),
         autoSkip: true,
-        autoSkipPadding: compactTicks ? 28 : 24,
+        autoSkipPadding: volumeTight ? 32 : (compactTicks ? 28 : 24),
         maxRotation: 0,
         minRotation: 0,
         font: { size: compactTicks ? 11 : 12, weight: "700" }
@@ -3225,10 +3826,10 @@
       const yTickOpts = {
         color: axis,
         beginAtZero: true,
-        padding: compactTicks ? 10 : 12,
-        maxTicksLimit: compactTicks ? 4 : 5,
-        autoSkipPadding: compactTicks ? 12 : 14,
-        font: { size: compactTicks ? 11 : 12, weight: "700" },
+        padding: volumeTight ? 14 : (compactTicks ? 10 : 12),
+        maxTicksLimit: volumeTight ? 4 : (compactTicks ? 4 : 5),
+        autoSkipPadding: volumeTight ? 16 : (compactTicks ? 12 : 14),
+        font: { size: volumeTight ? 11 : (compactTicks ? 11 : 12), weight: "700" },
         callback: yTickFormatter
       };
       if (chartOverlayTitle) {
@@ -3365,11 +3966,26 @@
       if (!chartOverlay || !trendTimeline.length) return;
       currentOverlayType = type;
       chartOverlay.classList.add("visible");
+      if (chartOverlayContent) {
+        chartOverlayContent.classList.toggle("volume-layout", type === "volume");
+        if (type === "volume") {
+          updateVolumeOverlayLayout();
+          applyVolumeOverlayTint();
+        } else {
+          chartOverlayContent.classList.remove("volume-tight");
+          resetOverlayTint();
+        }
+      }
       renderOverlayChart(type);
     }
 
     function closeChartOverlay() {
       if (chartOverlay) chartOverlay.classList.remove("visible");
+      if (chartOverlayContent) {
+        chartOverlayContent.classList.remove("volume-layout");
+        chartOverlayContent.classList.remove("volume-tight");
+      }
+      resetOverlayTint();
       currentOverlayType = null;
     }
 
@@ -3407,8 +4023,25 @@
       chartOverlayClose.addEventListener("click", closeChartOverlay);
     }
 
+    if (overlayTabChart) {
+      overlayTabChart.addEventListener("click", () => setVolumeMobileTab("chart"));
+    }
+    if (overlayTabTable) {
+      overlayTabTable.addEventListener("click", () => setVolumeMobileTab("table"));
+    }
+    if (overlaySortButtons && overlaySortButtons.length) {
+      overlaySortButtons.forEach(btn => {
+        btn.addEventListener("click", () => setVolumeSort(btn.dataset.sort));
+      });
+      updateVolumeSortButtons();
+    }
+
     document.addEventListener("keydown", event => {
       if (event.key === "Escape") closeChartOverlay();
+    });
+
+    window.addEventListener("resize", () => {
+      if (currentOverlayType === "volume") updateVolumeOverlayLayout();
     });
 
     if (chartSpeedCard) {
@@ -4383,8 +5016,9 @@
           const icon = L.divIcon({ html: iconHtml, className: "stop-fade", iconSize: [1, 1], iconAnchor: [0, 0] });
           const stopName = s.stop_name || "Paragem";
           const stopId = s.stop_id || "";
+          const schedState = initialScheduleStateForContext();
           const marker = L.marker([lat, lon], { icon }).bindPopup(
-            stopPopupHtml({ stopName, stopId, loading: true }),
+            stopPopupHtml({ stopName, stopId, loading: true, schedule: schedState }),
             { ...popupPanOptions(), maxWidth: 320 }
           );
           marker.on("add", () => {
@@ -4398,15 +5032,9 @@
             }));
           });
           marker.on("popupopen", async () => {
-            if (!stopId) {
-              marker.setPopupContent(stopPopupHtml({ stopName, stopId, routes: [] }));
-              try { wireStopPopupPills(marker.getPopup?.().getElement?.()); } catch (e) {}
-              return;
-            }
-            const routes = await ensureStopRoutes(stopId);
-            marker.setPopupContent(stopPopupHtml({ stopName, stopId, routes }));
-            try { wireStopPopupPills(marker.getPopup?.().getElement?.()); } catch (e) {}
+            await hydrateStopPopup(marker, { stopId, stopName });
           });
+          marker.on("popupclose", () => { hideMobileStopCard(); activeStopPopup = null; });
           marker.addTo(this.routeStopsLayer);
           boundsLayers.push(marker);
         }
@@ -4809,20 +5437,16 @@
             const stopName = props.stop_name || "Paragem";
             const stopId = props.stop_id || "";
             closeAllPopups();
-            const html = stopPopupHtml({ stopName, stopId, loading: true });
+            const schedState = initialScheduleStateForContext();
+            const html = stopPopupHtml({ stopName, stopId, loading: true, schedule: schedState });
             const popup = new maplibregl.Popup({ offset: 12, className: "custom-popup" })
               .setLngLat(e.lngLat)
               .setHTML(html)
               .addTo(this.map);
             try { popup.on("open", () => ensurePopupVisible(e.lngLat, this.map)); } catch (e4) {}
+            try { popup.on("close", () => { hideMobileStopCard(); activeStopPopup = null; }); } catch (e5) {}
             this.activePopups.push(popup);
-            (async () => {
-              try {
-                const routes = await ensureStopRoutes(stopId);
-                popup.setHTML(stopPopupHtml({ stopName, stopId, routes }));
-                try { wireStopPopupPills(popup.getElement?.()); } catch (e3) {}
-              } catch (e2) {}
-            })();
+            hydrateStopPopup(popup, { stopId, stopName }).catch(() => {});
           } catch (err) {}
         });
         this.map.on("click", "route-stops", (e) => {
@@ -4835,17 +5459,12 @@
             closeAllPopups();
             const popup = new maplibregl.Popup({ offset: 12, className: "custom-popup" })
               .setLngLat(e.lngLat)
-              .setHTML(stopPopupHtml({ stopName, stopId, loading: true }))
+              .setHTML(stopPopupHtml({ stopName, stopId, loading: true, schedule: initialScheduleStateForContext() }))
               .addTo(this.map);
             try { popup.on("open", () => ensurePopupVisible(e.lngLat, this.map)); } catch (e4) {}
+            try { popup.on("close", () => { hideMobileStopCard(); activeStopPopup = null; }); } catch (e5) {}
             this.activePopups.push(popup);
-            (async () => {
-              try {
-                const routes = stopId ? await ensureStopRoutes(stopId) : [];
-                popup.setHTML(stopPopupHtml({ stopName, stopId, routes }));
-                try { wireStopPopupPills(popup.getElement?.()); } catch (e3) {}
-              } catch (e2) {}
-            })();
+            hydrateStopPopup(popup, { stopId, stopName }).catch(() => {});
           } catch (err) {}
         });
         this.map.on("mouseenter", "route-stops", () => { this.map.getCanvas().style.cursor = "pointer"; });
@@ -4949,19 +5568,14 @@
                 const props = feature.properties || {};
                 const stopName = props.stop_name || "Paragem";
                 const stopId = props.stop_id || "";
-                const html = stopPopupHtml({ stopName, stopId, loading: true });
+                const html = stopPopupHtml({ stopName, stopId, loading: true, schedule: initialScheduleStateForContext() });
                 const popup = new maplibregl.Popup({ offset: 12, className: "custom-popup" })
                   .setLngLat(e.lngLat)
                   .setHTML(html)
                   .addTo(this.map);
+                try { popup.on("close", () => { hideMobileStopCard(); activeStopPopup = null; }); } catch (e5) {}
                 this.activePopups.push(popup);
-                (async () => {
-                  try {
-                    const routes = await ensureStopRoutes(stopId);
-                    popup.setHTML(stopPopupHtml({ stopName, stopId, routes }));
-                    try { wireStopPopupPills(popup.getElement?.()); } catch (e3) {}
-                  } catch (e2) {}
-                })();
+                hydrateStopPopup(popup, { stopId, stopName }).catch(() => {});
               } catch (err) {}
             });
             this.map.on("mouseenter", layerId, () => { this.map.getCanvas().style.cursor = "pointer"; });
@@ -5713,7 +6327,7 @@
         req.onupgradeneeded = (event) => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains(OVERLAY_IDB_STORE)) {
-            db.createObjectStore(OVERLAY_IDB_STORE, { keyPath: "key" });
+            db.createObjectStore(sOVERLAY_IDB_STORE, { keyPath: "key" });
           }
         };
         req.onsuccess = () => resolve(req.result);
@@ -5975,6 +6589,140 @@
       return activeVariantIdsForSelectedRoute();
     }
 
+    function setVolumeMobileTab(target = "chart") {
+      if (!chartOverlayContent) return;
+      chartOverlayContent.classList.remove("show-chart", "show-table");
+      if (target === "table") {
+        chartOverlayContent.classList.add("show-table");
+      } else {
+        chartOverlayContent.classList.add("show-chart");
+      }
+      if (overlayTabChart && overlayTabTable) {
+        overlayTabChart.classList.toggle("active", target !== "table");
+        overlayTabTable.classList.toggle("active", target === "table");
+      }
+    }
+
+    function updateVolumeOverlayLayout() {
+      if (!chartOverlayContent) return;
+      const width = chartOverlayContent.getBoundingClientRect().width || 0;
+      const compact = width < 1160;
+      if (compact) {
+        chartOverlayContent.classList.add("volume-tight");
+      } else {
+        chartOverlayContent.classList.remove("volume-tight");
+      }
+      const mobileTabs = width < 860;
+      chartOverlayContent.classList.toggle("mobile-tabs", mobileTabs);
+      if (mobileTabs) {
+        if (!chartOverlayContent.classList.contains("show-chart") && !chartOverlayContent.classList.contains("show-table")) {
+          setVolumeMobileTab("chart");
+        }
+      } else {
+        chartOverlayContent.classList.remove("show-chart", "show-table");
+        if (overlayTabChart && overlayTabTable) {
+          overlayTabChart.classList.remove("active");
+          overlayTabTable.classList.remove("active");
+        }
+      }
+    }
+
+    function normalizeHexColor(color) {
+      if (!color) return null;
+      const trimmed = color.trim().replace("#", "");
+      if (!/^[0-9a-fA-F]{6}$/.test(trimmed)) return null;
+      return `#${trimmed.toUpperCase()}`;
+    }
+
+    function hexToRgba(hex, alpha = 1) {
+      const normalized = normalizeHexColor(hex);
+      if (!normalized) return `rgba(245, 159, 0, ${alpha})`;
+      const r = parseInt(normalized.slice(1, 3), 16);
+      const g = parseInt(normalized.slice(3, 5), 16);
+      const b = parseInt(normalized.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function resolveOverlayPrimaryLabel() {
+      if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
+        const variantLabel = routeOptions.get(selectedRoute)?.variants?.get(selectedVariant);
+        return variantLabel || selectedVariant || selectedRoute;
+      }
+      if (selectedRoute && selectedRoute !== ROUTE_FILTER_ALL) {
+        const entry = routeOptions.get(selectedRoute);
+        return entry?.label || selectedRoute;
+      }
+      return null;
+    }
+
+    function resolveOverlayZoneInfo() {
+      const label = resolveOverlayPrimaryLabel();
+      if (!label) return { zone: null, color: null };
+      const byLabel = resolveRouteZone(label);
+      if (byLabel.zone && byLabel.color) return byLabel;
+      const base = getBaseRouteKey(label);
+      const entry = base ? routeOptions.get(base) : null;
+      const zone = entry?.zones ? Array.from(entry.zones)[0] : null;
+      return { zone: zone || null, color: zone ? getZoneColor(zone) : null };
+    }
+
+    function applyVolumeOverlayTint() {
+      const { color } = resolveOverlayZoneInfo();
+      const tint = normalizeHexColor(color) || "#f59f00";
+      const soft = hexToRgba(tint, 0.12);
+      const ultra = hexToRgba(tint, 0.04);
+      if (chartOverlayContent) {
+        chartOverlayContent.style.setProperty("--overlay-tint", tint);
+        chartOverlayContent.style.setProperty("--overlay-tint-soft", soft);
+        chartOverlayContent.style.setProperty("--overlay-tint-ultra", ultra);
+      }
+      if (chartOverlayVisual) {
+        chartOverlayVisual.style.background = `radial-gradient(130% 130% at 18% 16%, ${soft}, ${ultra})`;
+        chartOverlayVisual.style.borderColor = hexToRgba(tint, 0.35);
+      }
+      if (chartOverlayExtra && chartOverlayContent?.classList.contains("volume-layout")) {
+        chartOverlayExtra.style.background = `linear-gradient(160deg, ${soft}, transparent 46%), var(--surface-1)`;
+        chartOverlayExtra.style.borderColor = hexToRgba(tint, 0.24);
+      }
+      if (overlayTabChart && overlayTabTable) {
+        const activeBg = hexToRgba(tint, 0.16);
+        const border = hexToRgba(tint, 0.24);
+        const fg = readableTextColor(tint, "#8d5a00");
+        overlayTabChart.style.setProperty("--overlay-tab-active-bg", activeBg);
+        overlayTabChart.style.setProperty("--overlay-tab-border", border);
+        overlayTabChart.style.setProperty("--overlay-tab-fg", fg);
+        overlayTabTable.style.setProperty("--overlay-tab-active-bg", activeBg);
+        overlayTabTable.style.setProperty("--overlay-tab-border", border);
+        overlayTabTable.style.setProperty("--overlay-tab-fg", fg);
+      }
+      const pill = document.querySelector(".overlay-pill");
+      if (pill) {
+        pill.style.setProperty("--overlay-pill-bg", hexToRgba(tint, 0.14));
+        pill.style.setProperty("--overlay-pill-border", hexToRgba(tint, 0.22));
+      }
+    }
+
+    function resetOverlayTint() {
+      if (chartOverlayContent) {
+        chartOverlayContent.style.setProperty("--overlay-tint", "#f59f00");
+        chartOverlayContent.style.setProperty("--overlay-tint-soft", "rgba(245, 159, 0, 0.12)");
+        chartOverlayContent.style.setProperty("--overlay-tint-ultra", "rgba(15, 23, 42, 0.02)");
+      }
+      if (chartOverlayVisual) {
+        chartOverlayVisual.style.background = "radial-gradient(120% 120% at 20% 18%, rgba(245, 159, 0, 0.12), rgba(15, 23, 42, 0.02))";
+        chartOverlayVisual.style.borderColor = "rgba(245, 159, 0, 0.24)";
+      }
+      if (chartOverlayExtra) {
+        chartOverlayExtra.style.background = "var(--surface-1)";
+        chartOverlayExtra.style.borderColor = "var(--border-strong)";
+      }
+      const pill = document.querySelector(".overlay-pill");
+      if (pill) {
+        pill.style.removeProperty("--overlay-pill-bg");
+        pill.style.removeProperty("--overlay-pill-border");
+      }
+    }
+
     function shapeEndpoints(routeId) {
       const encoded = encodeURIComponent(String(routeId || ""));
       return (LOCAL_BACKENDS || []).map(base => `${base}/api/shapes/${encoded}`);
@@ -6170,6 +6918,226 @@
       return promise;
     }
 
+    const GTFS_TRIPS_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/trips`);
+    const GTFS_STOP_TIMES_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/stop_times`);
+    const TRIPS_CACHE_TTL_MS = 10 * 60_000;
+    const STOP_TIMES_CACHE_TTL_MS = 3 * 60_000;
+    const STOP_SCHEDULE_LIMIT = 10;
+    const tripsCache = new Map(); // route|direction|shape -> { ts, trips }
+    const tripsInflight = new Map(); // cacheKey -> Promise
+    const stopTimesCache = new Map(); // stop_id -> { ts, rows }
+    const stopTimesInflight = new Map(); // stop_id -> Promise
+    let stopScheduleRequestSeq = 0;
+    const stopScheduleTracker = new Map(); // stop_id -> { requestId, contextKey }
+    let activeStopPopup = null; // { stopId, stopName, target }
+
+    function buildScheduleContextKey() {
+      return "all-routes";
+    }
+
+    function resolveActiveRouteContext() {
+      return { routeId: null, directionId: null, shapeId: null };
+    }
+
+    function resolveRouteFilter() {
+      // Use the route that está ativa no contexto (flutuante): variante preferida, senão base.
+      if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) return selectedVariant;
+      if (selectedRoute && selectedRoute !== ROUTE_FILTER_ALL) return selectedRoute;
+      return null;
+    }
+
+    function refreshActiveStopSchedule() {
+      if (!activeStopPopup) return;
+      const { stopId, stopName, target } = activeStopPopup;
+      if (!stopId || !target) return;
+      hydrateStopPopup(target, { stopId, stopName }).catch(() => {});
+    }
+
+    function normalizeDirectionId(value) {
+      const num = Number.parseInt(String(value), 10);
+      return Number.isFinite(num) ? num : null;
+    }
+
+    function timeToSeconds(value) {
+      if (value == null) return NaN;
+      const parts = String(value).trim().split(":");
+      if (parts.length < 2) return NaN;
+      const h = Number.parseInt(parts[0], 10);
+      const m = Number.parseInt(parts[1], 10);
+      const s = Number.parseInt(parts[2] ?? "0", 10);
+      if (![h, m, s].every(Number.isFinite)) return NaN;
+      if (m < 0 || m >= 60 || s < 0 || s >= 60) return NaN;
+      return h * 3600 + m * 60 + s;
+    }
+
+    function formatSecondsToClock(seconds) {
+      if (!Number.isFinite(seconds)) return "—";
+      const totalMinutes = Math.floor(seconds / 60);
+      const mins = totalMinutes % 60;
+      const hours = Math.floor(totalMinutes / 60);
+      const hh = String(Math.max(0, hours)).padStart(2, "0");
+      const mm = String(Math.max(0, mins)).padStart(2, "0");
+      return `${hh}:${mm}`;
+    }
+
+    function getNowSeconds() {
+      const now = new Date();
+      return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    }
+
+    async function fetchTripsForContext(context) {
+      const ctx = context || resolveActiveRouteContext();
+      const { routeId, directionId, shapeId } = ctx || {};
+      if (!routeId || routeId === ROUTE_FILTER_ALL) return [];
+      const cacheKey = `${routeId}|${directionId ?? "any"}|${shapeId || ""}`;
+      const now = Date.now();
+      const cached = tripsCache.get(cacheKey);
+      if (cached && (now - cached.ts) < TRIPS_CACHE_TTL_MS) return cached.trips;
+      const inflight = tripsInflight.get(cacheKey);
+      if (inflight) return inflight;
+      const params = { route_id: routeId, limit: "5000" };
+      if (shapeId) params.shape_id = shapeId;
+      const promise = (async () => {
+        let list = [];
+        try {
+          const payload = await fetchFromEndpoints(GTFS_TRIPS_ENDPOINTS, params);
+          list = Array.isArray(payload) ? payload : [];
+        } catch (err) {
+          console.warn("Falha ao carregar trips GTFS:", err);
+          list = [];
+        }
+        const trips = list.filter(trip => {
+          const tripDir = normalizeDirectionId(trip?.direction_id ?? trip?.directionId ?? trip?.direction);
+          if (directionId === 0 || directionId === 1) {
+            if (tripDir !== directionId) return false;
+          }
+          if (shapeId) {
+            const tripShape = (trip?.shape_id ?? trip?.shapeId ?? "").toString().trim();
+            if (tripShape && tripShape !== shapeId) return false;
+          }
+          return true;
+        });
+        tripsCache.set(cacheKey, { ts: Date.now(), trips });
+        return trips;
+      })();
+      tripsInflight.set(cacheKey, promise);
+      try {
+        return await promise;
+      } finally {
+        tripsInflight.delete(cacheKey);
+      }
+    }
+
+    async function fetchStopTimesForStop(stopId) {
+      const key = (stopId == null) ? "" : String(stopId);
+      if (!key) return [];
+      const now = Date.now();
+      const cached = stopTimesCache.get(key);
+      if (cached && (now - cached.ts) < STOP_TIMES_CACHE_TTL_MS) return cached.rows;
+      const inflight = stopTimesInflight.get(key);
+      if (inflight) return inflight;
+      const promise = (async () => {
+        let rows = [];
+        try {
+          const payload = await fetchFromEndpoints(GTFS_STOP_TIMES_ENDPOINTS, { stop_id: key, limit: "5000" });
+          rows = Array.isArray(payload) ? payload : [];
+        } catch (err) {
+          console.warn("Falha ao carregar stop_times GTFS:", err);
+          rows = [];
+        }
+        stopTimesCache.set(key, { ts: Date.now(), rows });
+        return rows;
+      })();
+      stopTimesInflight.set(key, promise);
+      try {
+        return await promise;
+      } finally {
+        stopTimesInflight.delete(key);
+      }
+    }
+
+    function computeUpcomingDepartures(stopTimes, routeFilter, nowSeconds, limit = STOP_SCHEDULE_LIMIT) {
+      const byKey = new Map();
+      const routeFilterBase = routeFilter ? getBaseRouteKey(routeFilter) : "";
+      for (const st of Array.isArray(stopTimes) ? stopTimes : []) {
+        const tripId = st?.trip_id ?? st?.tripId ?? st?.tripID;
+        const rawTime = st?.arrival_time ?? st?.departure_time ?? st?.arrivalTime ?? st?.departureTime;
+        const seconds = timeToSeconds(rawTime);
+        if (!Number.isFinite(seconds)) continue;
+        if (seconds < nowSeconds) continue;
+        const routeId = st?.route_id ?? st?.routeId ?? "";
+        const routeBase = routeId ? getBaseRouteKey(routeId) : "";
+        const directionId = normalizeDirectionId(st?.direction_id ?? st?.directionId ?? st?.direction);
+        if (routeFilter) {
+          const match =
+            routeId === routeFilter ||
+            routeBase && routeBase === routeFilter ||
+            routeFilterBase && (routeId === routeFilterBase || routeBase === routeFilterBase);
+          if (!match) continue;
+        }
+        const key = `route:${routeId || "?"}|${directionId ?? "x"}|${seconds}`;
+        const existing = byKey.get(key);
+        if (existing) {
+          existing.count += 1;
+          if (tripId) existing.tripIds.add(String(tripId));
+        } else {
+          byKey.set(key, {
+            tripIds: new Set(tripId ? [String(tripId)] : []),
+            seconds,
+            rawTime,
+            routeId,
+            directionId,
+            count: 1
+          });
+        }
+      }
+      const rows = Array.from(byKey.values()).map(item => ({
+        tripIds: Array.from(item.tripIds),
+        seconds: item.seconds,
+        rawTime: item.rawTime,
+        routeId: item.routeId,
+        directionId: item.directionId,
+        count: item.count
+      }));
+      rows.sort((a, b) => a.seconds - b.seconds);
+      return rows.slice(0, limit);
+    }
+
+    function initialScheduleStateForContext() {
+      return { status: "loading" };
+    }
+
+    async function requestStopSchedule(stopId) {
+      const contextKey = buildScheduleContextKey();
+      const key = (stopId == null) ? "" : String(stopId);
+      if (!key) return { status: "idle", contextKey };
+      const requestId = ++stopScheduleRequestSeq;
+      stopScheduleTracker.set(key, { requestId, contextKey });
+      try {
+        const stopTimes = await fetchStopTimesForStop(key);
+        const nowSeconds = getNowSeconds();
+        const routeFilter = resolveRouteFilter();
+        const upcoming = computeUpcomingDepartures(stopTimes, routeFilter, nowSeconds, STOP_SCHEDULE_LIMIT);
+        const latest = stopScheduleTracker.get(key);
+        if (!latest || latest.requestId !== requestId || latest.contextKey !== contextKey) return null;
+        const departures = upcoming.map(item => ({
+          ...item,
+          clock: formatSecondsToClock(item.seconds),
+          etaMinutes: Math.max(0, Math.round((item.seconds - nowSeconds) / 60))
+        }));
+        return {
+          status: departures.length ? "success" : "empty",
+          departures,
+          contextKey
+        };
+      } catch (err) {
+        const latest = stopScheduleTracker.get(key);
+        if (!latest || latest.requestId !== requestId || latest.contextKey !== contextKey) return null;
+        console.warn("Falha ao calcular horários para a paragem:", stopId, err);
+        return { status: "empty", contextKey };
+      }
+    }
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -6232,8 +7200,12 @@
       return definirCategoria(text);
     }
 
-	    function routePillsHtml(routes) {
+	    function routePillsHtml(routes, selected = null) {
 	      const list = Array.isArray(routes) ? routes : [];
+	      const selectedNorm = normalizeRouteKey(selected || "");
+	      const selectedBase = getBaseRouteKey(selectedNorm);
+	      const selectedCode = parseRouteCodeParts(selectedNorm).code.toUpperCase?.() || selectedNorm.toUpperCase?.() || "";
+	      const selectedBaseCode = parseRouteCodeParts(selectedBase).code.toUpperCase?.() || selectedBase.toUpperCase?.() || "";
 	      if (!list.length) {
 	        return `<span class="route-pill" style="--pill-bg:#e2e8f0">—</span>`;
 	      }
@@ -6243,24 +7215,156 @@
 	        const style = pillStyleForRoute(label);
 	        const safeLabel = escapeHtml(label);
 	        const safeTitle = escapeHtml(style.title || label);
-	        return `<span class="route-pill route-pill--clickable" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}" title="${safeTitle}" role="button" tabindex="0" data-route-label="${safeLabel}">${safeLabel}</span>`;
+	        const code = parseRouteCodeParts(label).code.toUpperCase?.() || label.toUpperCase?.() || "";
+	        const base = getBaseRouteKey(label);
+	        const baseCode = parseRouteCodeParts(base).code.toUpperCase?.() || base.toUpperCase?.() || "";
+	        const active = Boolean(
+	          (selectedCode && code && selectedCode === code) ||
+	          (selectedBaseCode && code && selectedBaseCode === code) ||
+	          (selectedCode && baseCode && selectedCode === baseCode) ||
+	          (selectedBase && selectedBase === base)
+	        );
+	        const activeClass = active ? " route-pill--active" : "";
+	        return `<span class="route-pill route-pill--clickable${activeClass}" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}" title="${safeTitle}" role="button" tabindex="0" data-route-label="${safeLabel}">${safeLabel}</span>`;
 	      }).filter(Boolean).join("");
 	    }
 
-    function stopPopupHtml({ stopName, stopId, routes, loading = false } = {}) {
+    function formatEtaLabel(etaMinutes, clock) {
+      if (!Number.isFinite(etaMinutes)) return escapeHtml(clock || "—");
+      if (etaMinutes <= 0) return "Agora";
+      if (etaMinutes < 60) return `${etaMinutes} min`;
+      return escapeHtml(clock || "—");
+    }
+
+    function renderStopSchedule(schedule = { status: "idle" }) {
+      const status = schedule?.status || "idle";
+      if (status === "loading") return `<div class="stop-schedule__loading">A carregar horários…</div>`;
+      if (status === "error") return `<div class="stop-schedule__empty">Não foi possível carregar horários.</div>`;
+      const departures = Array.isArray(schedule?.departures) ? schedule.departures : [];
+      if (!departures.length) return `<div class="stop-schedule__empty">Sem partidas programadas</div>`;
+      return `<div class="stop-schedule__list">` + departures.map(dep => {
+        const etaLabel = formatEtaLabel(dep.etaMinutes, dep.clock || dep.rawTime || formatSecondsToClock(dep.seconds));
+        const displayLabel = resolvePublicRouteLabel(dep.routeId || dep.routeLabel || "") || dep.routeId || dep.routeLabel || "";
+        const style = pillStyleForRoute(displayLabel);
+        const routeCode = parseRouteCodeParts(displayLabel).code || displayLabel || "—";
+        const pill = `<span class="route-pill pill--tiny" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(routeCode)}</span>`;
+        const dirLabel = directionDisplayLabel(dep.routeId || dep.routeLabel || "", dep.directionId);
+        const dirText = dirLabel ? dirLabel.replace(/^\s*Sentido:\s*/i, "").trim() : "";
+        const dirHtml = dirText ? `<span class="stop-schedule__dir">${escapeHtml(dirText)}</span>` : "";
+        return `<div class="stop-schedule__row">${pill}${dirHtml}<span class="stop-schedule__time">${escapeHtml(etaLabel)}</span></div>`;
+      }).join("") + `</div>`;
+    }
+
+    function stopPopupHtml({ stopName, stopId, routes, loading = false, schedule } = {}) {
       const title = (stopName || "Paragem").trim();
       const meta = (stopId || "").trim();
       const pills = loading
         ? `<span class="route-pill route-pill--loading">a carregar…</span>`
-        : routePillsHtml(routes);
+        : routePillsHtml(routes, resolveRouteFilter());
+      const scheduleState = schedule || { status: "loading" };
+      const safeMeta = escapeHtml(meta);
       return `
-        <div class="stop-popup">
+        <div class="stop-popup stop-popup--compact">
           <div class="stop-popup__title">${title}</div>
-          <div class="stop-popup__meta">${meta}</div>
-          <div class="stop-popup__section">Carreiras</div>
+          <div class="stop-popup__meta">${safeMeta}</div>
           <div class="pill-row">${pills}</div>
+          <div class="stop-schedule" data-stop-id="${safeMeta}">${renderStopSchedule(scheduleState)}</div>
         </div>
       `;
+    }
+
+    function showMobileStopCard({ stopName, stopId, schedule, routes }) {
+      const card = document.getElementById("mobile-stop-card");
+      const title = document.getElementById("mobile-stop-title");
+      const meta = document.getElementById("mobile-stop-meta");
+      const schedEl = document.getElementById("mobile-stop-schedule");
+      const pillsEl = document.getElementById("mobile-stop-pills");
+      if (!card || !title || !meta || !schedEl) return;
+      title.textContent = stopName || "Paragem";
+      meta.textContent = stopId || "";
+      schedEl.innerHTML = renderStopSchedule(schedule || { status: "loading" });
+      if (pillsEl) {
+        pillsEl.innerHTML = routePillsHtml(routes || [], resolveRouteFilter());
+        wireStopPopupPills(pillsEl);
+      }
+      card.classList.add("visible");
+      document.body.classList.add("mobile-stop-open");
+      const panel = document.getElementById("kpi-panel");
+      if (panel) panel.style.display = "none";
+      const floating = document.getElementById("kpi-floating-context");
+      if (floating) floating.style.display = "none";
+    }
+
+    function hideMobileStopCard() {
+      const card = document.getElementById("mobile-stop-card");
+      if (card) card.classList.remove("visible");
+      document.body.classList.remove("mobile-stop-open");
+      activeStopPopup = null;
+      if (adapter?.map && adapter.map.closePopup) {
+        try { adapter.map.closePopup(); } catch (e) {}
+      }
+      const panel = document.getElementById("kpi-panel");
+      if (panel) panel.style.display = "";
+      const floating = document.getElementById("kpi-floating-context");
+      if (floating) floating.style.display = "";
+    }
+
+    const mobileStopClose = document.getElementById("mobile-stop-close");
+    if (mobileStopClose) {
+      mobileStopClose.addEventListener("click", () => hideMobileStopCard());
+    }
+
+    function applyStopPopupContent(target, params = {}) {
+      if (!target) return;
+      const html = stopPopupHtml(params);
+      if (typeof target.setPopupContent === "function") {
+        target.setPopupContent(html);
+      } else if (typeof target.setHTML === "function") {
+        target.setHTML(html);
+      } else if (typeof target.setContent === "function") {
+        target.setContent(html);
+      }
+      const el =
+        target?.getPopup?.()?.getElement?.() ||
+        target?.getElement?.() ||
+        target?._contentNode ||
+        null;
+      // No mobile: não abrir tooltip, usamos o cartão.
+      if (isMobileViewport()) {
+        try { target.closePopup?.(); } catch (e) {}
+        if (el) el.style.display = "none";
+      } else {
+        try { wireStopPopupPills(el); } catch (e) {}
+      }
+    }
+
+    async function hydrateStopPopup(target, { stopId, stopName } = {}) {
+      let scheduleState = initialScheduleStateForContext();
+      applyStopPopupContent(target, { stopName, stopId, loading: true, routes: [], schedule: scheduleState });
+      if (!stopId) return;
+      const routesPromise = ensureStopRoutes(stopId);
+      const schedulePromise = requestStopSchedule(stopId);
+      let routes = [];
+      try {
+        routes = await routesPromise;
+      } catch (err) {
+        routes = [];
+      }
+      try {
+        const resolved = await schedulePromise;
+        if (resolved) {
+          scheduleState = resolved;
+        } else if (scheduleState?.status === "loading") {
+          scheduleState = { status: "error" };
+        }
+      } catch (err) {
+        scheduleState = { status: "error" };
+      }
+      applyStopPopupContent(target, { stopName, stopId, routes, loading: false, schedule: scheduleState });
+      if (isMobileViewport()) {
+        showMobileStopCard({ stopName, stopId, schedule: scheduleState, routes });
+      }
+      activeStopPopup = { stopId, stopName, target };
     }
 
     function resolveBaseIdFromLabel(label) {
@@ -6320,6 +7424,7 @@
       refreshKpis(true);
       fetchData().catch(() => {});
       setSidebarCollapsed(true);
+      refreshActiveStopSchedule();
     }
 
     function handlePopupRouteActions() {
@@ -6574,17 +7679,17 @@
             const marker = L.marker([lat, lon], { icon });
             marker.addTo(adapter.globalStopsLayer);
 
+            const schedState = initialScheduleStateForContext();
             marker.bindPopup(
-              stopPopupHtml({ stopName: (s.stop_name || "Paragem"), stopId: (s.stop_id || ""), loading: true }),
+              stopPopupHtml({ stopName: (s.stop_name || "Paragem"), stopId: (s.stop_id || ""), loading: true, schedule: schedState }),
               { ...popupPanOptions(), maxWidth: 320 }
             );
 
             marker.on("popupopen", async () => {
               const stopId = s?.stop_id || "";
-              const routes = await ensureStopRoutes(stopId);
-              marker.setPopupContent(stopPopupHtml({ stopName: (s.stop_name || "Paragem"), stopId, routes }));
-              try { wireStopPopupPills(marker.getPopup?.().getElement?.()); } catch (e) {}
+              await hydrateStopPopup(marker, { stopId, stopName: (s.stop_name || "Paragem") });
             });
+            marker.on("popupclose", () => hideMobileStopCard());
 
             marker.on("add", () => {
               const el = marker.getElement?.();
