@@ -1020,6 +1020,9 @@
       display: flex;
       flex-direction: column;
       gap: 2px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 2px;
     }
     .stop-schedule__time {
       font-variant-numeric: tabular-nums;
@@ -1058,8 +1061,9 @@
     }
     body.theme-dark .stop-schedule__row,
     body.theme-auto .stop-schedule__row {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
     }
     .mobile-stop-card {
       position: absolute;
@@ -1092,6 +1096,12 @@
       font-size: 0.82rem;
       color: var(--text-muted);
       font-variant-numeric: tabular-nums;
+    }
+    .mobile-stop-card__pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
     }
     .mobile-stop-card__close {
       border: 1px solid var(--border-strong);
@@ -6858,7 +6868,7 @@
     const GTFS_STOP_TIMES_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/stop_times`);
     const TRIPS_CACHE_TTL_MS = 10 * 60_000;
     const STOP_TIMES_CACHE_TTL_MS = 3 * 60_000;
-    const STOP_SCHEDULE_LIMIT = 8;
+    const STOP_SCHEDULE_LIMIT = 5;
     const tripsCache = new Map(); // route|direction|shape -> { ts, trips }
     const tripsInflight = new Map(); // cacheKey -> Promise
     const stopTimesCache = new Map(); // stop_id -> { ts, rows }
@@ -7197,7 +7207,10 @@
       title.textContent = stopName || "Paragem";
       meta.textContent = stopId || "";
       schedEl.innerHTML = renderStopSchedule(schedule || { status: "loading" });
-      if (pillsEl) pillsEl.innerHTML = routePillsHtml(routes || []);
+      if (pillsEl) {
+        pillsEl.innerHTML = routePillsHtml(routes || []);
+        wireStopPopupPills(pillsEl);
+      }
       card.classList.add("visible");
       document.body.classList.add("mobile-stop-open");
       const panel = document.getElementById("kpi-panel");
@@ -7240,7 +7253,13 @@
         target?.getElement?.() ||
         target?._contentNode ||
         null;
-      try { wireStopPopupPills(el); } catch (e) {}
+      // No mobile: não abrir tooltip, usamos o cartão.
+      if (isMobileViewport()) {
+        try { target.closePopup?.(); } catch (e) {}
+        if (el) el.style.display = "none";
+      } else {
+        try { wireStopPopupPills(el); } catch (e) {}
+      }
     }
 
     async function hydrateStopPopup(target, { stopId, stopName } = {}) {
