@@ -313,6 +313,14 @@
     @media (min-width: 901px) {
       .floating-search.visible { display: none !important; }
     }
+    body.theme-dark .floating-search,
+    body.theme-auto .floating-search {
+      background: var(--sidebar-bg);
+    }
+    body.theme-dark .floating-search .floating-route-input,
+    body.theme-auto .floating-search .floating-route-input {
+      background: var(--surface-1);
+    }
     @media (max-width: 900px) {
       .kpi-floating-context {
         width: min(98vw, 560px);
@@ -946,7 +954,7 @@
     }
 
     /* Estilos do Popup */
-    .custom-popup .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: 6px; }
+    .custom-popup .leaflet-popup-content-wrapper { background: transparent; padding: 0; overflow: hidden; border-radius: 6px; }
     .custom-popup .leaflet-popup-content { margin: 0; width: 200px !important; }
     
     .pop-header { 
@@ -964,13 +972,15 @@
     .pop-body { padding: 12px; font-size: 13px; color: #444; line-height: 1.5; }
 
     /* MapLibre popup parity */
-    .custom-popup .maplibregl-popup-content { padding: 0; margin: 0; width: 220px !important; overflow: hidden; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.2); }
+    .custom-popup .maplibregl-popup-content { background: transparent; padding: 0; margin: 0; width: 220px !important; overflow: hidden; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.2); }
     .custom-popup .maplibregl-popup-tip { display: none; }
 
     /* Stop popup pills */
     .stop-popup {
       padding: 12px 12px 14px;
-      background: rgba(255, 255, 255, 0.98);
+      background: var(--surface-1);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
     }
     .stop-popup__title {
       font-weight: 800;
@@ -1252,15 +1262,36 @@
       color: rgba(15, 23, 42, 0.55);
       box-shadow: none;
     }
-    body.theme-dark .stop-popup {
-      background: rgba(15, 23, 42, 0.92);
-    }
-    body.theme-dark .stop-popup__title { color: rgba(255,255,255,0.92); }
-    body.theme-dark .stop-popup__meta,
-    body.theme-dark .stop-popup__section { color: rgba(255,255,255,0.62); }
-    body.theme-dark .pill {
-      border-color: var(--pill-border, rgba(255,255,255,0.16));
-      color: var(--pill-fg, rgba(15, 23, 42, 0.95));
+
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .stop-popup,
+      body.theme-dark .stop-popup {
+        background: var(--surface-1);
+        color: #f8fafc;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+      }
+      body.theme-auto .stop-popup__title,
+      body.theme-dark .stop-popup__title {
+        color: #f8fafc;
+      }
+      body.theme-auto .stop-popup__meta,
+      body.theme-dark .stop-popup__meta,
+      body.theme-auto .stop-popup__section,
+      body.theme-dark .stop-popup__section {
+        color: rgba(248, 250, 252, 0.7);
+      }
+      body.theme-auto .pill,
+      body.theme-dark .pill {
+        border-color: var(--pill-border, rgba(255, 255, 255, 0.16));
+        box-shadow: none;
+      }
+      body.theme-auto .stop-schedule__row,
+      body.theme-dark .stop-schedule__row {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #f8fafc;
+      }
     }
 
     /* Route/global stops */
@@ -1350,7 +1381,7 @@
       font-size: 9px;
       font-weight: 900;
       line-height: 1;
-      color: white;
+      color: #0f172a;
       border: 1px solid rgba(0,0,0,0.15);
       box-shadow: 0 1px 2px rgba(0,0,0,0.2);
       white-space: nowrap;
@@ -1439,6 +1470,11 @@
       border-color: var(--pill-border, rgba(255, 255, 255, 0.16));
       color: var(--pill-fg, #0b1220);
       box-shadow: none;
+    }
+    body.theme-dark .stop-schedule__row {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
     }
     .custom-popup .maplibregl-popup-close-button { color: white; font-size: 16px; padding: 6px 10px; z-index: 10; }
     .custom-popup .maplibregl-popup-close-button:hover { background: rgba(0,0,0,0.1); }
@@ -6291,7 +6327,7 @@
         req.onupgradeneeded = (event) => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains(OVERLAY_IDB_STORE)) {
-            db.createObjectStore(OVERLAY_IDB_STORE, { keyPath: "key" });
+            db.createObjectStore(sOVERLAY_IDB_STORE, { keyPath: "key" });
           }
         };
         req.onsuccess = () => resolve(req.result);
