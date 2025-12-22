@@ -624,20 +624,20 @@
     }
     .chart-overlay canvas {
       width: 100%;
-      height: 440px !important;
-      min-height: 440px;
-      flex: 0 0 440px;
+      max-width: none;
+      height: clamp(320px, 46vh, 440px) !important;
+      min-height: 320px;
+      flex: 0 0 auto;
       display: block;
-      flex-shrink: 0;
+      margin: 0 auto;
     }
     @media (min-height: 900px) {
       .chart-overlay canvas {
-        height: 480px !important;
-        min-height: 480px;
-        flex-basis: 480px;
+        height: clamp(360px, 50vh, 520px) !important;
+        min-height: 360px;
       }
     }
-    .chart-overlay-extra { margin-top: 4px; }
+    .chart-overlay-extra { margin-top: 4px; max-height: 38vh; overflow: auto; }
     .overlay-subtitle { margin: 0 0 10px; font-size: 1rem; }
     .overlay-table-wrapper { overflow: auto; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-1); max-height: 260px; }
     .overlay-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
@@ -1435,9 +1435,10 @@
 	      return Math.max(1, Math.min(180, parsed));
 	    })();
 
-	    const MAP_CENTER = [38.736946, -9.142685];
-	    const MAP_ZOOM = 13;
-	    const REFRESH_RATE_MS = 5000;
+    const MAP_CENTER = [38.736946, -9.142685];
+    const MAP_ZOOM = 13;
+    const REFRESH_RATE_MS = 5000;
+    const VEHICLE_CACHE_TTL_MS = 20_000;
     // Mimic Streamlit dashboard: on each poll, vehicles with a new ping slide for ~1s, otherwise stay still.
     const ANIMATION_MS = 1000;
     const ACTIVE_SECONDS = 300;
@@ -1612,6 +1613,9 @@
     let selectedRoute = ROUTE_FILTER_ALL;
     let selectedVariant = VARIANT_FILTER_ALL;
     let lastVehicles = [];
+    let globalVehiclesCache = { timestamp: 0, list: [] };
+    let vehiclesRequestSeq = 0;
+    let vehiclesLatestAppliedId = 0;
     const routeOptions = new Map(); // baseId -> { label: string, variants: Map<variantId, label>, categories: Set<string> }
     const ROUTE_DETAILS = new Map(); // routeId -> { shortName, longName }
     const BASE_ROUTE_DETAILS = new Map(); // baseId -> { shortName, longName }
@@ -1667,6 +1671,7 @@
     let trendTimeline = [];
     let previewCharts = { speed: null, volume: null };
     let overlayChartInstance = null;
+    let overlayChartState = { type: null, labels: [], values: [] };
     let currentOverlayType = null;
     let lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
     let lastTrendLineCandidate = null;
@@ -2902,7 +2907,9 @@
       const styles = getComputedStyle(document.body);
       const axis = (styles.getPropertyValue("--chart-axis-color") || "#0f172a").trim();
       const grid = (styles.getPropertyValue("--chart-grid-color") || "rgba(15, 23, 42, 0.12)").trim();
-      return { axis, grid };
+      const tooltipBg = (styles.getPropertyValue("--panel-bg") || "rgba(255,255,255,0.95)").trim();
+      const tooltipFg = (styles.getPropertyValue("--text-primary") || "#0f172a").trim();
+      return { axis, grid, tooltipBg, tooltipFg };
     }
 
     async function checkApiHealth() {
@@ -3179,11 +3186,12 @@
       if (!chartOverlayCanvas) return;
       const context = chartOverlayCanvas.getContext("2d");
       if (!context) return;
-      const { axis, grid } = getChartColors();
+      const { axis, grid, tooltipBg, tooltipFg } = getChartColors();
       if (!trendTimeline.length) {
         if (chartOverlayTitle) chartOverlayTitle.textContent = "Sem dados";
         chartOverlayCanvas.getContext("2d").clearRect(0, 0, chartOverlayCanvas.width, chartOverlayCanvas.height);
         if (chartOverlayExtra) chartOverlayExtra.hidden = true;
+        overlayChartState = { type: null, labels: [], values: [] };
         return;
       }
       const labels = trendTimeline.map(entry => timeLabelFormatter.format(entry.interval));
@@ -3199,81 +3207,152 @@
         const num = Number(value);
         return Number.isFinite(num) ? num.toFixed(1) : value;
       };
-	      const color = type === "volume" ? "#f59f00" : "#ff4b4b";
-	      const fill = type === "volume" ? "rgba(245, 159, 0, 0.3)" : "transparent";
-	      const title = type === "volume" ? "Volume da Frota" : "Velocidade Comercial";
-	      const fillMode = type === "volume" ? "start" : false;
-	      if (chartOverlayTitle) {
-	        let contextLabel = "";
-	        if (selectedRoute && selectedRoute !== ROUTE_FILTER_ALL) {
-	          const ctx = buildRouteContext();
-	          contextLabel = ctx.html || escapeHtml(ctx.text || "");
-	        } else if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
-	          contextLabel = escapeHtml(selectedCategory);
-	        } else {
-	          contextLabel = "Rede Global";
-	        }
-	        const safeTitle = escapeHtml(title);
-	        chartOverlayTitle.innerHTML = contextLabel
-	          ? `<span class=\"chart-overlay-title-main\">${safeTitle}</span><span class=\"chart-overlay-context\">${contextLabel}</span>`
-	          : safeTitle;
-	      }
-	      if (overlayChartInstance) {
-	        overlayChartInstance.destroy();
-	        overlayChartInstance = null;
-	      }
-      overlayChartInstance = new Chart(context, {
-        type: "line",
-        data: {
-          labels,
-	          datasets: buildSegmentedLineDatasets({
-              values: data,
-              label: title,
-              color,
-              fill,
-              fillMode,
-              borderWidth: 2,
-              tension: 0.2
-            })
-	        },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              layout: { padding: { top: 6, right: 10, bottom: 6, left: 8 } },
-              interaction: { mode: "nearest", intersect: false, axis: "x" },
-              hover: { mode: "nearest", intersect: false },
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  mode: "nearest",
-                  intersect: false,
-                  titleFont: { size: 12, weight: "700" },
-                  bodyFont: { size: 12, weight: "600" },
-                  padding: 10
-                }
-              },
-              scales: {
-                x: {
-                  grid: { display: false },
-                  ticks: { color: axis, maxTicksLimit: 6, autoSkip: true, autoSkipPadding: 16, maxRotation: 0, minRotation: 0 }
-                },
-                y: {
-                  grid: { color: grid },
-                  ticks: {
-                    color: axis,
-                    beginAtZero: true,
-                    padding: 12,
-                    maxTicksLimit: 6,
-                    autoSkipPadding: 12,
-                    font: { size: 13, weight: "700" },
-                    callback: yTickFormatter
-                  },
-                  min: 0,
-                  suggestedMax
+      const color = type === "volume" ? "#f59f00" : "#ff4b4b";
+      const fill = type === "volume" ? "rgba(245, 159, 0, 0.3)" : "transparent";
+      const title = type === "volume" ? "Volume da Frota" : "Velocidade Comercial";
+      const fillMode = type === "volume" ? "start" : false;
+      const valueUnit = type === "volume" ? "veículos" : "km/h";
+      const compactTicks = type === "volume";
+      const xTickOpts = {
+        color: axis,
+        maxTicksLimit: compactTicks ? 4 : 5,
+        autoSkip: true,
+        autoSkipPadding: compactTicks ? 28 : 24,
+        maxRotation: 0,
+        minRotation: 0,
+        font: { size: compactTicks ? 11 : 12, weight: "700" }
+      };
+      const yTickOpts = {
+        color: axis,
+        beginAtZero: true,
+        padding: compactTicks ? 10 : 12,
+        maxTicksLimit: compactTicks ? 4 : 5,
+        autoSkipPadding: compactTicks ? 12 : 14,
+        font: { size: compactTicks ? 11 : 12, weight: "700" },
+        callback: yTickFormatter
+      };
+      if (chartOverlayTitle) {
+        let contextLabel = "";
+        if (selectedRoute && selectedRoute !== ROUTE_FILTER_ALL) {
+          const ctx = buildRouteContext();
+          contextLabel = ctx.html || escapeHtml(ctx.text || "");
+        } else if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
+          contextLabel = escapeHtml(selectedCategory);
+        } else {
+          contextLabel = "Rede Global";
+        }
+        const safeTitle = escapeHtml(title);
+        chartOverlayTitle.innerHTML = contextLabel
+          ? `<span class=\"chart-overlay-title-main\">${safeTitle}</span><span class=\"chart-overlay-context\">${contextLabel}</span>`
+          : safeTitle;
+      }
+
+      const sameType = overlayChartState.type === type;
+      const sameLabels = sameType && overlayChartState.labels.length === labels.length && overlayChartState.labels.every((v, i) => v === labels[i]);
+      const sameValues = sameType && overlayChartState.values.length === data.length && overlayChartState.values.every((v, i) => v === data[i]);
+      const datasets = buildSegmentedLineDatasets({
+        values: data,
+        label: title,
+        color,
+        fill,
+        fillMode,
+        borderWidth: 2,
+        tension: 0.2
+      });
+
+      if (!overlayChartInstance) {
+        overlayChartInstance = new Chart(context, {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 10, right: 18, bottom: 18, left: 28 } },
+            interaction: { mode: "nearest", intersect: false, axis: "x" },
+            hover: { mode: "nearest", intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: tooltipBg,
+                titleColor: tooltipFg,
+                bodyColor: tooltipFg,
+                borderWidth: 0,
+                displayColors: false,
+                mode: "nearest",
+                intersect: false,
+                titleFont: { size: 11, weight: "700" },
+                bodyFont: { size: 11, weight: "600" },
+                padding: 8,
+                callbacks: {
+                  title: (items) => items?.[0]?.label || "",
+                  label: (ctx) => {
+                    const v = ctx?.parsed?.y;
+                    if (!Number.isFinite(v)) return "";
+                    const val = type === "volume" ? Math.round(v) : Number(v).toFixed(1);
+                    return `${val} ${valueUnit}`;
+                  }
                 }
               }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: {
+                  color: axis,
+                  maxTicksLimit: 5,
+                  autoSkip: true,
+                  autoSkipPadding: 24,
+                  maxRotation: 0,
+                  minRotation: 0,
+                  font: { size: 11, weight: "700" }
+                }
+              },
+              y: {
+                grid: { color: grid, borderDash: [4, 4] },
+                ticks: yTickOpts,
+                min: 0,
+                suggestedMax
+              }
+            },
+            elements: {
+              line: { borderCapStyle: "round", borderJoinStyle: "round" },
+              point: { radius: 0, hoverRadius: 6, hitRadius: 12 }
             }
-      });
+          }
+        });
+      } else if (!sameLabels || !sameValues || !sameType) {
+        overlayChartInstance.data.labels = labels;
+        overlayChartInstance.data.datasets = datasets;
+        overlayChartInstance.options.animation = false;
+        overlayChartInstance.options.scales.x.ticks.color = axis;
+        overlayChartInstance.options.scales.y.ticks.color = axis;
+        overlayChartInstance.options.scales.y.grid.color = grid;
+        overlayChartInstance.options.scales.y.grid.borderDash = [4, 4];
+        overlayChartInstance.options.scales.y.ticks.callback = yTickFormatter;
+        overlayChartInstance.options.scales.y.suggestedMax = suggestedMax;
+        overlayChartInstance.options.plugins.tooltip.backgroundColor = tooltipBg;
+        overlayChartInstance.options.plugins.tooltip.titleColor = tooltipFg;
+        overlayChartInstance.options.plugins.tooltip.bodyColor = tooltipFg;
+        overlayChartInstance.options.plugins.tooltip.callbacks = {
+          title: (items) => items?.[0]?.label || "",
+          label: (ctx) => {
+            const v = ctx?.parsed?.y;
+            if (!Number.isFinite(v)) return "";
+            const val = type === "volume" ? Math.round(v) : Number(v).toFixed(1);
+            return `${val} ${valueUnit}`;
+          }
+        };
+        overlayChartInstance.options.plugins.tooltip.titleFont = { size: 11, weight: "700" };
+        overlayChartInstance.options.plugins.tooltip.bodyFont = { size: 11, weight: "600" };
+        overlayChartInstance.options.plugins.tooltip.padding = 8;
+        overlayChartInstance.options.scales.x.ticks = xTickOpts;
+        overlayChartInstance.options.scales.y.ticks = yTickOpts;
+        overlayChartInstance.options.layout = { padding: { top: 10, right: 18, bottom: 18, left: 28 } };
+        overlayChartInstance.update("none");
+      }
+
+      overlayChartState = { type, labels: labels.slice(), values: data.slice() };
 
       if (type === "volume") {
         renderVolumeOverlayTable().catch(err => console.warn("Falha ao renderizar tabela de veículos:", err));
@@ -3292,10 +3371,6 @@
     function closeChartOverlay() {
       if (chartOverlay) chartOverlay.classList.remove("visible");
       currentOverlayType = null;
-      if (overlayChartInstance) {
-        overlayChartInstance.destroy();
-        overlayChartInstance = null;
-      }
     }
 
     if (chartOverlayCanvas && !chartOverlayCanvas.dataset.tooltipClickBound) {
@@ -4375,6 +4450,7 @@
         this.activePopups = [];
         this._stopPieCache = new Map();
         this._stopRoutesInflight = new Set();
+        this.globalStopTilesEnabled = false;
         this.ready = this.init();
       }
 
@@ -4606,6 +4682,8 @@
           try { this.map.removeLayer("global-stops-routes"); } catch (e) {}
         }
 
+        this.initGlobalStopTiles();
+
         // Smooth fade when we toggle paint properties (used on data refresh).
         try {
           this.map.setPaintProperty("route-stops", "circle-opacity-transition", { duration: 260, delay: 0 });
@@ -4672,6 +4750,138 @@
         this.map.on("mouseleave", "global-stops", () => { this.map.getCanvas().style.cursor = ""; });
 
         this.overlayReady = true;
+      }
+
+      initGlobalStopTiles() {
+        if (!this.map || this.globalStopTilesEnabled) return this.globalStopTilesEnabled;
+        if (!STOP_TILES_ENABLED) {
+          stopTilesAvailability = false;
+          return false;
+        }
+        // Only enable tile source when availability is confirmed true; otherwise, rely on GeoJSON flow.
+        if (stopTilesAvailability === null) {
+          prewarmStopTilesAvailability()
+            .then((val) => { if (val) try { this.initGlobalStopTiles(); } catch (e) {} })
+            .catch(() => {});
+          return false;
+        }
+        if (stopTilesAvailability === false) return false;
+        const tiles = stopsTileTemplates();
+        if (!tiles.length) return false;
+        try {
+          if (!this.map.getSource(STOP_TILE_SOURCE_ID)) {
+            this.map.addSource(STOP_TILE_SOURCE_ID, {
+              type: "vector",
+              tiles,
+              minzoom: 10,
+              maxzoom: 20
+            });
+          }
+          if (!this.map.getLayer(STOP_TILE_LAYER_IDS.circle)) {
+            this.map.addLayer({
+              id: STOP_TILE_LAYER_IDS.circle,
+              type: "circle",
+              source: STOP_TILE_SOURCE_ID,
+              "source-layer": STOP_TILE_LAYER_NAME,
+              paint: {
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 10.5, 1.2, 11.5, 2.4, 12.5, 4.8, 15, 8],
+                "circle-color": ["coalesce", ["get", "fill"], "#ffffff"],
+                "circle-opacity": ["interpolate", ["linear"], ["zoom"], 10.5, 0, 12, 0.08, 13.5, 0.24, 15, 0.4],
+                "circle-stroke-color": ["coalesce", ["get", "border"], "#ffd400"],
+                "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 10.5, 0.8, 11.5, 1.4, 12.5, 2.2, 15, 3.1]
+              }
+            });
+          }
+          if (!this.map.getLayer(STOP_TILE_LAYER_IDS.symbol)) {
+            if (!this.map.hasImage("stop-pie-default")) {
+              try { this.map.addImage("stop-pie-default", buildPieImage(["#ffd400"], 52), { pixelRatio: 2 }); } catch (e) {}
+            }
+            this.map.addLayer({
+              id: STOP_TILE_LAYER_IDS.symbol,
+              type: "symbol",
+              source: STOP_TILE_SOURCE_ID,
+              "source-layer": STOP_TILE_LAYER_NAME,
+              layout: {
+                "icon-image": ["coalesce", ["get", "icon"], "stop-pie-default"],
+                "icon-size": ["interpolate", ["linear"], ["zoom"], 10.5, 0.3, 11.5, 0.55, 12.5, 0.85, 15, 1.05],
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+                "icon-anchor": "center",
+                visibility: "none"
+              },
+              paint: {
+                "icon-opacity": ["interpolate", ["linear"], ["zoom"], 10.5, 0, 12, 0.1, 13.5, this._globalStopsCircleOpacity]
+              }
+            });
+          }
+          if (!this.map.getLayer(STOP_TILE_LAYER_IDS.triangle)) {
+            this.map.addLayer({
+              id: STOP_TILE_LAYER_IDS.triangle,
+              type: "symbol",
+              source: STOP_TILE_SOURCE_ID,
+              "source-layer": STOP_TILE_LAYER_NAME,
+              layout: {
+                "icon-image": "stop-triangle",
+                "icon-size": 0.52,
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+                "icon-rotate": ["-", 90, ["coalesce", ["get", "direction_angle"], 0]],
+                "icon-rotation-alignment": "map",
+                "icon-anchor": "center",
+                visibility: "none"
+              },
+              paint: {
+                "icon-color": ["coalesce", ["get", "arrow"], "#000000"],
+                "icon-opacity": ["interpolate", ["linear"], ["zoom"], 10.5, 0, 12, 0.14, 13.5, this._globalStopsIconOpacity]
+              }
+            });
+          }
+          // Interactions for tile-based stops
+          const clickHandler = (layerId) => {
+            this.map.on("click", layerId, (e) => {
+              try {
+                const feature = e?.features?.[0];
+                if (!feature) return;
+                const props = feature.properties || {};
+                const stopName = props.stop_name || "Paragem";
+                const stopId = props.stop_id || "";
+                const html = stopPopupHtml({ stopName, stopId, loading: true });
+                const popup = new maplibregl.Popup({ offset: 12, className: "custom-popup" })
+                  .setLngLat(e.lngLat)
+                  .setHTML(html)
+                  .addTo(this.map);
+                this.activePopups.push(popup);
+                (async () => {
+                  try {
+                    const routes = await ensureStopRoutes(stopId);
+                    popup.setHTML(stopPopupHtml({ stopName, stopId, routes }));
+                    try { wireStopPopupPills(popup.getElement?.()); } catch (e3) {}
+                  } catch (e2) {}
+                })();
+              } catch (err) {}
+            });
+            this.map.on("mouseenter", layerId, () => { this.map.getCanvas().style.cursor = "pointer"; });
+            this.map.on("mouseleave", layerId, () => { this.map.getCanvas().style.cursor = ""; });
+          };
+          [STOP_TILE_LAYER_IDS.circle, STOP_TILE_LAYER_IDS.symbol].forEach(clickHandler);
+          this.globalStopTilesEnabled = true;
+          this.setGlobalStopTilesVisible(true);
+        } catch (err) {
+          this.globalStopTilesEnabled = false;
+        }
+        return this.globalStopTilesEnabled;
+      }
+
+      setGlobalStopTilesVisible(show) {
+        if (!this.map || !this.globalStopTilesEnabled) return;
+        const visibility = show ? "visible" : "none";
+        [STOP_TILE_LAYER_IDS.circle, STOP_TILE_LAYER_IDS.symbol, STOP_TILE_LAYER_IDS.triangle].forEach(id => {
+          try { this.map.setLayoutProperty(id, "visibility", visibility); } catch (e) {}
+        });
+        // Hide GeoJSON overlay-based layers to avoid double rendering.
+        try { this.map.setLayoutProperty("global-stops", "visibility", show ? "none" : "visible"); } catch (e) {}
+        try { this.map.setLayoutProperty("global-stops-symbol", "visibility", show ? "none" : "visible"); } catch (e) {}
+        try { this.map.setLayoutProperty("global-stops-triangles", "visibility", show ? "none" : "visible"); } catch (e) {}
       }
 
       clearOverlay() {
@@ -4752,6 +4962,8 @@
 
 	      setGlobalStops(payload) {
 	        if (!this.map) return;
+	        // When vector tiles are enabled for global stops, skip GeoJSON overlay updates.
+	        if (this.globalStopTilesEnabled) return;
 	        this.initOverlayLayers();
 	        const stops = Array.isArray(payload?.stops) ? payload.stops : [];
 	        const prevCount = this._lastGlobalStopsCount || 0;
@@ -5344,7 +5556,6 @@
 	      } catch (err) {}
 	    }
 
-	    const OVERLAY_CACHE_TTL_MS = 5 * 60_000;
 	    const OVERLAY_DIRECTIONS = [0, 1];
 	    const overlayCache = new Map(); // key -> { ts, payload }
 	    let currentOverlayKey = null;
@@ -5368,6 +5579,76 @@
     const STOP_LABEL_ZOOM_THRESHOLD = 15.2; // Zoom onde as pills começam a aparecer
     const STOP_LABEL_FADE_MS = 260;
     let mapLibreStopsFadeTimer = null;
+    const STOP_TILE_SOURCE_ID = "global-stop-tiles";
+    const STOP_TILE_LAYER_NAME = "stops";
+    const STOP_TILE_LAYER_IDS = {
+      circle: "global-stops-tiles",
+      symbol: "global-stops-symbol-tiles",
+      triangle: "global-stops-triangles-tiles"
+    };
+    const STOP_TILES_ENABLED = false; // Temporarily disable tile mode to ensure stops load via GeoJSON
+    let stopTilesAvailability = null;
+    let stopTilesAvailabilityPromise = null;
+
+    // IndexedDB-backed persistent cache (route overlays: shapes + stops)
+    const OVERLAY_CACHE_TTL_MS = 30 * 60_000;
+    const OVERLAY_PERSIST_TTL_MS = 12 * 60 * 60_000; // 12h persisted
+    const OVERLAY_IDB_NAME = "carris-overlay-cache";
+    const OVERLAY_IDB_STORE = "routeOverlays";
+    let overlayDbPromise = null;
+
+    function openOverlayDb() {
+      if (overlayDbPromise) return overlayDbPromise;
+      if (!("indexedDB" in window)) {
+        overlayDbPromise = Promise.resolve(null);
+        return overlayDbPromise;
+      }
+      overlayDbPromise = new Promise((resolve) => {
+        const req = indexedDB.open(OVERLAY_IDB_NAME, 1);
+        req.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(OVERLAY_IDB_STORE)) {
+            db.createObjectStore(OVERLAY_IDB_STORE, { keyPath: "key" });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      });
+      return overlayDbPromise;
+    }
+
+    async function readOverlayFromIdb(key) {
+      try {
+        const db = await openOverlayDb();
+        if (!db) return null;
+        return await new Promise((resolve) => {
+          const tx = db.transaction([OVERLAY_IDB_STORE], "readonly");
+          const store = tx.objectStore(OVERLAY_IDB_STORE);
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (err) {
+        return null;
+      }
+    }
+
+    async function writeOverlayToIdb(key, payload) {
+      try {
+        const db = await openOverlayDb();
+        if (!db) return;
+        const record = { key, ts: Date.now(), payload };
+        await new Promise((resolve) => {
+          const tx = db.transaction([OVERLAY_IDB_STORE], "readwrite");
+          const store = tx.objectStore(OVERLAY_IDB_STORE);
+          store.put(record);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        });
+      } catch (err) {
+        /* ignore */
+      }
+    }
 
 
 
@@ -5416,6 +5697,11 @@
       try { map.setPaintProperty("global-stops", "circle-opacity", circle); } catch (e) {}
       try { map.setPaintProperty("global-stops-symbol", "icon-opacity", circle); } catch (e) {}
       try { map.setPaintProperty("global-stops-triangles", "icon-opacity", icon); } catch (e) {}
+      if (adapter.globalStopTilesEnabled) {
+        try { map.setPaintProperty(STOP_TILE_LAYER_IDS.circle, "circle-opacity", circle); } catch (e) {}
+        try { map.setPaintProperty(STOP_TILE_LAYER_IDS.symbol, "icon-opacity", circle); } catch (e) {}
+        try { map.setPaintProperty(STOP_TILE_LAYER_IDS.triangle, "icon-opacity", icon); } catch (e) {}
+      }
     }
 
     function fadeOutMapLibreStops() {
@@ -5428,6 +5714,11 @@
       try { map.setPaintProperty("global-stops", "circle-opacity", 0); } catch (e) {}
       try { map.setPaintProperty("global-stops-symbol", "icon-opacity", 0); } catch (e) {}
       try { map.setPaintProperty("global-stops-triangles", "icon-opacity", 0); } catch (e) {}
+      if (adapter.globalStopTilesEnabled) {
+        try { map.setPaintProperty(STOP_TILE_LAYER_IDS.circle, "circle-opacity", 0); } catch (e) {}
+        try { map.setPaintProperty(STOP_TILE_LAYER_IDS.symbol, "icon-opacity", 0); } catch (e) {}
+        try { map.setPaintProperty(STOP_TILE_LAYER_IDS.triangle, "icon-opacity", 0); } catch (e) {}
+      }
       mapLibreStopsFadeTimer = setTimeout(() => {
         try { adapter.setGlobalStops({ stops: [] }); } catch (e) {}
         clearMapLibreStopLabels();
@@ -5461,7 +5752,8 @@
         return;
       }
 
-      const features = m.queryRenderedFeatures?.({ layers: ["global-stops"] }) || [];
+      const labelLayer = adapter.globalStopTilesEnabled ? STOP_TILE_LAYER_IDS.circle : "global-stops";
+      const features = m.queryRenderedFeatures?.({ layers: [labelLayer] }) || [];
       const currentIds = new Set();
 
       features.forEach(f => {
@@ -5550,6 +5842,7 @@
     })();
 
     wireMapEvents().catch(() => {});
+    prewarmStopTilesAvailability().catch(() => {});
 
     function activeVariantIdsForSelectedRoute() {
       if (!selectedRoute || selectedRoute === ROUTE_FILTER_ALL) return [];
@@ -5608,53 +5901,105 @@
       return (LOCAL_BACKENDS || []).map(base => `${base}/api/stops/${encoded}`);
     }
 
+    function stopsTileTemplates() {
+      return dedupeList((LOCAL_BACKENDS || []).map(base => `${base}/api/tiles/stops/{z}/{x}/{y}.pbf`));
+    }
+
+    function prewarmStopTilesAvailability() {
+      if (!STOP_TILES_ENABLED) {
+        stopTilesAvailability = false;
+        stopTilesAvailabilityPromise = Promise.resolve(false);
+        return stopTilesAvailabilityPromise;
+      }
+      if (stopTilesAvailabilityPromise) return stopTilesAvailabilityPromise;
+      stopTilesAvailabilityPromise = (async () => {
+        const templates = stopsTileTemplates();
+        if (!templates.length) {
+          stopTilesAvailability = false;
+          return stopTilesAvailability;
+        }
+        const sample = templates[0].replace("{z}", "12").replace("{x}", "1944").replace("{y}", "1568");
+        try {
+          const resp = await fetch(sample, { method: "HEAD", cache: "no-store" });
+          stopTilesAvailability = resp.ok;
+        } catch (err) {
+          stopTilesAvailability = false;
+        }
+        return stopTilesAvailability;
+      })();
+      return stopTilesAvailabilityPromise;
+    }
+
     function routeDetailEndpoints(routeId, dateStr) {
       const encoded = encodeURIComponent(String(routeId || ""));
       const day = dateStr || new Date().toISOString().split("T")[0];
       return VEHICLE_DAY_ENDPOINTS.map(base => `${base}?date=${encodeURIComponent(day)}&line_id=${encoded}`);
     }
 
-    async function fetchRouteOverlayPayload(routeIds) {
+    async function fetchRouteOverlayPayload(routeIds, { forceNetwork = false } = {}) {
       const now = Date.now();
-      const ids = Array.isArray(routeIds) ? routeIds.filter(Boolean) : [];
+      const ids = normalizeOverlayIds(routeIds);
       const cacheKey = JSON.stringify({ ids });
       const cached = overlayCache.get(cacheKey);
-      if (cached && (now - cached.ts) < OVERLAY_CACHE_TTL_MS) return cached.payload;
+      if (!forceNetwork && cached && (now - cached.ts) < OVERLAY_CACHE_TTL_MS) {
+        return cached.payload;
+      }
+
+      // Persistent cache: return quickly if present (and reasonably fresh)
+      if (!forceNetwork) {
+        const stored = await readOverlayFromIdb(cacheKey);
+        if (stored && stored.payload && (now - (stored.ts || 0)) < OVERLAY_PERSIST_TTL_MS) {
+          overlayCache.set(cacheKey, { ts: stored.ts || now, payload: stored.payload });
+          return stored.payload;
+        }
+      }
 
       const shapes = [];
       const stops = [];
       const seenStops = new Set();
+      const tasks = [];
 
       for (const routeId of ids) {
         for (const dirId of OVERLAY_DIRECTIONS) {
           const color = routeDirectionColor(routeId, dirId);
-          try {
-            const geojson = await fetchFromEndpoints(shapeEndpoints(routeId), { direction: String(serverDirectionForClientDirection(dirId)) });
-            if (geojson && geojson.type) {
-              shapes.push({ routeId, directionId: dirId, color, geojson });
+          tasks.push((async () => {
+            const [shapeResult, stopsResult] = await Promise.allSettled([
+              fetchFromEndpoints(shapeEndpoints(routeId), { direction: String(serverDirectionForClientDirection(dirId)) }),
+              fetchFromEndpoints(stopsEndpoints(routeId), { direction: String(serverDirectionForClientDirection(dirId)), limit: "220" })
+            ]);
+            if (shapeResult.status === "fulfilled" && shapeResult.value && shapeResult.value.type) {
+              shapes.push({ routeId, directionId: dirId, color, geojson: shapeResult.value });
             }
-          } catch (err) {}
-
-          try {
-            const rows = await fetchFromEndpoints(stopsEndpoints(routeId), { direction: String(serverDirectionForClientDirection(dirId)), limit: "220" });
-            const list = Array.isArray(rows) ? rows : [];
-            for (const s of list) {
-              const key = `${s?.stop_id || ""}|${Number(s?.stop_lat).toFixed(6)}|${Number(s?.stop_lon).toFixed(6)}|${dirId}|${routeId}`;
-              if (seenStops.has(key)) continue;
-              seenStops.add(key);
-              stops.push({ ...s, routeId, directionId: dirId, color });
+            if (stopsResult.status === "fulfilled") {
+              const list = Array.isArray(stopsResult.value) ? stopsResult.value : [];
+              for (const s of list) {
+                const key = `${s?.stop_id || ""}|${Number(s?.stop_lat).toFixed(6)}|${Number(s?.stop_lon).toFixed(6)}|${dirId}|${routeId}`;
+                if (seenStops.has(key)) continue;
+                seenStops.add(key);
+                stops.push({ ...s, routeId, directionId: dirId, color });
+              }
             }
-          } catch (err) {}
+          })());
         }
+      }
+
+      let fetchFailed = false;
+      try {
+        await Promise.allSettled(tasks);
+      } catch (err) {
+        fetchFailed = true;
       }
 
       const payload = { routeIds: ids, shapes, stops };
       overlayCache.set(cacheKey, { ts: now, payload });
+      writeOverlayToIdb(cacheKey, payload);
+
+      if (fetchFailed && cached?.payload) return cached.payload;
       return payload;
     }
 
     async function refreshRouteOverlay(force = false) {
-      const ids = resolveOverlayVariantIds();
+      const ids = normalizeOverlayIds(resolveOverlayVariantIds());
       const wantKey = ids.length ? JSON.stringify(ids) : null;
 
       if (!wantKey) {
@@ -5745,6 +6090,12 @@
       const zone = definirZona(label);
       const color = getZoneColor(zone);
       return { zone: zone || null, color: color || null };
+    }
+
+    function normalizeOverlayIds(list) {
+      if (!Array.isArray(list)) return [];
+      const uniq = Array.from(new Set(list.map(v => (v == null ? "" : String(v)))));
+      return uniq.filter(Boolean).sort();
     }
 
     function readableTextColor(bg, fallback = "#ffffff") {
@@ -5862,6 +6213,7 @@
       refreshGlobalStops(true).catch(() => {});
       refreshCharts(true).catch(() => {});
       refreshKpis(true);
+      fetchData().catch(() => {});
       setSidebarCollapsed(true);
     }
 
@@ -5974,6 +6326,9 @@
       selectedVariant = VARIANT_FILTER_ALL;
       syncRouteInputValue();
       updateVariantOptions();
+      if (Array.isArray(globalVehiclesCache.list) && globalVehiclesCache.list.length) {
+        lastVehicles = globalVehiclesCache.list;
+      }
       renderVehicles();
       refreshRouteOverlay(true).catch(() => {});
       refreshGlobalStops(true).catch(() => {});
@@ -5982,6 +6337,7 @@
       updateRouteClearVisibility();
       renderSelectedRoutePill();
       closeFloatingSearch();
+      fetchData({ forceGlobal: true, preferCache: true }).catch(() => {});
     }
 
 	    function wireStopPopupPills(containerEl) {
@@ -6190,6 +6546,17 @@
     async function refreshGlobalStops(force = false) {
       if (!adapter) return;
       if (!force && adapter?.isInteracting) return;
+      if (adapter instanceof MapLibreAdapter && adapter.globalStopTilesEnabled) {
+        const z = adapterZoom();
+        const visible = Number.isFinite(z) && z >= STOPS_MIN_ZOOM && selectedRoute === ROUTE_FILTER_ALL;
+        adapter.setGlobalStopTilesVisible(visible);
+        if (!visible) {
+          clearMapLibreStopLabels();
+        } else {
+          updateMapLibreStopLabels();
+        }
+        return;
+      }
       if (selectedRoute !== ROUTE_FILTER_ALL) {
         // Clear when leaving global mode
         cancelGlobalStopsFetch();
@@ -6226,11 +6593,11 @@
       const now = Date.now();
       const cached = globalStopsCache.get(key);
       const cachedFresh = cached && (now - cached.ts) < GLOBAL_STOPS_CACHE_TTL_MS;
-      if (!force && cachedFresh) {
-        if (lastRenderedGlobalStopsKey !== key) renderGlobalStops(cached.payload);
+      if (cached && lastRenderedGlobalStopsKey !== key) {
+        renderGlobalStops(cached.payload);
         lastRenderedGlobalStopsKey = key;
-        return;
       }
+      if (!force && cachedFresh) return;
       if (!force && sameViewport && globalStopsAbort) return;
 
       cancelGlobalStopsFetch();
@@ -6333,32 +6700,54 @@
        return normalized.map(decorateVehicle);
     }
 
-    async function fetchData() {
+    async function fetchData(options = {}) {
+      const { forceGlobal = false, preferCache = true } = options;
+      const vehicleParams = forceGlobal ? {} : buildVehicleQueryParams();
+      const requestId = ++vehiclesRequestSeq;
+
+      const useCachedGlobal =
+        forceGlobal &&
+        preferCache &&
+        Array.isArray(globalVehiclesCache.list) &&
+        globalVehiclesCache.list.length > 0 &&
+        (Date.now() - globalVehiclesCache.timestamp) < VEHICLE_CACHE_TTL_MS;
+
+      if (useCachedGlobal) {
+        lastVehicles = globalVehiclesCache.list;
+        await renderVehicles();
+      }
+
       updateStatus("fetching");
-      const vehicleParams = buildVehicleQueryParams();
+
+      const applyResult = async (vehicles, statusText, isFallback = false) => {
+        if (requestId < vehiclesLatestAppliedId) return false;
+        vehiclesLatestAppliedId = requestId;
+        lastVehicles = vehicles;
+        if (!vehicleParams.linha && !isFallback) {
+          globalVehiclesCache = { timestamp: Date.now(), list: vehicles };
+        }
+        updateRouteOptionsFromVehicles(vehicles);
+        await renderVehicles();
+        refreshRouteOverlay(false).catch(() => {});
+        refreshGlobalStops(false).catch(() => {});
+        updateStatus(statusText);
+        refreshKpis().catch(() => {});
+        return true;
+      };
+
       try {
         const payload = await fetchFromEndpoints(VEHICLE_ENDPOINTS, vehicleParams);
         const vehicles = normalizeVehicles(payload);
-        lastVehicles = vehicles;
-        updateRouteOptionsFromVehicles(vehicles);
-        await renderVehicles();
-        refreshRouteOverlay(false).catch(() => {});
-        refreshGlobalStops(false).catch(() => {});
-        updateStatus("online");
-        refreshKpis().catch(() => {});
-        clearAppError();
+        const applied = await applyResult(vehicles, "online");
+        if (applied) clearAppError();
+        return vehicles;
       } catch (err) {
         console.warn("Offline mode:", err);
-        showAppError(`Falha a obter veículos: ${err?.message || err}`);
         const fallback = await loadOfflineVehicles();
         const vehicles = normalizeVehicles(fallback);
-        lastVehicles = vehicles;
-        updateRouteOptionsFromVehicles(vehicles);
-        await renderVehicles();
-        refreshRouteOverlay(false).catch(() => {});
-        refreshGlobalStops(false).catch(() => {});
-        updateStatus("offline");
-        refreshKpis().catch(() => {});
+        const applied = await applyResult(vehicles, "offline", true);
+        if (applied) showAppError(`Falha a obter veículos: ${err?.message || err}`);
+        return vehicles;
       }
     }
 
