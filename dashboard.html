@@ -429,19 +429,19 @@
 
     .kpi-panel .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(140px, 1fr));
-      gap: 4px;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 2px;
       justify-items: stretch;
     }
 
     .kpi-card {
       background: var(--surface-2);
-      border-radius: 12px;
-      padding: 6px 8px;
-      min-height: 68px;
+      border-radius: 10px;
+      padding: 4px 6px;
+      min-height: 58px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 1px;
       border: 1px solid rgba(15, 23, 42, 0.05);
       align-items: center;
       text-align: center;
@@ -449,8 +449,8 @@
     }
 
 	    .kpi-card strong {
-	      font-size: 1.4rem;
-	      line-height: 1.15;
+	      font-size: 1.25rem;
+	      line-height: 1.1;
 	      width: 100%;
 	    }
 	    .kpi-card .kpi-value {
@@ -833,6 +833,21 @@
         grid-template-columns: 1fr;
       }
     }
+    @media (max-width: 768px) {
+      .chart-overlay-content {
+        width: 100vw;
+        max-width: 100vw;
+        padding: 16px;
+        border-radius: 14px;
+      }
+      .chart-overlay-visual {
+        margin-inline: -2px;
+      }
+      .chart-overlay canvas {
+        height: clamp(280px, 50vh, 380px) !important;
+        min-height: 260px;
+      }
+    }
     .chart-overlay-close {
       position: absolute;
       top: 12px;
@@ -963,6 +978,118 @@
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
+    }
+    .stop-schedule {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stop-schedule__row {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 4px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px solid var(--glass);
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      width: 100%;
+      line-height: 1.1;
+    }
+    .stop-schedule__list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .stop-schedule__time {
+      font-variant-numeric: tabular-nums;
+      min-width: 40px;
+      margin-left: auto;
+      text-align: right;
+    }
+    .stop-schedule__eta {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .pill--tiny {
+      padding: 1px 4px;
+      font-size: 0.72rem;
+      border-radius: 999px;
+      line-height: 1;
+      letter-spacing: -0.01em;
+    }
+    .stop-schedule__meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex-wrap: wrap;
+    }
+    .stop-schedule__dir {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .stop-schedule__empty,
+    .stop-schedule__loading {
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      padding: 6px 2px;
+    }
+    body.theme-dark .stop-schedule__row,
+    body.theme-auto .stop-schedule__row {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+    .mobile-stop-card {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: 14px;
+      z-index: 1600;
+      background: var(--surface-1);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      box-shadow: var(--shadow-strong);
+      padding: 12px 14px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .mobile-stop-card.visible { display: flex; }
+    .mobile-stop-card__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .mobile-stop-card__title {
+      font-weight: 800;
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+    .mobile-stop-card__meta {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .mobile-stop-card__close {
+      border: none;
+      background: var(--accent);
+      color: #0f172a;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-size: 1rem;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.16);
+    }
+    body.mobile-stop-open .kpi-panel,
+    body.mobile-stop-open .kpi-floating-context {
+      display: none !important;
     }
     .route-preview {
       position: fixed;
@@ -1569,8 +1696,18 @@
 	            <span class="kpi-label">Vel. comercial (1 hora)</span>
 	            <strong class="kpi-value kpi-speed" id="kpi-vel-hour">—</strong>
 	            <span class="kpi-delta" id="kpi-vel-hour-delta">—</span>
-	          </article>
+          </article>
         </div>
+      </div>
+      <div class="mobile-stop-card" id="mobile-stop-card" aria-live="polite">
+        <div class="mobile-stop-card__header">
+          <div>
+            <div class="mobile-stop-card__title" id="mobile-stop-title">Paragem</div>
+            <div class="mobile-stop-card__meta" id="mobile-stop-meta">—</div>
+          </div>
+          <button class="mobile-stop-card__close" id="mobile-stop-close" type="button" aria-label="Fechar paragem">✕</button>
+        </div>
+        <div class="stop-schedule" id="mobile-stop-schedule"></div>
       </div>
       <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Mostrar filtros">☰</button>
       <div id="map"></div>
@@ -1621,7 +1758,7 @@
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-	    const API_URL = "https://rt.jdcp.workers.dev/";
+    const API_URL = "https://4belhato.trade/";
 	    const urlParams = new URLSearchParams(window.location.search);
 	    const ACTIVE_WINDOW_MIN = (() => {
 	      const raw = (urlParams.get("active_window_min") || urlParams.get("activeWindowMin") || "").trim();
@@ -1753,7 +1890,7 @@
 	    }
 
 	    function resolveBackendBases() {
-	      const bases = ["https://tyron-uncondensational-prepossessingly.ngrok-free.dev"];
+	      const bases = ["https://4belhato.trade"];
 	      const override = urlParams.get("backend") || urlParams.get("api_base");
 	      const normalizedOverride = normalizeBaseUrl(override);
 	      if (normalizedOverride) bases.push(normalizedOverride);
@@ -1795,7 +1932,7 @@
     const CHARTS_ENDPOINTS = KPI_BASE_URLS.flatMap(base => CHART_PATHS.map(path => `${base}${path}`));
     const LOCAL_BACKENDS = BACKEND_BASES.length ? BACKEND_BASES : ["http://127.0.0.1:8001", "http://127.0.0.1:8002"];
     // Realtime feed used for vehicle positions (only). KPIs/charts use backend APIs separately.
-    const VEHICLE_ENDPOINT = API_URL;
+    const VEHICLE_ENDPOINT = "https://rt.jdcp.workers.dev/";
     const CHARTS_CACHE_TTL_MS = 60_000;
     const CHARTS_MIN_INTERVAL_MS = 35_000;
     const CHARTS_REFRESH_INTERVAL_MS = 45_000;
@@ -3189,6 +3326,71 @@
       return { id, model, first: firstTs, last: lastTs, dist, trips };
     }
 
+    function mergeVehicleRows(rows, startMs, endMs) {
+      const byId = new Map();
+      rows.forEach(row => {
+        if (!row || !row.id) return;
+        if (startMs != null && endMs != null) {
+          const inRangeFirst = row.first != null && row.first >= startMs && row.first < endMs;
+          const inRangeLast = row.last != null && row.last >= startMs && row.last < endMs;
+          if (!inRangeFirst && !inRangeLast) return;
+        }
+        const key = String(row.id);
+        const existing = byId.get(key);
+        if (!existing) {
+          byId.set(key, { ...row });
+          return;
+        }
+        const merged = { ...existing };
+        const numDist = Number(row.dist);
+        const numTrips = Number(row.trips);
+        merged.model = merged.model || row.model || "";
+        if (row.first != null && (merged.first == null || row.first < merged.first)) merged.first = row.first;
+        if (row.last != null && (merged.last == null || row.last > merged.last)) merged.last = row.last;
+        if (Number.isFinite(numDist)) {
+          const existingDist = Number(merged.dist);
+          if (!Number.isFinite(existingDist) || numDist > existingDist) merged.dist = row.dist;
+        }
+        if (Number.isFinite(numTrips)) {
+          const existingTrips = Number(merged.trips);
+          if (!Number.isFinite(existingTrips) || numTrips > existingTrips) merged.trips = row.trips;
+        }
+        byId.set(key, merged);
+      });
+      return Array.from(byId.values());
+    }
+
+    function buildLiveVehiclesById(lineIds = []) {
+      const map = new Map();
+      if (!Array.isArray(lastVehicles) || !lastVehicles.length) return map;
+      const ids = Array.isArray(lineIds) ? lineIds.map(normalizeOptionKey) : [];
+      const allowedVariants = new Set(ids.filter(Boolean));
+      const allowedBases = new Set();
+      if (selectedVariant === VARIANT_FILTER_ALL) {
+        ids.forEach(id => {
+          const base = getBaseRouteKey(id);
+          if (base) allowedBases.add(base);
+        });
+        const baseSelected = getBaseRouteKey(selectedRoute);
+        if (baseSelected) allowedBases.add(baseSelected);
+      }
+      const activeCutoff = Date.now() - 10 * 60 * 1000;
+      for (const v of lastVehicles) {
+        const vid = v?.id ?? v?.vehicle_id ?? v?.vehicleId ?? v?.vehicle;
+        if (!vid) continue;
+        const variantKey = normalizeOptionKey(v?.routeId || v?.routeLabel || v?.linha || "");
+        const baseKey = getBaseRouteKey(variantKey);
+        const matchVariant = allowedVariants.size === 0 || (variantKey && allowedVariants.has(variantKey));
+        const matchBase = allowedBases.size === 0 || (baseKey && allowedBases.has(baseKey));
+        if (!matchVariant && !matchBase) continue;
+        const tsMs = normalizeTimestampMs(v?.ts ?? v?.timestamp ?? v?.serverTsSec ?? v?.server_ts ?? v?.time ?? null);
+        if (!Number.isFinite(tsMs)) continue;
+        const active = tsMs >= activeCutoff;
+        map.set(String(vid), { tsMs, active });
+      }
+      return map;
+    }
+
     function sortedVolumeRows() {
       const rows = Array.isArray(volumeTableRows) ? [...volumeTableRows] : [];
       const { key, dir } = volumeTableSort;
@@ -3282,30 +3484,32 @@
       const today = new Date().toISOString().split("T")[0];
       const startMs = normalizeTimestampMs(`${today}T00:00:00`);
       const endMs = startMs != null ? startMs + 24 * 60 * 60 * 1000 : null;
+      const liveById = buildLiveVehiclesById(lineIds);
+      const activeCutoff = Date.now() - 10 * 60 * 1000;
       return Promise.all(lineIds.map(id => fetchRouteDayVehicles(id, today))).then(results => {
         const rows = results.flat();
         const normalized = rows.map(normalizeVehicleDayRow).filter(Boolean);
-        const unique = [];
-        const seen = new Set();
-        normalized.forEach(row => {
-          if (seen.has(row.id)) return;
-          if (startMs != null && endMs != null) {
-            const inRangeFirst = row.first != null && row.first >= startMs && row.first < endMs;
-            const inRangeLast = row.last != null && row.last >= startMs && row.last < endMs;
-            if (!inRangeFirst && !inRangeLast) return;
-          }
-          seen.add(row.id);
-          unique.push(row);
-        });
-        if (!unique.length) {
+        const merged = mergeVehicleRows(normalized, startMs, endMs);
+        if (!merged.length) {
           chartOverlayVehicleRows.innerHTML = `<tr><td colspan="7" class="overlay-empty">Sem dados desta carreira para hoje.</td></tr>`;
           return;
         }
-        volumeTableRows = unique.map(row => {
-          const active = row.last != null && row.last >= (Date.now() - 10 * 60 * 1000);
+        volumeTableRows = merged.map(row => {
+          const live = liveById.get(String(row.id));
+          const liveLast = live?.tsMs;
+          const finalLast = Number.isFinite(liveLast)
+            ? Math.max(row.last ?? -Infinity, liveLast)
+            : row.last;
+          const active = live?.active ?? (finalLast != null && finalLast >= activeCutoff);
           const distKm = kmValueForSort(row.dist);
           const tripsNum = Number(row.trips);
-          return { ...row, active, distKm: Number.isFinite(distKm) ? distKm : null, tripsNum: Number.isFinite(tripsNum) ? tripsNum : null };
+          return {
+            ...row,
+            last: finalLast,
+            active,
+            distKm: Number.isFinite(distKm) ? distKm : null,
+            tripsNum: Number.isFinite(tripsNum) ? tripsNum : null
+          };
         });
         renderVolumeTableRows();
         updateVolumeSortButtons();
@@ -4720,8 +4924,9 @@
           const icon = L.divIcon({ html: iconHtml, className: "stop-fade", iconSize: [1, 1], iconAnchor: [0, 0] });
           const stopName = s.stop_name || "Paragem";
           const stopId = s.stop_id || "";
+          const schedState = initialScheduleStateForContext();
           const marker = L.marker([lat, lon], { icon }).bindPopup(
-            stopPopupHtml({ stopName, stopId, loading: true }),
+            stopPopupHtml({ stopName, stopId, loading: true, schedule: schedState }),
             { ...popupPanOptions(), maxWidth: 320 }
           );
           marker.on("add", () => {
@@ -4735,15 +4940,9 @@
             }));
           });
           marker.on("popupopen", async () => {
-            if (!stopId) {
-              marker.setPopupContent(stopPopupHtml({ stopName, stopId, routes: [] }));
-              try { wireStopPopupPills(marker.getPopup?.().getElement?.()); } catch (e) {}
-              return;
-            }
-            const routes = await ensureStopRoutes(stopId);
-            marker.setPopupContent(stopPopupHtml({ stopName, stopId, routes }));
-            try { wireStopPopupPills(marker.getPopup?.().getElement?.()); } catch (e) {}
+            await hydrateStopPopup(marker, { stopId, stopName });
           });
+          marker.on("popupclose", () => { hideMobileStopCard(); activeStopPopup = null; });
           marker.addTo(this.routeStopsLayer);
           boundsLayers.push(marker);
         }
@@ -5146,20 +5345,16 @@
             const stopName = props.stop_name || "Paragem";
             const stopId = props.stop_id || "";
             closeAllPopups();
-            const html = stopPopupHtml({ stopName, stopId, loading: true });
+            const schedState = initialScheduleStateForContext();
+            const html = stopPopupHtml({ stopName, stopId, loading: true, schedule: schedState });
             const popup = new maplibregl.Popup({ offset: 12, className: "custom-popup" })
               .setLngLat(e.lngLat)
               .setHTML(html)
               .addTo(this.map);
             try { popup.on("open", () => ensurePopupVisible(e.lngLat, this.map)); } catch (e4) {}
+            try { popup.on("close", () => { hideMobileStopCard(); activeStopPopup = null; }); } catch (e5) {}
             this.activePopups.push(popup);
-            (async () => {
-              try {
-                const routes = await ensureStopRoutes(stopId);
-                popup.setHTML(stopPopupHtml({ stopName, stopId, routes }));
-                try { wireStopPopupPills(popup.getElement?.()); } catch (e3) {}
-              } catch (e2) {}
-            })();
+            hydrateStopPopup(popup, { stopId, stopName }).catch(() => {});
           } catch (err) {}
         });
         this.map.on("click", "route-stops", (e) => {
@@ -5172,17 +5367,12 @@
             closeAllPopups();
             const popup = new maplibregl.Popup({ offset: 12, className: "custom-popup" })
               .setLngLat(e.lngLat)
-              .setHTML(stopPopupHtml({ stopName, stopId, loading: true }))
+              .setHTML(stopPopupHtml({ stopName, stopId, loading: true, schedule: initialScheduleStateForContext() }))
               .addTo(this.map);
             try { popup.on("open", () => ensurePopupVisible(e.lngLat, this.map)); } catch (e4) {}
+            try { popup.on("close", () => { hideMobileStopCard(); activeStopPopup = null; }); } catch (e5) {}
             this.activePopups.push(popup);
-            (async () => {
-              try {
-                const routes = stopId ? await ensureStopRoutes(stopId) : [];
-                popup.setHTML(stopPopupHtml({ stopName, stopId, routes }));
-                try { wireStopPopupPills(popup.getElement?.()); } catch (e3) {}
-              } catch (e2) {}
-            })();
+            hydrateStopPopup(popup, { stopId, stopName }).catch(() => {});
           } catch (err) {}
         });
         this.map.on("mouseenter", "route-stops", () => { this.map.getCanvas().style.cursor = "pointer"; });
@@ -5286,19 +5476,14 @@
                 const props = feature.properties || {};
                 const stopName = props.stop_name || "Paragem";
                 const stopId = props.stop_id || "";
-                const html = stopPopupHtml({ stopName, stopId, loading: true });
+                const html = stopPopupHtml({ stopName, stopId, loading: true, schedule: initialScheduleStateForContext() });
                 const popup = new maplibregl.Popup({ offset: 12, className: "custom-popup" })
                   .setLngLat(e.lngLat)
                   .setHTML(html)
                   .addTo(this.map);
+                try { popup.on("close", () => { hideMobileStopCard(); activeStopPopup = null; }); } catch (e5) {}
                 this.activePopups.push(popup);
-                (async () => {
-                  try {
-                    const routes = await ensureStopRoutes(stopId);
-                    popup.setHTML(stopPopupHtml({ stopName, stopId, routes }));
-                    try { wireStopPopupPills(popup.getElement?.()); } catch (e3) {}
-                  } catch (e2) {}
-                })();
+                hydrateStopPopup(popup, { stopId, stopName }).catch(() => {});
               } catch (err) {}
             });
             this.map.on("mouseenter", layerId, () => { this.map.getCanvas().style.cursor = "pointer"; });
@@ -6641,6 +6826,218 @@
       return promise;
     }
 
+    const GTFS_TRIPS_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/trips`);
+    const GTFS_STOP_TIMES_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/stop_times`);
+    const TRIPS_CACHE_TTL_MS = 10 * 60_000;
+    const STOP_TIMES_CACHE_TTL_MS = 3 * 60_000;
+    const STOP_SCHEDULE_LIMIT = 8;
+    const tripsCache = new Map(); // route|direction|shape -> { ts, trips }
+    const tripsInflight = new Map(); // cacheKey -> Promise
+    const stopTimesCache = new Map(); // stop_id -> { ts, rows }
+    const stopTimesInflight = new Map(); // stop_id -> Promise
+    let stopScheduleRequestSeq = 0;
+    const stopScheduleTracker = new Map(); // stop_id -> { requestId, contextKey }
+    let activeStopPopup = null; // { stopId, stopName, target }
+
+    function buildScheduleContextKey() {
+      return "all-routes";
+    }
+
+    function resolveActiveRouteContext() {
+      return { routeId: null, directionId: null, shapeId: null };
+    }
+
+    function resolveRouteFilter() {
+      // Use the route that está ativa no contexto (flutuante): variante preferida, senão base.
+      if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) return selectedVariant;
+      if (selectedRoute && selectedRoute !== ROUTE_FILTER_ALL) return selectedRoute;
+      return null;
+    }
+
+    function refreshActiveStopSchedule() {
+      if (!activeStopPopup) return;
+      const { stopId, stopName, target } = activeStopPopup;
+      if (!stopId || !target) return;
+      hydrateStopPopup(target, { stopId, stopName }).catch(() => {});
+    }
+
+    function normalizeDirectionId(value) {
+      const num = Number.parseInt(String(value), 10);
+      return Number.isFinite(num) ? num : null;
+    }
+
+    function timeToSeconds(value) {
+      if (value == null) return NaN;
+      const parts = String(value).trim().split(":");
+      if (parts.length < 2) return NaN;
+      const h = Number.parseInt(parts[0], 10);
+      const m = Number.parseInt(parts[1], 10);
+      const s = Number.parseInt(parts[2] ?? "0", 10);
+      if (![h, m, s].every(Number.isFinite)) return NaN;
+      if (m < 0 || m >= 60 || s < 0 || s >= 60) return NaN;
+      return h * 3600 + m * 60 + s;
+    }
+
+    function formatSecondsToClock(seconds) {
+      if (!Number.isFinite(seconds)) return "—";
+      const totalMinutes = Math.floor(seconds / 60);
+      const mins = totalMinutes % 60;
+      const hours = Math.floor(totalMinutes / 60);
+      const hh = String(Math.max(0, hours)).padStart(2, "0");
+      const mm = String(Math.max(0, mins)).padStart(2, "0");
+      return `${hh}:${mm}`;
+    }
+
+    function getNowSeconds() {
+      const now = new Date();
+      return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    }
+
+    async function fetchTripsForContext(context) {
+      const ctx = context || resolveActiveRouteContext();
+      const { routeId, directionId, shapeId } = ctx || {};
+      if (!routeId || routeId === ROUTE_FILTER_ALL) return [];
+      const cacheKey = `${routeId}|${directionId ?? "any"}|${shapeId || ""}`;
+      const now = Date.now();
+      const cached = tripsCache.get(cacheKey);
+      if (cached && (now - cached.ts) < TRIPS_CACHE_TTL_MS) return cached.trips;
+      const inflight = tripsInflight.get(cacheKey);
+      if (inflight) return inflight;
+      const params = { route_id: routeId, limit: "5000" };
+      if (shapeId) params.shape_id = shapeId;
+      const promise = (async () => {
+        let list = [];
+        try {
+          const payload = await fetchFromEndpoints(GTFS_TRIPS_ENDPOINTS, params);
+          list = Array.isArray(payload) ? payload : [];
+        } catch (err) {
+          console.warn("Falha ao carregar trips GTFS:", err);
+          list = [];
+        }
+        const trips = list.filter(trip => {
+          const tripDir = normalizeDirectionId(trip?.direction_id ?? trip?.directionId ?? trip?.direction);
+          if (directionId === 0 || directionId === 1) {
+            if (tripDir !== directionId) return false;
+          }
+          if (shapeId) {
+            const tripShape = (trip?.shape_id ?? trip?.shapeId ?? "").toString().trim();
+            if (tripShape && tripShape !== shapeId) return false;
+          }
+          return true;
+        });
+        tripsCache.set(cacheKey, { ts: Date.now(), trips });
+        return trips;
+      })();
+      tripsInflight.set(cacheKey, promise);
+      try {
+        return await promise;
+      } finally {
+        tripsInflight.delete(cacheKey);
+      }
+    }
+
+    async function fetchStopTimesForStop(stopId) {
+      const key = (stopId == null) ? "" : String(stopId);
+      if (!key) return [];
+      const now = Date.now();
+      const cached = stopTimesCache.get(key);
+      if (cached && (now - cached.ts) < STOP_TIMES_CACHE_TTL_MS) return cached.rows;
+      const inflight = stopTimesInflight.get(key);
+      if (inflight) return inflight;
+      const promise = (async () => {
+        let rows = [];
+        try {
+          const payload = await fetchFromEndpoints(GTFS_STOP_TIMES_ENDPOINTS, { stop_id: key, limit: "5000" });
+          rows = Array.isArray(payload) ? payload : [];
+        } catch (err) {
+          console.warn("Falha ao carregar stop_times GTFS:", err);
+          rows = [];
+        }
+        stopTimesCache.set(key, { ts: Date.now(), rows });
+        return rows;
+      })();
+      stopTimesInflight.set(key, promise);
+      try {
+        return await promise;
+      } finally {
+        stopTimesInflight.delete(key);
+      }
+    }
+
+    function computeUpcomingDepartures(stopTimes, routeFilter, nowSeconds, limit = STOP_SCHEDULE_LIMIT) {
+      const byKey = new Map();
+      for (const st of Array.isArray(stopTimes) ? stopTimes : []) {
+        const tripId = st?.trip_id ?? st?.tripId ?? st?.tripID;
+        const rawTime = st?.arrival_time ?? st?.departure_time ?? st?.arrivalTime ?? st?.departureTime;
+        const seconds = timeToSeconds(rawTime);
+        if (!Number.isFinite(seconds)) continue;
+        if (seconds < nowSeconds) continue;
+        const routeId = st?.route_id ?? st?.routeId ?? "";
+        const directionId = normalizeDirectionId(st?.direction_id ?? st?.directionId ?? st?.direction);
+        if (routeFilter && routeId && routeId !== routeFilter) continue;
+        const key = `route:${routeId || "?"}|${directionId ?? "x"}|${seconds}`;
+        const existing = byKey.get(key);
+        if (existing) {
+          existing.count += 1;
+          if (tripId) existing.tripIds.add(String(tripId));
+        } else {
+          byKey.set(key, {
+            tripIds: new Set(tripId ? [String(tripId)] : []),
+            seconds,
+            rawTime,
+            routeId,
+            directionId,
+            count: 1
+          });
+        }
+      }
+      const rows = Array.from(byKey.values()).map(item => ({
+        tripIds: Array.from(item.tripIds),
+        seconds: item.seconds,
+        rawTime: item.rawTime,
+        routeId: item.routeId,
+        directionId: item.directionId,
+        count: item.count
+      }));
+      rows.sort((a, b) => a.seconds - b.seconds);
+      return rows.slice(0, limit);
+    }
+
+    function initialScheduleStateForContext() {
+      return { status: "loading" };
+    }
+
+    async function requestStopSchedule(stopId) {
+      const contextKey = buildScheduleContextKey();
+      const key = (stopId == null) ? "" : String(stopId);
+      if (!key) return { status: "idle", contextKey };
+      const requestId = ++stopScheduleRequestSeq;
+      stopScheduleTracker.set(key, { requestId, contextKey });
+      try {
+        const stopTimes = await fetchStopTimesForStop(key);
+        const nowSeconds = getNowSeconds();
+        const routeFilter = resolveRouteFilter();
+        const upcoming = computeUpcomingDepartures(stopTimes, routeFilter, nowSeconds, STOP_SCHEDULE_LIMIT);
+        const latest = stopScheduleTracker.get(key);
+        if (!latest || latest.requestId !== requestId || latest.contextKey !== contextKey) return null;
+        const departures = upcoming.map(item => ({
+          ...item,
+          clock: formatSecondsToClock(item.seconds),
+          etaMinutes: Math.max(0, Math.round((item.seconds - nowSeconds) / 60))
+        }));
+        return {
+          status: departures.length ? "success" : "empty",
+          departures,
+          contextKey
+        };
+      } catch (err) {
+        const latest = stopScheduleTracker.get(key);
+        if (!latest || latest.requestId !== requestId || latest.contextKey !== contextKey) return null;
+        console.warn("Falha ao calcular horários para a paragem:", stopId, err);
+        return { status: "empty", contextKey };
+      }
+    }
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -6718,20 +7115,120 @@
 	      }).filter(Boolean).join("");
 	    }
 
-    function stopPopupHtml({ stopName, stopId, routes, loading = false } = {}) {
+    function formatEtaLabel(etaMinutes, clock) {
+      if (!Number.isFinite(etaMinutes)) return escapeHtml(clock || "—");
+      if (etaMinutes <= 0) return "Agora";
+      if (etaMinutes < 60) return `${etaMinutes} min`;
+      return escapeHtml(clock || "—");
+    }
+
+    function renderStopSchedule(schedule = { status: "idle" }) {
+      const status = schedule?.status || "idle";
+      if (status === "loading") return `<div class="stop-schedule__loading">A carregar horários…</div>`;
+      if (status === "error") return `<div class="stop-schedule__empty">Não foi possível carregar horários.</div>`;
+      const departures = Array.isArray(schedule?.departures) ? schedule.departures : [];
+      if (!departures.length) return `<div class="stop-schedule__empty">Sem partidas programadas</div>`;
+      return `<div class="stop-schedule__list">` + departures.map(dep => {
+        const etaLabel = formatEtaLabel(dep.etaMinutes, dep.clock || dep.rawTime || formatSecondsToClock(dep.seconds));
+        const displayLabel = resolvePublicRouteLabel(dep.routeId || dep.routeLabel || "") || dep.routeId || dep.routeLabel || "";
+        const style = pillStyleForRoute(displayLabel);
+        const routeCode = parseRouteCodeParts(displayLabel).code || displayLabel || "—";
+        const pill = `<span class="route-pill pill--tiny" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(routeCode)}</span>`;
+        const dirLabel = directionDisplayLabel(dep.routeId || dep.routeLabel || "", dep.directionId);
+        const dirText = dirLabel ? dirLabel.replace(/^\s*Sentido:\s*/i, "").trim() : "";
+        const dirHtml = dirText ? `<span class="stop-schedule__dir">${escapeHtml(dirText)}</span>` : "";
+        return `<div class="stop-schedule__row">${pill}${dirHtml}<span class="stop-schedule__time">${escapeHtml(etaLabel)}</span></div>`;
+      }).join("") + `</div>`;
+    }
+
+    function stopPopupHtml({ stopName, stopId, routes, loading = false, schedule } = {}) {
       const title = (stopName || "Paragem").trim();
       const meta = (stopId || "").trim();
       const pills = loading
         ? `<span class="route-pill route-pill--loading">a carregar…</span>`
         : routePillsHtml(routes);
+      const scheduleState = schedule || { status: "loading" };
+      const safeMeta = escapeHtml(meta);
       return `
-        <div class="stop-popup">
+        <div class="stop-popup stop-popup--compact">
           <div class="stop-popup__title">${title}</div>
-          <div class="stop-popup__meta">${meta}</div>
-          <div class="stop-popup__section">Carreiras</div>
+          <div class="stop-popup__meta">${safeMeta}</div>
           <div class="pill-row">${pills}</div>
+          <div class="stop-schedule" data-stop-id="${safeMeta}">${renderStopSchedule(scheduleState)}</div>
         </div>
       `;
+    }
+
+    function showMobileStopCard({ stopName, stopId, schedule }) {
+      const card = document.getElementById("mobile-stop-card");
+      const title = document.getElementById("mobile-stop-title");
+      const meta = document.getElementById("mobile-stop-meta");
+      const schedEl = document.getElementById("mobile-stop-schedule");
+      if (!card || !title || !meta || !schedEl) return;
+      title.textContent = stopName || "Paragem";
+      meta.textContent = stopId || "";
+      schedEl.innerHTML = renderStopSchedule(schedule || { status: "loading" });
+      card.classList.add("visible");
+      document.body.classList.add("mobile-stop-open");
+    }
+
+    function hideMobileStopCard() {
+      const card = document.getElementById("mobile-stop-card");
+      if (card) card.classList.remove("visible");
+      document.body.classList.remove("mobile-stop-open");
+      activeStopPopup = null;
+    }
+
+    const mobileStopClose = document.getElementById("mobile-stop-close");
+    if (mobileStopClose) {
+      mobileStopClose.addEventListener("click", () => hideMobileStopCard());
+    }
+
+    function applyStopPopupContent(target, params = {}) {
+      if (!target) return;
+      const html = stopPopupHtml(params);
+      if (typeof target.setPopupContent === "function") {
+        target.setPopupContent(html);
+      } else if (typeof target.setHTML === "function") {
+        target.setHTML(html);
+      } else if (typeof target.setContent === "function") {
+        target.setContent(html);
+      }
+      const el =
+        target?.getPopup?.()?.getElement?.() ||
+        target?.getElement?.() ||
+        target?._contentNode ||
+        null;
+      try { wireStopPopupPills(el); } catch (e) {}
+    }
+
+    async function hydrateStopPopup(target, { stopId, stopName } = {}) {
+      let scheduleState = initialScheduleStateForContext();
+      applyStopPopupContent(target, { stopName, stopId, loading: true, routes: [], schedule: scheduleState });
+      if (!stopId) return;
+      const routesPromise = ensureStopRoutes(stopId);
+      const schedulePromise = requestStopSchedule(stopId);
+      let routes = [];
+      try {
+        routes = await routesPromise;
+      } catch (err) {
+        routes = [];
+      }
+      try {
+        const resolved = await schedulePromise;
+        if (resolved) {
+          scheduleState = resolved;
+        } else if (scheduleState?.status === "loading") {
+          scheduleState = { status: "error" };
+        }
+      } catch (err) {
+        scheduleState = { status: "error" };
+      }
+      applyStopPopupContent(target, { stopName, stopId, routes, loading: false, schedule: scheduleState });
+      if (isMobileViewport()) {
+        showMobileStopCard({ stopName, stopId, schedule: scheduleState });
+      }
+      activeStopPopup = { stopId, stopName, target };
     }
 
     function resolveBaseIdFromLabel(label) {
@@ -6791,6 +7288,7 @@
       refreshKpis(true);
       fetchData().catch(() => {});
       setSidebarCollapsed(true);
+      refreshActiveStopSchedule();
     }
 
     function handlePopupRouteActions() {
@@ -7045,17 +7543,17 @@
             const marker = L.marker([lat, lon], { icon });
             marker.addTo(adapter.globalStopsLayer);
 
+            const schedState = initialScheduleStateForContext();
             marker.bindPopup(
-              stopPopupHtml({ stopName: (s.stop_name || "Paragem"), stopId: (s.stop_id || ""), loading: true }),
+              stopPopupHtml({ stopName: (s.stop_name || "Paragem"), stopId: (s.stop_id || ""), loading: true, schedule: schedState }),
               { ...popupPanOptions(), maxWidth: 320 }
             );
 
             marker.on("popupopen", async () => {
               const stopId = s?.stop_id || "";
-              const routes = await ensureStopRoutes(stopId);
-              marker.setPopupContent(stopPopupHtml({ stopName: (s.stop_name || "Paragem"), stopId, routes }));
-              try { wireStopPopupPills(marker.getPopup?.().getElement?.()); } catch (e) {}
+              await hydrateStopPopup(marker, { stopId, stopName: (s.stop_name || "Paragem") });
             });
+            marker.on("popupclose", () => hideMobileStopCard());
 
             marker.on("add", () => {
               const el = marker.getElement?.();
