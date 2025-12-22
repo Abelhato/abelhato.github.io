@@ -80,6 +80,8 @@
         --surface-2: rgba(15, 23, 42, 0.82);
         --border-strong: rgba(255, 255, 255, 0.12);
         --shadow-strong: 0 24px 50px rgba(0, 0, 0, 0.32);
+        --chart-axis-color: #f9fafb;
+        --chart-grid-color: rgba(255, 255, 255, 0.18);
       }
     }
 
@@ -3305,12 +3307,23 @@
       return 0;
     }
 
+    function isDarkThemeActive() {
+      const body = document.body;
+      if (!body) return false;
+      if (body.classList.contains("theme-dark")) return true;
+      if (body.classList.contains("theme-auto")) {
+        return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      }
+      return false;
+    }
+
     function getChartColors() {
       const styles = getComputedStyle(document.body);
-      const axis = (styles.getPropertyValue("--chart-axis-color") || "#0f172a").trim();
-      const grid = (styles.getPropertyValue("--chart-grid-color") || "rgba(15, 23, 42, 0.12)").trim();
-      const tooltipBg = (styles.getPropertyValue("--panel-bg") || "rgba(255,255,255,0.95)").trim();
-      const tooltipFg = (styles.getPropertyValue("--text-primary") || "#0f172a").trim();
+      const dark = isDarkThemeActive();
+      const axis = (styles.getPropertyValue("--chart-axis-color") || (dark ? "#f9fafb" : "#0f172a")).trim();
+      const grid = (styles.getPropertyValue("--chart-grid-color") || (dark ? "rgba(255, 255, 255, 0.18)" : "rgba(15, 23, 42, 0.12)")).trim();
+      const tooltipBg = (styles.getPropertyValue("--panel-bg") || (dark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.95)")).trim();
+      const tooltipFg = (styles.getPropertyValue("--text-primary") || (dark ? "#f9fafb" : "#0f172a")).trim();
       return { axis, grid, tooltipBg, tooltipFg };
     }
 
