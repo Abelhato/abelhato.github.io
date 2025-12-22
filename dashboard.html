@@ -1026,9 +1026,10 @@
     }
     .stop-schedule__time {
       font-variant-numeric: tabular-nums;
-      min-width: 40px;
+      min-width: 44px;
       margin-left: auto;
       text-align: right;
+      padding-right: 4px;
     }
     .stop-schedule__eta {
       font-size: 0.76rem;
@@ -1041,6 +1042,10 @@
       border-radius: 999px;
       line-height: 1;
       letter-spacing: -0.01em;
+    }
+    .route-pill--active {
+      box-shadow: 0 0 0 2px rgba(245, 159, 0, 0.3);
+      border-color: var(--accent);
     }
     .stop-schedule__meta {
       display: inline-flex;
@@ -6868,7 +6873,7 @@
     const GTFS_STOP_TIMES_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/stop_times`);
     const TRIPS_CACHE_TTL_MS = 10 * 60_000;
     const STOP_TIMES_CACHE_TTL_MS = 3 * 60_000;
-    const STOP_SCHEDULE_LIMIT = 5;
+    const STOP_SCHEDULE_LIMIT = 10;
     const tripsCache = new Map(); // route|direction|shape -> { ts, trips }
     const tripsInflight = new Map(); // cacheKey -> Promise
     const stopTimesCache = new Map(); // stop_id -> { ts, rows }
@@ -7004,6 +7009,7 @@
 
     function computeUpcomingDepartures(stopTimes, routeFilter, nowSeconds, limit = STOP_SCHEDULE_LIMIT) {
       const byKey = new Map();
+      const routeFilterBase = routeFilter ? getBaseRouteKey(routeFilter) : "";
       for (const st of Array.isArray(stopTimes) ? stopTimes : []) {
         const tripId = st?.trip_id ?? st?.tripId ?? st?.tripID;
         const rawTime = st?.arrival_time ?? st?.departure_time ?? st?.arrivalTime ?? st?.departureTime;
@@ -7011,8 +7017,15 @@
         if (!Number.isFinite(seconds)) continue;
         if (seconds < nowSeconds) continue;
         const routeId = st?.route_id ?? st?.routeId ?? "";
+        const routeBase = routeId ? getBaseRouteKey(routeId) : "";
         const directionId = normalizeDirectionId(st?.direction_id ?? st?.directionId ?? st?.direction);
-        if (routeFilter && routeId && routeId !== routeFilter) continue;
+        if (routeFilter) {
+          const match =
+            routeId === routeFilter ||
+            routeBase && routeBase === routeFilter ||
+            routeFilterBase && (routeId === routeFilterBase || routeBase === routeFilterBase);
+          if (!match) continue;
+        }
         const key = `route:${routeId || "?"}|${directionId ?? "x"}|${seconds}`;
         const existing = byKey.get(key);
         if (existing) {
@@ -7138,8 +7151,12 @@
       return definirCategoria(text);
     }
 
-	    function routePillsHtml(routes) {
+	    function routePillsHtml(routes, selected = null) {
 	      const list = Array.isArray(routes) ? routes : [];
+	      const selectedNorm = normalizeRouteKey(selected || "");
+	      const selectedBase = getBaseRouteKey(selectedNorm);
+	      const selectedCode = parseRouteCodeParts(selectedNorm).code.toUpperCase?.() || selectedNorm.toUpperCase?.() || "";
+	      const selectedBaseCode = parseRouteCodeParts(selectedBase).code.toUpperCase?.() || selectedBase.toUpperCase?.() || "";
 	      if (!list.length) {
 	        return `<span class="route-pill" style="--pill-bg:#e2e8f0">—</span>`;
 	      }
@@ -7149,7 +7166,17 @@
 	        const style = pillStyleForRoute(label);
 	        const safeLabel = escapeHtml(label);
 	        const safeTitle = escapeHtml(style.title || label);
-	        return `<span class="route-pill route-pill--clickable" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}" title="${safeTitle}" role="button" tabindex="0" data-route-label="${safeLabel}">${safeLabel}</span>`;
+	        const code = parseRouteCodeParts(label).code.toUpperCase?.() || label.toUpperCase?.() || "";
+	        const base = getBaseRouteKey(label);
+	        const baseCode = parseRouteCodeParts(base).code.toUpperCase?.() || base.toUpperCase?.() || "";
+	        const active = Boolean(
+	          (selectedCode && code && selectedCode === code) ||
+	          (selectedBaseCode && code && selectedBaseCode === code) ||
+	          (selectedCode && baseCode && selectedCode === baseCode) ||
+	          (selectedBase && selectedBase === base)
+	        );
+	        const activeClass = active ? " route-pill--active" : "";
+	        return `<span class="route-pill route-pill--clickable${activeClass}" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}" title="${safeTitle}" role="button" tabindex="0" data-route-label="${safeLabel}">${safeLabel}</span>`;
 	      }).filter(Boolean).join("");
 	    }
 
@@ -7184,7 +7211,7 @@
       const meta = (stopId || "").trim();
       const pills = loading
         ? `<span class="route-pill route-pill--loading">a carregar…</span>`
-        : routePillsHtml(routes);
+        : routePillsHtml(routes, resolveRouteFilter());
       const scheduleState = schedule || { status: "loading" };
       const safeMeta = escapeHtml(meta);
       return `
@@ -7208,7 +7235,7 @@
       meta.textContent = stopId || "";
       schedEl.innerHTML = renderStopSchedule(schedule || { status: "loading" });
       if (pillsEl) {
-        pillsEl.innerHTML = routePillsHtml(routes || []);
+        pillsEl.innerHTML = routePillsHtml(routes || [], resolveRouteFilter());
         wireStopPopupPills(pillsEl);
       }
       card.classList.add("visible");
