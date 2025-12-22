@@ -1438,7 +1438,9 @@
     const MAP_CENTER = [38.736946, -9.142685];
     const MAP_ZOOM = 13;
     const REFRESH_RATE_MS = 5000;
-    const VEHICLE_CACHE_TTL_MS = 20_000;
+    const VEHICLE_STALE_FORCE_MS = 12_000; // Force a refresh if we haven't applied new vehicles within this window.
+    const VEHICLE_MAX_STALE_MS = 15_000; // If newest ping is older than this, try the next endpoint.
+    const VEHICLE_CACHE_TTL_MS = 0; // disable vehicle cache to force fresh pulls each poll
     // Mimic Streamlit dashboard: on each poll, vehicles with a new ping slide for ~1s, otherwise stay still.
     const ANIMATION_MS = 1000;
     const ACTIVE_SECONDS = 300;
@@ -1596,11 +1598,8 @@
     const CHART_PATHS = ["/historico/metricas/resumo", "/historico/metricas"];
     const CHARTS_ENDPOINTS = KPI_BASE_URLS.flatMap(base => CHART_PATHS.map(path => `${base}${path}`));
     const LOCAL_BACKENDS = BACKEND_BASES.length ? BACKEND_BASES : ["http://127.0.0.1:8001", "http://127.0.0.1:8002"];
-    // Prefer the upstream realtime GTFS-RT feed for fresher vehicle positions, then fall back to local snapshots.
-    const VEHICLE_ENDPOINTS = dedupeList([
-      API_URL,
-      ...LOCAL_BACKENDS.flatMap(base => ["/api/frota", "/api/json", "/api/vehicles"].map(path => `${base}${path}`)),
-    ]);
+    // Realtime feed used for vehicle positions (only). KPIs/charts use backend APIs separately.
+    const VEHICLE_ENDPOINT = API_URL;
     const CHARTS_CACHE_TTL_MS = 60_000;
     const CHARTS_MIN_INTERVAL_MS = 35_000;
     const CHARTS_REFRESH_INTERVAL_MS = 45_000;
@@ -1613,6 +1612,7 @@
     let selectedRoute = ROUTE_FILTER_ALL;
     let selectedVariant = VARIANT_FILTER_ALL;
     let lastVehicles = [];
+    let lastVehicleApplyTs = 0;
     let globalVehiclesCache = { timestamp: 0, list: [] };
     let vehiclesRequestSeq = 0;
     let vehiclesLatestAppliedId = 0;
@@ -3430,17 +3430,14 @@
     function buildUrlWithParams(endpoint, params) {
       try {
         const url = new URL(endpoint);
-        // The upstream GTFS-RT endpoint is a raw feed and does not support our filter query params.
-        // We fetch the full feed and apply filters client-side.
-        if (url.hostname === "rt.jdcp.workers.dev") {
-          url.searchParams.set("_ts", String(Date.now()));
-          return url.toString();
-        }
         Object.entries(params || {}).forEach(([key, value]) => {
           if (value != null && value !== "") {
             url.searchParams.set(key, value);
           }
         });
+        if (!url.searchParams.has("_ts")) {
+          url.searchParams.set("_ts", String(Date.now()));
+        }
         return url.toString();
       } catch (err) {
         console.warn("URL inválida ignorada:", endpoint, err);
@@ -3456,7 +3453,7 @@
       let lastError = null;
       for (const url of resolved) {
         try {
-          const response = await fetch(url, withNgrokBypass({ cache: "no-store", signal: opts.signal }));
+          const response = await fetchWithTimeout(url, withNgrokBypass({ cache: "no-store", signal: opts.signal }), opts.timeoutMs || 6000);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           return await response.json();
         } catch (err) {
@@ -3466,6 +3463,26 @@
         }
       }
       throw lastError || new Error("Todos os endpoints falharam");
+    }
+
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
+      const controller = new AbortController();
+      const origSignal = options.signal;
+      const onOrigAbort = () => controller.abort();
+      if (origSignal) {
+        if (origSignal.aborted) controller.abort();
+        origSignal.addEventListener("abort", onOrigAbort, { once: true });
+      }
+      const timer = setTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
+      try {
+        const resp = await fetch(url, { ...options, signal: controller.signal });
+        return resp;
+      } finally {
+        clearTimeout(timer);
+        if (origSignal) origSignal.removeEventListener("abort", onOrigAbort);
+      }
     }
 
     async function fetchCategoryKpis(force = false) {
@@ -4005,6 +4022,69 @@
       return num;
     }
 
+    function newestVehicleTimestampSec(list) {
+      let newest = -Infinity;
+      for (const v of Array.isArray(list) ? list : []) {
+        const ts = normalizeTimestampSeconds(v?.ts ?? v?.timestamp ?? v?.time ?? v?.serverTsSec ?? v?.server_ts);
+        if (Number.isFinite(ts) && ts > newest) newest = ts;
+      }
+      return newest;
+    }
+
+    function vehiclesAreFresh(list, maxAgeMs = VEHICLE_MAX_STALE_MS) {
+      const newest = newestVehicleTimestampSec(list);
+      if (!Number.isFinite(newest)) return false;
+      const ageMs = (Date.now() / 1000 - newest) * 1000;
+      return ageMs <= maxAgeMs;
+    }
+
+    function mapSafePadding() {
+      const mapEl = document.getElementById("map");
+      const mapWidth = mapEl?.clientWidth || 0;
+      const sidebar = document.getElementById("sidebar");
+      const sidebarVisible = sidebar && sidebar.offsetParent !== null && !document.body.classList.contains("sidebar-collapsed");
+      const sidebarWidth = sidebarVisible ? (sidebar.getBoundingClientRect().width || 0) : 0;
+      const floating = document.querySelector(".kpi-floating-context");
+      const floatingWidth = floating?.offsetWidth || 0;
+      const left = Math.min(Math.max(260, sidebarWidth + 24), Math.max(mapWidth - 120, 320));
+      const right = Math.max(24, floatingWidth + 24);
+      return { top: 20, bottom: 28, left, right };
+    }
+
+    function popupPanOptions() {
+      const pad = mapSafePadding();
+      return {
+        className: "custom-popup",
+        autoPan: true,
+        autoPanPaddingTopLeft: [pad.left, pad.top],
+        autoPanPaddingBottomRight: [pad.right, pad.bottom]
+      };
+    }
+
+    function ensurePopupVisible(lngLat, mapInstance) {
+      const map = mapInstance || (adapter && adapter.map);
+      if (!map || typeof map.project !== "function") return;
+      const container = map.getContainer?.();
+      if (!container) return;
+      const pad = mapSafePadding();
+      const pt = map.project(lngLat);
+      const minX = pad.left;
+      const maxX = container.clientWidth - pad.right;
+      const minY = pad.top;
+      const maxY = container.clientHeight - pad.bottom;
+      let dx = 0;
+      let dy = 0;
+      if (pt.x < minX) dx = minX - pt.x;
+      else if (pt.x > maxX) dx = maxX - pt.x;
+      if (pt.y < minY) dy = minY - pt.y;
+      else if (pt.y > maxY) dy = maxY - pt.y;
+      if (dx !== 0 || dy !== 0) {
+        try {
+          map.panBy([dx, dy], { duration: 260 });
+        } catch (e) {}
+      }
+    }
+
     function resolveRouteId(vehicle) {
       return vehicle?.routeId ?? vehicle?.route_id ?? vehicle?.route ?? vehicle?.linha ?? vehicle?.line ?? "";
     }
@@ -4172,6 +4252,7 @@
         this.routeShapesLayer = L.layerGroup().addTo(this.overlayGroup);
         this.routeStopsLayer = L.layerGroup().addTo(this.overlayGroup);
         this.isInteracting = false;
+        this._interactionTimeout = null;
         this.animationDuration = Math.max(300, Math.min(ANIMATION_MS, REFRESH_RATE_MS - 150));
         L.control.zoom({ position: 'topright' }).addTo(this.map);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -4184,20 +4265,30 @@
           keepBuffer: 4
         }).addTo(this.map);
 
+        const clearInteraction = () => {
+          this.isInteracting = false;
+          const container = this.map.getContainer?.();
+          if (container) container.classList.remove("map-interacting");
+          document.body?.classList?.remove?.("map-interacting");
+          this.clearAllTransitions();
+        };
+
+        const scheduleInteractionRelease = () => {
+          if (this._interactionTimeout) clearTimeout(this._interactionTimeout);
+          this._interactionTimeout = setTimeout(clearInteraction, 1200);
+        };
+
         const startInteraction = () => {
           this.isInteracting = true;
           const container = this.map.getContainer?.();
           if (container) container.classList.add("map-interacting");
           document.body?.classList?.add?.("map-interacting");
           this.clearAllTransitions();
+          scheduleInteractionRelease();
         };
         const endInteraction = () => {
-          this.isInteracting = false;
-          const container = this.map.getContainer?.();
-          if (container) container.classList.remove("map-interacting");
-          document.body?.classList?.remove?.("map-interacting");
-          // Ensure no lingering transitions after an interaction ends.
-          this.clearAllTransitions();
+          if (this._interactionTimeout) clearTimeout(this._interactionTimeout);
+          clearInteraction();
         };
         this.map.on("zoomstart movestart dragstart", startInteraction);
         this.map.on("zoomend moveend dragend", endInteraction);
@@ -4294,7 +4385,7 @@
           const stopId = s.stop_id || "";
           const marker = L.marker([lat, lon], { icon }).bindPopup(
             stopPopupHtml({ stopName, stopId, loading: true }),
-            { maxWidth: 320, className: "custom-popup" }
+            { ...popupPanOptions(), maxWidth: 320 }
           );
           marker.on("add", () => {
             const el = marker.getElement?.();
@@ -4373,7 +4464,7 @@
               riseOnHover: true,
               keyboard: false
             }).addTo(this.map);
-            marker.bindPopup(popupHtml(v, style), { className: 'custom-popup' });
+            marker.bindPopup(popupHtml(v, style), popupPanOptions());
             entry = {
               marker,
               styleKey: `${style.color}|${style.icon}`,
@@ -4438,6 +4529,7 @@
         this.map = null;
         this.markers = new Map();
         this.isInteracting = false;
+        this._interactionTimeout = null;
         this.animationDuration = Math.max(300, Math.min(ANIMATION_MS, REFRESH_RATE_MS - 150));
         this.visualTickMs = 1000;
         this.visualIntervalId = null;
@@ -4466,20 +4558,30 @@
         await new Promise(resolve => this.map.once("load", resolve));
         this.initOverlayLayers();
 
+        const clearInteraction = () => {
+          this.isInteracting = false;
+          const container = this.map.getContainer?.();
+          if (container) container.classList.remove("map-interacting");
+          document.body?.classList?.remove?.("map-interacting");
+          this.clearAllTransitions();
+        };
+
+        const scheduleInteractionRelease = () => {
+          if (this._interactionTimeout) clearTimeout(this._interactionTimeout);
+          this._interactionTimeout = setTimeout(clearInteraction, 1200);
+        };
+
         const startInteraction = () => {
           this.isInteracting = true;
           const container = this.map.getContainer?.();
           if (container) container.classList.add("map-interacting");
           document.body?.classList?.add?.("map-interacting");
           this.clearAllTransitions();
+          scheduleInteractionRelease();
         };
         const endInteraction = () => {
-          this.isInteracting = false;
-          const container = this.map.getContainer?.();
-          if (container) container.classList.remove("map-interacting");
-          document.body?.classList?.remove?.("map-interacting");
-          // Ensure no lingering transitions after an interaction ends.
-          this.clearAllTransitions();
+          if (this._interactionTimeout) clearTimeout(this._interactionTimeout);
+          clearInteraction();
         };
         this.map.on("zoomstart", startInteraction);
         this.map.on("movestart", startInteraction);
@@ -4712,6 +4814,7 @@
               .setLngLat(e.lngLat)
               .setHTML(html)
               .addTo(this.map);
+            try { popup.on("open", () => ensurePopupVisible(e.lngLat, this.map)); } catch (e4) {}
             this.activePopups.push(popup);
             (async () => {
               try {
@@ -4734,6 +4837,7 @@
               .setLngLat(e.lngLat)
               .setHTML(stopPopupHtml({ stopName, stopId, loading: true }))
               .addTo(this.map);
+            try { popup.on("open", () => ensurePopupVisible(e.lngLat, this.map)); } catch (e4) {}
             this.activePopups.push(popup);
             (async () => {
               try {
@@ -5055,6 +5159,7 @@
           .addTo(this.map);
         const popup = new maplibregl.Popup({ offset: 18, className: "custom-popup" }).setHTML(popupHtml(vehicle, style));
         marker.setPopup(popup);
+        try { popup.on("open", () => ensurePopupVisible(marker.getLngLat(), this.map)); } catch (e) {}
         const state = {
           id,
           marker,
@@ -6337,7 +6442,7 @@
       updateRouteClearVisibility();
       renderSelectedRoutePill();
       closeFloatingSearch();
-      fetchData({ forceGlobal: true, preferCache: true }).catch(() => {});
+      fetchData({ forceGlobal: true, preferCache: false }).catch(() => {});
     }
 
 	    function wireStopPopupPills(containerEl) {
@@ -6471,7 +6576,7 @@
 
             marker.bindPopup(
               stopPopupHtml({ stopName: (s.stop_name || "Paragem"), stopId: (s.stop_id || ""), loading: true }),
-              { maxWidth: 320, className: "custom-popup" }
+              { ...popupPanOptions(), maxWidth: 320 }
             );
 
             marker.on("popupopen", async () => {
@@ -6606,14 +6711,14 @@
       (async () => {
         try {
           if (adapter.ready instanceof Promise) await adapter.ready;
-          const payload = await fetchFromEndpoints(stopsBboxEndpoints(), {
+        const payload = await fetchFromEndpoints(stopsBboxEndpoints(), {
             min_lat: String(b.minLat),
             max_lat: String(b.maxLat),
             min_lon: String(b.minLon),
             max_lon: String(b.maxLon),
             limit: String(effLimit),
             include_routes: "1"
-          }, { signal: controller.signal });
+          }, { signal: controller.signal, timeoutMs: 5000 });
           const stops = Array.isArray(payload) ? payload : (payload?.stops || []);
           const data = { stops };
           globalStopsCache.set(key, { ts: now, payload: data });
@@ -6701,21 +6806,8 @@
     }
 
     async function fetchData(options = {}) {
-      const { forceGlobal = false, preferCache = true } = options;
-      const vehicleParams = forceGlobal ? {} : buildVehicleQueryParams();
+      const { signal = null } = options;
       const requestId = ++vehiclesRequestSeq;
-
-      const useCachedGlobal =
-        forceGlobal &&
-        preferCache &&
-        Array.isArray(globalVehiclesCache.list) &&
-        globalVehiclesCache.list.length > 0 &&
-        (Date.now() - globalVehiclesCache.timestamp) < VEHICLE_CACHE_TTL_MS;
-
-      if (useCachedGlobal) {
-        lastVehicles = globalVehiclesCache.list;
-        await renderVehicles();
-      }
 
       updateStatus("fetching");
 
@@ -6723,45 +6815,74 @@
         if (requestId < vehiclesLatestAppliedId) return false;
         vehiclesLatestAppliedId = requestId;
         lastVehicles = vehicles;
-        if (!vehicleParams.linha && !isFallback) {
+        lastVehicleApplyTs = Date.now();
+        if (!isFallback) {
           globalVehiclesCache = { timestamp: Date.now(), list: vehicles };
         }
         updateRouteOptionsFromVehicles(vehicles);
         await renderVehicles();
-        refreshRouteOverlay(false).catch(() => {});
-        refreshGlobalStops(false).catch(() => {});
         updateStatus(statusText);
-        refreshKpis().catch(() => {});
         return true;
       };
 
       try {
-        const payload = await fetchFromEndpoints(VEHICLE_ENDPOINTS, vehicleParams);
+        // Use the plain realtime feed directly (same behavior as set.html).
+        const resp = await fetchWithTimeout(VEHICLE_ENDPOINT, { cache: "no-store", signal }, 5000);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const payload = await resp.json();
         const vehicles = normalizeVehicles(payload);
         const applied = await applyResult(vehicles, "online");
         if (applied) clearAppError();
         return vehicles;
       } catch (err) {
+        if (err?.name === "AbortError") return [];
         console.warn("Offline mode:", err);
         const fallback = await loadOfflineVehicles();
         const vehicles = normalizeVehicles(fallback);
         const applied = await applyResult(vehicles, "offline", true);
-        if (applied) showAppError(`Falha a obter veículos: ${err?.message || err}`);
+        if (applied) showAppError(`Falha ao obter veículos: ${err?.message || err}`);
         return vehicles;
       }
     }
 
     function startPolling() {
-      let timerId = null;
-      const loop = async () => {
-        const started = performance.now();
-        await fetchData();
-        const elapsed = performance.now() - started;
-        const delay = Math.max(0, REFRESH_RATE_MS - elapsed);
-        timerId = setTimeout(loop, delay);
+      if (window.__pollingTimer) clearTimeout(window.__pollingTimer);
+      if (window.__pollingAbort) {
+        try { window.__pollingAbort.abort(); } catch (e) {}
+      }
+      let inFlight = false;
+      let currentAbort = null;
+      const scheduleNext = (delayMs = REFRESH_RATE_MS) => {
+        clearTimeout(window.__pollingTimer);
+        window.__pollingTimer = setTimeout(tick, delayMs);
       };
-      if (timerId) clearTimeout(timerId);
-      loop();
+      const tick = async () => {
+        if (inFlight) {
+          try { currentAbort?.abort(); } catch (e) {}
+        }
+        const controller = new AbortController();
+        currentAbort = controller;
+        inFlight = true;
+        try {
+          await fetchData({ signal: controller.signal });
+        } catch (err) {
+          if (err?.name !== "AbortError") {
+            console.warn("Polling falhou:", err);
+          }
+        } finally {
+          inFlight = false;
+          if (currentAbort === controller) currentAbort = null;
+          const now = Date.now();
+          const age = now - lastVehicleApplyTs;
+          const delay = age > VEHICLE_STALE_FORCE_MS ? 0 : REFRESH_RATE_MS;
+          scheduleNext(delay);
+        }
+      };
+      scheduleNext(0);
+      window.__pollingAbort = () => {
+        try { currentAbort?.abort(); } catch (e) {}
+        clearTimeout(window.__pollingTimer);
+      };
     }
 
     function startKpiRefreshLoop() {
