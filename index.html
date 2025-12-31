@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-  <title>Mapa de Frota em Tempo Real</title>
+  <title>🚌 Dashboard Carris</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" crossorigin="">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -12,6 +12,12 @@
 
     :root {
       color-scheme: light dark;
+      --floating-width: clamp(210px, 23vw, 270px);
+      --mobile-safe-top: max(12px, env(safe-area-inset-top, 0px));
+      --mobile-safe-start: max(12px, env(safe-area-inset-left, 0px));
+      --mobile-safe-end: max(12px, env(safe-area-inset-right, 0px));
+      --mobile-action-diameter: 48px;
+      --mobile-context-gap: 10px;
     }
 
     html, body {
@@ -100,8 +106,9 @@
       top: 0;
       left: 0;
       bottom: 0;
-      width: clamp(220px, 18vw, 280px);
-      max-width: 90vw;
+      width: 280px;
+      min-width: 280px;
+      max-width: 280px;
       padding: 24px 26px 30px;
       background: var(--sidebar-bg);
       border-right: 1px solid var(--sidebar-border);
@@ -117,13 +124,13 @@
       backdrop-filter: blur(20px);
     }
 
-	    .sidebar-header {
-	      display: flex;
-	      align-items: flex-start;
-	      justify-content: space-between;
-	      gap: 16px;
-	      flex-wrap: wrap;
-	    }
+    .sidebar-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
 
 	    .sidebar-header > div {
 	      padding-left: 56px;
@@ -133,6 +140,47 @@
       font-size: 1.5rem;
       margin: 0;
     }
+    .sidebar-footer {
+      margin-top: auto;
+      border-top: 1px solid var(--glass);
+      padding-top: 16px;
+      display: flex;
+      justify-content: center;
+    }
+      .sidebar-author-link {
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 0.95rem;
+        position: relative;
+        padding-bottom: 4px;
+        display: inline-flex;
+        gap: 6px;
+      }
+      .sidebar-author-label {
+        color: inherit;
+      }
+      .sidebar-author-handle {
+        color: var(--accent);
+      }
+      .sidebar-author-link::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background: var(--accent);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.2s ease;
+      }
+    .sidebar-author-link:hover::after,
+    .sidebar-author-link:focus-visible::after {
+      transform: scaleX(1);
+    }
 
     #sidebar-close,
     #sidebar-toggle {
@@ -140,8 +188,8 @@
       border-radius: 50%;
       background: var(--surface-1);
       color: var(--text-primary);
-      width: 40px;
-      height: 40px;
+      width: 45px;
+      height: 45px;
       font-size: 1.2rem;
       display: flex;
       align-items: center;
@@ -153,8 +201,8 @@
 
 	    #sidebar-close {
 	      position: absolute;
-	      top: 24px;
-	      left: 24px;
+	      top: 20px;
+	      left: 25px;
 		      z-index: 1601;
 	    }
 
@@ -182,6 +230,9 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--text-muted);
+    }
+    #variant-filter-group {
+      margin-top: var(--variant-gap, 20px);
     }
     #variant-filter-group label {
       color: var(--text-muted);
@@ -228,6 +279,16 @@
       box-shadow: 0 0 0 2px rgba(244, 159, 0, 0.3);
     }
 
+    .sidebar-route-hint {
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .sidebar-route-hint.hidden {
+      display: none;
+    }
+
     .sidebar-note {
       font-size: 0.82rem;
       color: var(--text-muted);
@@ -237,42 +298,154 @@
     }
 
     .kpi-floating-context {
+      --floating-base-top: 75px;
+      --floating-base-left: 25px;
+      --floating-scroll-offset: 0px;
+      --floating-width: clamp(210px, 23vw, 270px);
       position: absolute;
-      top: 56px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 18px;
-      border-radius: 999px;
+      top: calc(var(--floating-base-top) + env(safe-area-inset-top, 0px) - var(--floating-scroll-offset));
+      left: calc(var(--floating-base-left) + env(safe-area-inset-left, 0px));
+      transform: none;
+      padding: 5px 12px;
+      border-radius: 16px;
       background: var(--surface-1);
       border: 1px solid var(--border-strong);
       box-shadow: var(--shadow-strong);
       color: var(--text-primary);
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 700;
       letter-spacing: 0.04em;
-      z-index: 1003;
+      z-index: 4600;
       backdrop-filter: blur(12px);
-      position: absolute;
-      max-width: min(760px, calc(100% - 64px));
-      width: fit-content;
+      width: var(--floating-width);
+      max-width: var(--floating-width);
+      min-width: var(--floating-width);
+      height: auto;
+    }
+
+    @media (min-width: 901px) {
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only {
+        top: calc(24px + 45px + 12px);
+        left: 24px;
+        width: 45px;
+        min-width: 45px;
+        max-width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only .kpi-floating-chip {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+      }
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only #kpi-floating-text,
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only .kpi-floating-clear {
+        display: none;
+      }
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only .kpi-floating-icon {
+        width: auto;
+        height: auto;
+        font-size: 1.2rem;
+        background: transparent;
+        box-shadow: none;
+      }
     }
 
     .floating-search {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      z-index: 10050;
+      backdrop-filter: blur(10px);
+    }
+    .floating-search.visible {
+      display: flex;
+    }
+
+    .floating-search--map {
       position: absolute;
       top: calc(100% + 10px);
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(92vw, 360px);
+      left: 0;
+      transform: none;
+      width: 100%;
+      max-width: none;
+      min-width: 100%;
       background: var(--sidebar-bg);
       border: 1px solid var(--sidebar-border);
       box-shadow: 0 18px 36px rgba(5, 10, 25, 0.2);
       border-radius: 14px;
-      padding: 10px 12px;
-      display: none;
-      z-index: 2200;
-      backdrop-filter: blur(10px);
+      padding: 12px 15px;
+      height: auto !important;
+      overflow: visible !important;
     }
-    .floating-search.visible { display: block; }
+    body.sidebar-collapsed .floating-search--map {
+      width: clamp(240px, 20vw, 320px);
+      min-width: clamp(240px, 20vw, 320px);
+      max-width: clamp(240px, 20vw, 320px);
+    }
+
+    .floating-search--sidebar {
+      position: fixed;
+      top: var(--mobile-safe-top);
+      left: var(--mobile-safe-start);
+      right: var(--mobile-safe-end);
+      width: auto;
+      max-width: min(360px, 92vw);
+      margin: 0 auto;
+      background: var(--surface-1);
+      border: 1px solid var(--sidebar-border);
+      box-shadow: var(--shadow-strong);
+      border-radius: 14px;
+      padding: 12px 15px;
+      height: auto !important;
+      overflow: visible !important;
+      pointer-events: auto;
+      transform: none;
+      z-index: 100060;
+    }
+
+    @media (max-width: 900px) {
+      .floating-search--map {
+        position: fixed !important;
+        top: clamp(64px, 8vh, 110px) !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: min(90vw, 420px) !important;
+        max-width: 420px !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        z-index: 100050 !important;
+        max-height: 70vh;
+      }
+
+      .floating-search.visible {
+        display: flex !important;
+      }
+
+      .floating-route-input {
+        width: 100% !important;
+        box-sizing: border-box;
+      }
+
+      .floating-route-preview {
+        position: static !important;
+        width: 100%;
+        max-height: 260px;
+        margin-top: 8px;
+        z-index: 100100;
+      }
+
+    }
     .floating-route-input {
       width: 100%;
       box-sizing: border-box;
@@ -292,17 +465,19 @@
       color: #f8fafc;
     }
     .floating-route-preview {
-      margin-top: 8px;
-      max-height: 220px;
+      margin-top: 2px;
+      max-height: 260px;
       overflow-y: auto;
       display: grid;
-      gap: 6px;
+      gap: 1px;
+      width: 100%;
     }
     .floating-route-preview .preview-item {
       display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 8px;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0px;
+      padding: 4px 8px;
       border-radius: 10px;
       border: 1px solid var(--border-strong);
       background: var(--surface-2);
@@ -313,7 +488,29 @@
     .floating-route-preview .preview-label {
       font-weight: 700;
       color: var(--text-primary);
-      font-size: 0.9rem;
+      font-size: 0.85rem;
+      white-space: normal;
+      word-break: break-word;
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .floating-route-preview .preview-label .route-pill {
+      flex: 0 0 auto;
+    }
+    .floating-route-preview .preview-item .preview-meta {
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .floating-route-preview .preview-item.preview-category .preview-meta {
+      color: var(--accent);
     }
     body.theme-dark .floating-route-preview .preview-item {
       border-color: rgba(255, 255, 255, 0.12);
@@ -333,7 +530,12 @@
       }
     }
     @media (min-width: 901px) {
-      .floating-search.visible { display: none !important; }
+      .floating-search.visible {
+        display: none !important;
+      }
+      body.floating-search-open .floating-search.visible {
+        display: flex !important;
+      }
     }
     body.theme-dark .floating-search {
       background: var(--sidebar-bg);
@@ -341,14 +543,39 @@
     body.theme-dark .floating-search .floating-route-input {
       background: var(--surface-1);
     }
+    @media (max-width: 1200px) {
+      .kpi-panel {
+        width: clamp(220px, 42vw, 360px);
+        padding: 10px;
+        border-radius: 14px;
+      }
+      .kpi-panel .kpi-grid {
+        grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+        gap: 3px;
+      }
+      .kpi-card {
+        padding: 2px 4px;
+        min-height: 44px;
+      }
+      .kpi-card strong {
+        font-size: 1.05rem;
+      }
+      .kpi-panel-trigger {
+        height: 26px;
+      }
+    }
+
     @media (max-width: 900px) {
       .kpi-floating-context {
-        width: min(98vw, 560px);
+        top: calc(12px + env(safe-area-inset-top));
+        left: calc(12px + 45px + 12px + env(safe-area-inset-left));
+        right: calc(12px + env(safe-area-inset-right));
+        width: auto;
+        max-width: min(var(--floating-width), 98vw, 560px);
         padding: 10px 14px;
       }
       .kpi-floating-chip {
         width: 100%;
-        justify-content: space-between;
         gap: 12px;
       }
       #kpi-floating-text { flex: 1; text-align: left; }
@@ -357,18 +584,20 @@
         border: 1px solid var(--border-strong);
         box-shadow: var(--shadow-strong);
         padding: 8px;
-        width: calc(100% - 16px);
+        width: min(300px, calc(100% - 16px));
+        max-width: 300px;
+        margin: 0 auto;
       }
       #kpi-panel .kpi-grid {
-        grid-template-columns: repeat(3, minmax(120px, 1fr));
-        gap: 6px;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 4px;
       }
       #kpi-panel .kpi-card {
         background: var(--surface-2);
         border: 1px solid var(--border-strong);
         align-items: center;
-        padding: 6px;
-        min-height: 58px;
+        padding: 5px;
+        min-height: 50px;
       }
       #kpi-panel .kpi-card strong {
         font-size: 1.08rem;
@@ -383,8 +612,11 @@
       }
     }
     @media (max-width: 640px) {
+      #kpi-panel {
+      width: min(280px, calc(100% - 16px));
+      }
       #kpi-panel .kpi-grid {
-        grid-template-columns: repeat(3, minmax(100px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
         gap: 4px;
       }
       #kpi-extra-row {
@@ -396,17 +628,18 @@
     }
 
     .kpi-floating-chip {
-      display: inline-flex;
-      align-items: center;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: flex-start;
       gap: 8px;
-      flex-wrap: nowrap;
       min-width: 0;
       border: none;
       background: transparent;
       color: inherit;
       font: inherit;
-      padding: 0;
+      padding: 4px 0;
       cursor: pointer;
+      width: 100%;
     }
     .kpi-floating-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     .kpi-floating-icon {
@@ -419,8 +652,7 @@
       background: rgba(15, 23, 42, 0.04);
       color: inherit;
       font-size: 0.85rem;
-      flex: 0 0 auto;
-      flex-shrink: 0;
+      justify-self: start;
     }
     body.theme-dark .kpi-floating-icon,
     body.theme-auto .kpi-floating-icon {
@@ -428,10 +660,24 @@
     }
     #kpi-floating-text {
       min-width: 0;
-      flex: 1;
-      white-space: nowrap;
+      flex: 1 1 120px;
+      max-width: 100%;
+      line-height: 1.6;
+      display: block;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: normal;
+      word-break: break-word;
+      max-height: calc(1.6em * 5);
+      transition: color 120ms ease;
+      align-self: flex-start;
+    }
+    #kpi-floating-text.kpi-floating-text--placeholder {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      white-space: nowrap;
+      max-height: calc(1.6em * 3);
+      text-transform: none;
     }
     .kpi-floating-clear {
       display: inline-flex;
@@ -449,8 +695,7 @@
       appearance: none;
       cursor: pointer;
       transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
-      flex: 0 0 auto;
-      flex-shrink: 0;
+      justify-self: end;
     }
     .kpi-floating-clear:hover { background: rgba(15, 23, 42, 0.12); transform: translateY(-1px); }
     .kpi-floating-clear:active { transform: translateY(0); }
@@ -460,23 +705,28 @@
       border-color: rgba(255, 255, 255, 0.18);
     }
 
-.kpi-panel {
+    .kpi-panel {
       position: absolute;
-      top: 110px;
+      top: clamp(8px, 2vh, 22px);
       left: 50%;
       right: auto;
       transform: translateX(-50%);
-      width: min(560px, calc(100% - 36px));
+      width: clamp(220px, 36vw, 400px);
       background: var(--surface-1);
-      border-radius: 16px;
+      border-radius: 12px;
       border: 1px solid var(--border-strong);
-      padding: 16px;
+      padding: 10px;
       box-shadow: var(--shadow-strong);
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 4px;
       z-index: 1002;
       overflow: visible;
+    }
+    .kpi-panel.kpi-panel--loading .kpi-card,
+    .kpi-panel.kpi-panel--loading .kpi-panel-trigger {
+      opacity: 0.6;
+      transition: opacity 0.25s ease;
     }
     .kpi-panel::after {
       content: "";
@@ -496,19 +746,19 @@
 
     .kpi-panel {
       position: absolute;
-      top: 110px;
+      top: clamp(8px, 2vh, 22px);
       left: 50%;
       right: auto;
       transform: translateX(-50%);
-      width: min(560px, calc(100% - 36px));
+      width: clamp(200px, 34vw, 380px);
       background: var(--surface-1);
-      border-radius: 16px;
+      border-radius: 12px;
       border: 1px solid var(--border-strong);
-      padding: 16px;
+      padding: 8px;
       box-shadow: var(--shadow-strong);
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 3px;
       z-index: 1002;
       overflow: visible;
     }
@@ -517,9 +767,9 @@
       position: absolute;
       left: 50%;
       transform: translateX(-50%);
-      bottom: 6px;
+      bottom: 3px;
       width: 86%;
-      height: 28px;
+      height: 26px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -534,7 +784,7 @@
       content: "";
       position: absolute;
       height: 3px;
-      top: 78%;
+      top: 92%;
       transform: translateY(-50%) scaleX(0.75);
       border-radius: 999px;
       background: rgba(15, 23, 42, 0.35);
@@ -563,7 +813,7 @@
       font-size: 1.5rem;
       color: var(--text-muted);
       transition: transform 0.2s ease;
-      margin-top: 6px;
+      margin-top: 10px;
       position: relative;
       z-index: 2;
     }
@@ -603,19 +853,19 @@
 
     .kpi-panel .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 6px;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 2px;
       justify-items: stretch;
     }
 
     .kpi-card {
       background: var(--surface-2);
       border-radius: 10px;
-      padding: 4px 6px;
-      min-height: 58px;
+      padding: 1px 2px;
+      min-height: 36px;
       display: flex;
       flex-direction: column;
-      gap: 1px;
+      gap: 0;
       border: 1px solid rgba(15, 23, 42, 0.05);
       align-items: center;
       text-align: center;
@@ -713,10 +963,13 @@
     }
 
     .charts-section {
-      margin-top: 12px;
+      margin-top: 16px;
       position: relative;
       border-top: 1px solid rgba(15, 23, 42, 0.1);
-      padding-top: 18px;
+      padding-top: 14px;
+    }
+    #variant-filter-group.hidden + .charts-section {
+      margin-top: calc(var(--variant-gap, 24px) + 4px);
     }
     .charts-section__header {
       margin-bottom: 12px;
@@ -789,6 +1042,10 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 12px;
+      width: var(--floating-width);
+      max-width: var(--floating-width);
+      min-width: var(--floating-width);
+      margin: 0 auto;
       transition: opacity 0.4s ease;
     }
     .chart-card {
@@ -802,7 +1059,7 @@
       gap: 8px;
       cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
-      max-width: 320px;
+      max-width: 100%;
       min-height: 180px;
     }
     .chart-card:hover {
@@ -1209,11 +1466,6 @@
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
-    @media (min-width: 901px) {
-      .user-location-btn {
-        display: none;
-      }
-    }
 
     .app-alert {
       position: fixed;
@@ -1524,9 +1776,15 @@
       body:not(.sidebar-collapsed) .maplibregl-popup,
       body:not(.sidebar-collapsed) .leaflet-popup,
       body:not(.sidebar-collapsed) .custom-popup,
-      body:not(.sidebar-collapsed) .mobile-stop-card,
-      body:not(.sidebar-collapsed) .kpi-floating-context {
+      body:not(.sidebar-collapsed) .mobile-stop-card {
         display: none !important;
+      }
+    }
+    @media (max-width: 900px) {
+      body.floating-search-open .kpi-floating-context {
+        display: flex !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
       }
     }
     .route-preview {
@@ -1575,7 +1833,6 @@
       box-sizing: border-box;
       min-height: 42px;
     }
-
     /* Ensure sidebar overlays tooltips/popups from the map */
     .leaflet-pane.leaflet-tooltip-pane { z-index: 900 !important; }
     .maplibregl-popup {
@@ -2074,23 +2331,31 @@
     .maplibregl-popup { z-index: 4000 !important; }
 
 	    @media (max-width: 900px) {
-	      #sidebar {
-	        position: fixed;
-	        width: min(88vw, 340px);
-	        max-width: 88vw;
-	        border-radius: 0;
-	      }
 
-	      .sidebar-header h1 {
+      #sidebar {
+        width: min(360px, 92vw);
+        min-width: min(360px, 92vw);
+        max-width: min(360px, 92vw);
+      }
+
+      .sidebar-header {
+        margin-top: 60px;
+        margin-bottom: -100px;
+      }
+
+      .chart-grid {
+        grid-template-columns: 1fr;
+        width: 100%;
+        max-width: none;
+        min-width: auto;
+      }
+
+      .sidebar-header h1 {
 	        font-size: 1.3rem;
 	      }
 
 	      .charts-section h2 {
 	        font-size: 0.95rem;
-	      }
-
-	      .chart-grid {
-	        grid-template-columns: 1fr;
 	      }
 
 	      .chart-card {
@@ -2103,27 +2368,54 @@
 	        height: 100dvh;
 	      }
 
-      .kpi-floating-context {
-        font-size: 0.9rem;
-        top: calc(62px + env(safe-area-inset-top));
+	      .kpi-floating-context {
+	        font-size: 0.9rem;
+	        top: var(--mobile-safe-top);
+	        left: calc(var(--mobile-safe-start) + var(--mobile-action-diameter) + var(--mobile-context-gap));
+	        right: var(--mobile-safe-end);
+	        width: auto;
+	        min-width: 0;
+	        max-width: calc(100% - (var(--mobile-safe-start) + var(--mobile-safe-end) + var(--mobile-action-diameter) + var(--mobile-context-gap)));
+	        padding: 0 14px;
+	        display: flex;
+	        align-items: center;
+	        gap: 0;
+	      }
+      .kpi-floating-chip {
+        min-height: var(--mobile-action-diameter);
+        padding: 0 clamp(4px, 2vw, 8px);
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) 18px;
+        align-items: center;
+        gap: clamp(6px, 1vw, 10px);
+        width: 100%;
       }
+	      .kpi-floating-icon,
+	      #kpi-floating-text,
+	      .kpi-floating-clear {
+	        align-self: center;
+	      }
 
-      #kpi-panel {
-        top: calc(114px + env(safe-area-inset-top));
-        width: calc(100% - 16px);
-        padding: 8px;
-        gap: 8px;
-        border-radius: 14px;
-      }
+	      #kpi-panel {
+	        top: calc(var(--mobile-safe-top) + var(--mobile-action-diameter) + 12px);
+	        left: var(--mobile-safe-start);
+	        right: var(--mobile-safe-end);
+	        transform: none;
+	        width: auto;
+	        max-width: min(420px, calc(100% - (var(--mobile-safe-start) + var(--mobile-safe-end))));
+	        padding: 8px 10px;
+	        gap: 8px;
+	        border-radius: 14px;
+	      }
 
-      #kpi-panel .kpi-grid {
-        grid-template-columns: repeat(3, minmax(100px, 1fr));
-        gap: 4px;
-      }
+	      #kpi-panel .kpi-grid {
+	        grid-template-columns: repeat(3, minmax(0, 1fr));
+	        gap: 6px;
+	      }
 
 	      #kpi-panel .kpi-card {
-	        min-height: 58px;
-	        padding: 5px 6px;
+	        min-height: 52px;
+	        padding: 6px 8px;
 	      }
 
 	      #kpi-panel .kpi-card strong {
@@ -2141,52 +2433,78 @@
 
 		      #sidebar-toggle,
 		      #sidebar-close {
-		        top: calc(12px + env(safe-area-inset-top));
-		        left: calc(12px + env(safe-area-inset-left));
+		        top: var(--mobile-safe-top);
+		        left: var(--mobile-safe-start);
+		        width: var(--mobile-action-diameter);
+		        height: var(--mobile-action-diameter);
 		      }
 
-		      .sidebar-section select,
-		      .sidebar-section input[type="text"] {
-		        padding: 8px 10px;
-		        font-size: 0.86rem;
-		      }
-		      .sidebar-section label {
-		        font-size: 0.72rem;
-		      }
+      body:not(.sidebar-collapsed) .kpi-panel {
+        opacity: 0;
+        pointer-events: none;
+      }
+	    }
 
-		      body:not(.sidebar-collapsed) .kpi-panel,
-		      body:not(.sidebar-collapsed) .kpi-floating-context {
-		        opacity: 0;
-		        pointer-events: none;
-		      }
-		    }
-		  </style>
+    @media (max-width: 1024px) {
+      .charts-section {
+        margin-top: 12px;
+      }
+      .chart-grid {
+        gap: 10px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      #map-container {
+        height: 100dvh;
+      }
+      .chart-grid {
+        grid-template-columns: 1fr;
+      }
+      .chart-card {
+        min-height: 150px;
+        padding: 12px 10px;
+      }
+      #kpi-panel {
+        width: min(96vw, 340px);
+        max-width: min(96vw, 340px);
+        padding: 10px;
+      }
+      #kpi-panel .kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .kpi-panel-trigger {
+        width: 92%;
+      }
+      .kpi-floating-context {
+        --floating-width: min(280px, 90vw);
+      }
+    }
+
+    @media (max-width: 540px) {
+      .chart-card {
+        min-height: 140px;
+      }
+      #kpi-panel {
+        width: min(92vw, 320px);
+        padding: 8px;
+      }
+      .kpi-floating-context {
+        --floating-width: min(280px, 90vw);
+      }
+    }
+
+</style>
 </head>
 <body class="theme-auto">
   <div id="app-shell">
-	    <aside id="sidebar">
-	      <button id="sidebar-close" type="button" aria-label="Fechar filtros">✕</button>
-	      <div class="sidebar-header">
-	        <div>
-	          <h1>🚌 Dashboard Carris</h1>
-	          <p>Feito por Abelhato</p>
-	        </div>
-	      </div>
-      <div class="sidebar-section">
-        <label for="category-filter">🗂️ Categoria</label>
-        <select id="category-filter"></select>
-      </div>
-      <div class="sidebar-section">
-        <label for="route-filter">🛣️ Carreira</label>
-        <div class="route-input-wrapper">
-          <input id="route-filter" type="text" placeholder="Pesquise por carreira..." autocomplete="off">
-          <div id="route-selected-pill" class="route-selected-pill hidden" role="button" tabindex="0" aria-label="Carreira selecionada">
-            <span id="route-selected-text"></span>
-            <button id="route-clear" class="route-clear" type="button" aria-label="Voltar à Rede Global">✕</button>
-          </div>
-          <div id="route-preview" class="route-preview hidden" role="listbox" aria-label="Sugestões de carreiras"></div>
+    <aside id="sidebar">
+      <button id="sidebar-close" type="button" aria-label="Fechar filtros">✕</button>
+      <div class="sidebar-header">
+        <div>
+          <h1>🚌 Dashboard</h1>
         </div>
-        <datalist id="route-filter-options"></datalist>
       </div>
       <div class="sidebar-section hidden" id="variant-filter-group">
         <label for="variant-filter">🔀 Variante</label>
@@ -2219,19 +2537,29 @@
           </div>
         </div>
       </section>
+      <p id="route-chart-hint" class="sidebar-route-hint hidden">
+        Expanda o gráfico para ver detalhes da frota.
+      </p>
       <p class="sidebar-note">
       </p>
+      <div class="sidebar-footer">
+        <a
+          class="sidebar-author-link"
+          href="https://discord.com/users/666907356789080066"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="sidebar-author-label">Feito por</span>
+          <span class="sidebar-author-handle">@Abelhato</span>
+        </a>
+      </div>
     </aside>
     <div id="map-container">
       <div class="kpi-floating-context" id="kpi-floating-context">
         <div id="kpi-floating-chip" class="kpi-floating-chip" role="button" tabindex="0" aria-label="Pesquisar carreira">
           <span class="kpi-floating-icon" aria-hidden="true"><i class="fa fa-search"></i></span>
-          <span id="kpi-floating-text">Rede Global</span>
+          <span id="kpi-floating-text" class="kpi-floating-text--placeholder">pesquise por carreira...</span>
           <button id="kpi-floating-clear" class="kpi-floating-clear hidden" type="button" aria-label="Voltar à Rede Global" title="Voltar à Rede Global">✕</button>
-        </div>
-        <div id="floating-search" class="floating-search hidden" aria-label="Pesquisar carreira (mobile)">
-          <input id="floating-route-input" class="floating-route-input" type="text" placeholder="Pesquise por carreira..." autocomplete="off">
-          <div id="floating-route-preview" class="floating-route-preview"></div>
         </div>
       </div>
       <div class="kpi-panel" id="kpi-panel">
@@ -2339,6 +2667,10 @@
       <button id="user-location-btn" class="user-location-btn" type="button" aria-label="Mostrar a minha localização">
         <i class="fa fa-location-arrow" aria-hidden="true"></i>
       </button>
+      <div id="floating-search" class="floating-search floating-search--map hidden" aria-label="Pesquisar carreira (mobile)">
+        <input id="floating-route-input" class="floating-route-input" type="text" placeholder="Pesquise por carreira..." autocomplete="off">
+        <div id="floating-route-preview" class="floating-route-preview"></div>
+      </div>
     </div>
   </div>
 
@@ -2367,6 +2699,7 @@
     const ACTIVE_SECONDS = 300;
     const INACTIVE_SECONDS = 600;
     const MOBILE_POPUP_BREAKPOINT = 900;
+const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     const SHAPES_MOCK = {
       "type": "FeatureCollection",
@@ -2404,6 +2737,7 @@
       "Elétricos",
       "Rede Madrugada"
     ];
+    const observedCategories = new Set(STANDARD_ROUTE_CATEGORIES);
     // Zone mapping provided by Carris (for future zoning features).
     const ZONE_COLOR_BY_NAME = {
       Bairro: "#FFE113",
@@ -2624,6 +2958,8 @@
     let chapaFetchAbortController = null;
 
     const categorySelect = document.getElementById("category-filter");
+    const categorySearchInput = document.getElementById("category-search-input");
+    const categoryPreview = document.getElementById("category-preview");
     const routeInput = document.getElementById("route-filter");
     const routeDatalist = document.getElementById("route-filter-options");
     const routePreview = document.getElementById("route-preview");
@@ -2647,6 +2983,7 @@
     const kpiFloatingText = document.getElementById("kpi-floating-text");
     const kpiFloatingChip = document.getElementById("kpi-floating-chip");
     const kpiFloatingClear = document.getElementById("kpi-floating-clear");
+    const kpiFloatingContext = document.getElementById("kpi-floating-context");
     const kpiVelHourDelta = document.getElementById("kpi-vel-hour-delta");
     const kpiTripsPercent = document.getElementById("kpi-trips-percent");
     const kpiTripsMeta = document.getElementById("kpi-trips-meta");
@@ -2679,7 +3016,28 @@
     const chartSectionToggle = document.getElementById("chart-section-toggle");
     const chartsSection = document.querySelector(".charts-section");
     const mapContainer = document.getElementById("map-container");
+    const bodyEl = document.body;
+    const sidebar = document.getElementById("sidebar");
     const KPI_TRIGGER_DRAG_THRESHOLD = 12;
+    const routeChartHint = document.getElementById("route-chart-hint");
+
+    function syncFloatingSearchPlacement() {
+      if (!floatingSearch) return;
+      const isMobileSidebar = window.matchMedia("(max-width: 900px)").matches;
+      const mobileTarget = bodyEl || document.body;
+      const target = isMobileSidebar
+        ? mobileTarget
+        : (kpiFloatingContext || mapContainer);
+      if (!target) return;
+      if (floatingSearch.parentElement !== target) {
+        target.appendChild(floatingSearch);
+      }
+      floatingSearch.classList.toggle("floating-search--map", !isMobileSidebar);
+      floatingSearch.classList.toggle("floating-search--sidebar", isMobileSidebar);
+    }
+
+    window.addEventListener("resize", syncFloatingSearchPlacement, { passive: true });
+    syncFloatingSearchPlacement();
 
     const setChartSectionExpanded = expanded => {
       if (!chartSectionToggle || !chartsSection) return;
@@ -2716,6 +3074,8 @@
     let volumeTableRows = [];
     let volumeTableSort = { key: "last", dir: "desc" };
     let volumeOverlayChapaCache = new Map();
+    let kpiRefreshToken = 0;
+    let kpiRefreshContextKey = "";
     const timeLabelFormatter = new Intl.DateTimeFormat("pt-PT", {
       hour: "2-digit",
       minute: "2-digit",
@@ -2916,6 +3276,14 @@
         entry.categories = nextCategories;
         dirty = true;
       }
+      let categoryAdded = false;
+      nextCategories.forEach(cat => {
+        if (cat && !observedCategories.has(cat)) {
+          observedCategories.add(cat);
+          categoryAdded = true;
+        }
+      });
+      if (categoryAdded) rebuildCategoryOptions();
       const resolvedZone = definirZona(shortName || fallbackLabel || baseId);
       const nextZones = new Set(resolvedZone ? [resolvedZone] : []);
       const zonesChanged =
@@ -2935,6 +3303,8 @@
       if (sidebarToggle) {
         sidebarToggle.setAttribute("aria-expanded", String(!sidebarCollapsed));
       }
+      syncFloatingContextIconState();
+      syncFloatingContextLayout();
     }
 
     if (sidebarToggle) {
@@ -3060,29 +3430,164 @@
       }
     }
 
-    function initCategoryFilter() {
+    const CATEGORY_PREVIEW_LIMIT = 7;
+    const CATEGORY_LIST_COLLATOR = new Intl.Collator("pt-PT", { numeric: true, sensitivity: "base" });
+
+    function previewCategoryEntries(query = "", options = {}) {
+      const limit = Number.isFinite(options.limit) ? options.limit : CATEGORY_PREVIEW_LIMIT;
+      const normalizedQuery = (query || "").trim().toLowerCase();
+      let baseCategories = Array.from(observedCategories).filter(Boolean);
+      if (!baseCategories.length) {
+        baseCategories = STANDARD_ROUTE_CATEGORIES.filter(Boolean);
+      }
+      const matches = baseCategories
+        .filter(cat => !normalizedQuery || cat.toLowerCase().includes(normalizedQuery))
+        .sort((a, b) => CATEGORY_LIST_COLLATOR.compare(a, b));
+      const entries = matches.slice(0, limit).map(cat => ({ label: cat, value: cat }));
+      if (!entries.length && baseCategories.length) {
+        baseCategories.slice(0, limit).forEach(cat => entries.push({ label: cat, value: cat }));
+      }
+      return entries;
+    }
+
+    function rebuildCategoryOptions() {
       if (!categorySelect) return;
+      const previousSelection = categorySelect.value || selectedCategory || CATEGORY_FILTER_ALL;
       categorySelect.innerHTML = "";
       categorySelect.appendChild(new Option("Todas", CATEGORY_FILTER_ALL));
-      STANDARD_ROUTE_CATEGORIES.forEach(cat => {
-        categorySelect.appendChild(new Option(cat, cat));
+      const sortedCategories = Array.from(observedCategories)
+        .filter(Boolean)
+        .sort((a, b) => CATEGORY_LIST_COLLATOR.compare(a, b));
+      sortedCategories.forEach(cat => categorySelect.appendChild(new Option(cat, cat)));
+      const availableValues = new Set(sortedCategories);
+      availableValues.add(CATEGORY_FILTER_ALL);
+      const target = availableValues.has(previousSelection) ? previousSelection : CATEGORY_FILTER_ALL;
+      categorySelect.value = target;
+      if (categorySearchInput) {
+        categorySearchInput.value = target === CATEGORY_FILTER_ALL ? "" : target;
+      }
+      if (categoryPreview?.classList.contains("visible")) {
+        renderCategoryPreview(categorySearchInput?.value || "");
+      }
+    }
+
+    let categoryChangeSuspended = false;
+
+    function renderCategoryPreview(query = "") {
+      if (!categoryPreview) return;
+      const entries = previewCategoryEntries(query);
+      if (!entries.length) {
+        categoryPreview.innerHTML = `<div class="preview-item preview-empty" aria-hidden="true">Sem resultados</div>`;
+      } else {
+        categoryPreview.innerHTML = entries
+          .map(entry => `<div class="preview-item" role="option" tabindex="0" data-category="${escapeHtml(entry.value)}">${escapeHtml(entry.label)}</div>`)
+          .join("");
+      }
+      categoryPreview.classList.add("visible");
+      categoryPreview.classList.remove("hidden");
+    }
+
+    function closeCategoryPreview() {
+      if (!categoryPreview) return;
+      categoryPreview.classList.remove("visible");
+      categoryPreview.classList.add("hidden");
+    }
+
+    function clearCategoryFilter() {
+      if (selectedCategory === CATEGORY_FILTER_ALL) return false;
+      selectedCategory = CATEGORY_FILTER_ALL;
+      syncCategoryInputs(CATEGORY_FILTER_ALL);
+      closeCategoryPreview();
+      return true;
+    }
+
+    function syncCategoryInputs(value) {
+      if (categorySelect) {
+        categoryChangeSuspended = true;
+        categorySelect.value = value;
+        categoryChangeSuspended = false;
+      }
+      if (categorySearchInput) {
+        categorySearchInput.value = value === CATEGORY_FILTER_ALL ? "" : value;
+      }
+    }
+
+    function applyCategorySelection(categoryValue) {
+      const normalized = categoryValue || CATEGORY_FILTER_ALL;
+      if (normalized === selectedCategory) {
+        closeCategoryPreview();
+        return;
+      }
+      selectedCategory = normalized;
+      syncCategoryInputs(normalized);
+      rebuildRouteSuggestions();
+      closeFloatingSearch();
+      selectedRoute = ROUTE_FILTER_ALL;
+      syncRouteInputValue();
+      selectedVariant = VARIANT_FILTER_ALL;
+      updateVariantOptions();
+      renderVehicles();
+      refreshRouteOverlay(true).catch(() => {});
+      refreshGlobalStops(true).catch(() => {});
+      refreshCharts(true).catch(() => {});
+      refreshKpis(true);
+      updateRouteClearVisibility();
+      renderSelectedRoutePill();
+    }
+
+    function selectCategoryValue(category) {
+      const normalized = category || CATEGORY_FILTER_ALL;
+      syncCategoryInputs(normalized);
+      applyCategorySelection(normalized);
+    }
+
+    function initCategorySearch() {
+      if (!categorySearchInput || !categoryPreview) return;
+      const openPreview = () => renderCategoryPreview(categorySearchInput.value || "");
+      categorySearchInput.addEventListener("input", openPreview);
+      categorySearchInput.addEventListener("focus", openPreview);
+      categorySearchInput.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          const firstItem = categoryPreview.querySelector(".preview-item:not(.preview-empty)");
+          if (firstItem) selectCategoryValue(firstItem.dataset.category);
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          closeCategoryPreview();
+        }
       });
+      categorySearchInput.addEventListener("blur", () => {
+        setTimeout(() => closeCategoryPreview(), 140);
+      });
+      categoryPreview.addEventListener("mousedown", (ev) => {
+        const item = ev.target.closest(".preview-item");
+        if (!item || item.classList.contains("preview-empty")) return;
+        ev.preventDefault();
+        selectCategoryValue(item.dataset.category);
+      });
+      categoryPreview.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          const item = ev.target.closest(".preview-item");
+          if (!item || item.classList.contains("preview-empty")) return;
+          ev.preventDefault();
+          selectCategoryValue(item.dataset.category);
+        }
+      });
+      document.addEventListener("click", (ev) => {
+        if (!categoryPreview?.classList.contains("visible")) return;
+        if (categoryPreview.contains(ev.target) || categorySearchInput.contains(ev.target)) return;
+        closeCategoryPreview();
+      });
+    }
+
+    function initCategoryFilter() {
+      if (!categorySelect) return;
+      rebuildCategoryOptions();
+      selectedCategory = CATEGORY_FILTER_ALL;
       categorySelect.value = CATEGORY_FILTER_ALL;
       categorySelect.addEventListener("change", () => {
-        selectedCategory = categorySelect.value || CATEGORY_FILTER_ALL;
-        rebuildRouteSuggestions();
-        closeFloatingSearch();
-        selectedRoute = ROUTE_FILTER_ALL;
-        syncRouteInputValue();
-        selectedVariant = VARIANT_FILTER_ALL;
-        updateVariantOptions();
-        renderVehicles();
-        refreshRouteOverlay(true).catch(() => {});
-        refreshGlobalStops(true).catch(() => {});
-        refreshKpis(true);
-        refreshCharts(true).catch(() => {});
-        updateRouteClearVisibility();
-        renderSelectedRoutePill();
+        if (categoryChangeSuspended) return;
+        applyCategorySelection(categorySelect.value || CATEGORY_FILTER_ALL);
       });
     }
 
@@ -3126,6 +3631,14 @@
     function handleRouteInputKeyDown(event) {
       if (!routeInput) return;
       if (event.key !== "Enter") return;
+      if (routePreview && !routePreview.classList.contains("hidden")) {
+        const firstItem = routePreview.querySelector(".preview-item:not(.preview-empty)");
+        const previewId = firstItem?.dataset?.routeId || "";
+        if (previewId && commitRoutePreviewSelection(previewId)) {
+          event.preventDefault();
+          return;
+        }
+      }
       const trimmed = routeInput.value?.trim();
       if (!trimmed) return;
       const suggestion = findBestRouteSuggestion(trimmed);
@@ -3154,6 +3667,22 @@
       }
     }
 
+    function updateRouteChartHintVisibility() {
+      if (!routeChartHint) return;
+      const showHint = Boolean(selectedRoute && selectedRoute !== ROUTE_FILTER_ALL);
+      routeChartHint.classList.toggle("hidden", !showHint);
+    }
+
+    function commitRoutePreviewSelection(routeId) {
+      if (!routeInput || !routePreview) return false;
+      const targetRouteId = (routeId || "").trim();
+      if (!targetRouteId) return false;
+      routeInput.value = routeLabelById.get(targetRouteId) || targetRouteId;
+      routeInput.dataset.focusCleared = "false";
+      handleRouteInputCommit();
+      return true;
+    }
+
     function previewEntries(query, { allowEmpty = false } = {}) {
       if (!routeOptions) return [];
       const normalized = (query || "").trim().toLowerCase();
@@ -3161,7 +3690,6 @@
       const entries = [];
       routeOptions.forEach((data, baseId) => {
         const label = data.label || baseId;
-        if (!routeMatchesSelectedCategory(data, baseId, label)) return;
         const translated = baseId.includes("_") ? translateRoute(baseId) : label;
         const { code, codeBase } = parseRouteCodeParts(translated || label);
         const haystacks = [
@@ -3219,21 +3747,7 @@
         item.dataset.bound = "1";
         item.addEventListener("mousedown", ev => {
           ev.preventDefault();
-          const rid = item.dataset.routeId || "";
-          routeInput.value = routeLabelById.get(rid) || rid;
-          routeInput.dataset.focusCleared = "false";
-          selectedRoute = rid || ROUTE_FILTER_ALL;
-          selectedVariant = VARIANT_FILTER_ALL;
-          updateVariantOptions();
-          renderVehicles();
-          refreshRouteOverlay(true).catch(() => {});
-          refreshGlobalStops(true).catch(() => {});
-          refreshCharts(true).catch(() => {});
-          refreshKpis(true);
-          updateRouteClearVisibility();
-          renderSelectedRoutePill();
-          routeInputWrapper?.classList.remove("input-focused");
-          routePreview.classList.add("hidden");
+          commitRoutePreviewSelection(item.dataset.routeId || "");
         });
       });
     }
@@ -3316,6 +3830,10 @@
       floatingRouteInput.addEventListener("input", () => renderFloatingRoutePreview(floatingRouteInput.value || ""));
       floatingRouteInput.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter") {
+          if (commitFloatingRoutePreviewSelection()) {
+            ev.preventDefault();
+            return;
+          }
           ev.preventDefault();
           handleFloatingRouteCommit();
         } else if (ev.key === "Escape") {
@@ -3333,7 +3851,6 @@
         floatingSearch.addEventListener("click", (ev) => ev.stopPropagation());
       }
       document.addEventListener("click", (ev) => {
-        if (!isMobileViewport()) return;
         if (!floatingSearch || !floatingSearch.classList.contains("visible")) return;
         if (floatingSearch.contains(ev.target) || kpiFloatingChip?.contains?.(ev.target)) return;
         closeFloatingSearch();
@@ -3560,7 +4077,7 @@
       }
       const catCtx = buildCategoryContext(selectedCategory);
       if (catCtx) return catCtx;
-      return { text: "Rede Global", html: null };
+      return { text: "pesquise por carreira...", html: null };
     }
 
     function updateFloatingContext(context) {
@@ -3583,10 +4100,61 @@
         kpiFloatingChip.setAttribute("aria-label", isGlobal ? "Pesquisar carreira" : `${aria} (clique para pesquisar)`);
       }
       kpiFloatingText.setAttribute("aria-label", aria);
+      const isPlaceholder = isGlobal && !ctx.html;
+      kpiFloatingText.classList.toggle("kpi-floating-text--placeholder", isPlaceholder);
+      syncFloatingContextIconState(isPlaceholder);
+      requestAnimationFrame(() => refreshFloatingSpacing());
     }
 
+    function syncFloatingContextIconState(isPlaceholderOverride) {
+      if (!kpiFloatingContext || !kpiFloatingText) return;
+      const isCollapsed = document.body.classList.contains("sidebar-collapsed");
+      const isPlaceholder =
+        typeof isPlaceholderOverride === "boolean"
+          ? isPlaceholderOverride
+          : kpiFloatingText.classList.contains("kpi-floating-text--placeholder");
+      kpiFloatingContext.classList.toggle("kpi-floating-context--icon-only", isCollapsed && isPlaceholder);
+    }
+
+    function refreshFloatingSpacing() {
+      if (!kpiFloatingChip) return;
+      const height = kpiFloatingChip.offsetHeight;
+      if (!height) return;
+      const shouldStack = height > FLOATING_SEARCH_MULTILINE_THRESHOLD;
+      document.body.classList.toggle("floating-search-multiline", shouldStack);
+      const baseGap = height + 18;
+      const clampedGap = Math.min(200, Math.max(24, baseGap));
+      document.documentElement.style.setProperty("--variant-gap", `${clampedGap}px`);
+    }
+
+    const FLOATING_SIDEBAR_MIN_WIDTH = 210;
+    const FLOATING_SIDEBAR_MAX_WIDTH = 360;
+
+    function syncFloatingContextLayout() {
+      if (!kpiFloatingContext || !sidebar) return;
+      const isCollapsed = document.body.classList.contains("sidebar-collapsed");
+      const scrollOffset = isCollapsed ? 0 : sidebar.scrollTop || 0;
+      kpiFloatingContext.style.setProperty("--floating-scroll-offset", `${scrollOffset}px`);
+      const sidebarRect = sidebar.getBoundingClientRect();
+      const sidebarStyle = window.getComputedStyle(sidebar);
+      const paddingLeft = parseFloat(sidebarStyle.paddingLeft) || 0;
+      const paddingRight = parseFloat(sidebarStyle.paddingRight) || 0;
+      const innerWidth = Math.max(0, sidebarRect.width - paddingLeft - paddingRight);
+      const availableWidth = innerWidth || FLOATING_SIDEBAR_MIN_WIDTH;
+      const targetWidth = Math.min(availableWidth, FLOATING_SIDEBAR_MAX_WIDTH);
+      const widthValue = `${targetWidth}px`;
+      kpiFloatingContext.style.setProperty("--floating-width", widthValue);
+      document.documentElement.style.setProperty("--floating-width", widthValue);
+    }
+    if (sidebar) {
+      sidebar.addEventListener("scroll", syncFloatingContextLayout, { passive: true });
+    }
+    window.addEventListener("resize", syncFloatingContextLayout);
+    window.addEventListener("resize", syncFloatingContextLayout);
+    syncFloatingContextLayout();
+
     function focusRouteSearchFromFloating() {
-      if (isMobileViewport() && floatingSearch && floatingRouteInput) {
+      if (floatingSearch && floatingRouteInput) {
         openFloatingSearch();
         return;
       }
@@ -4948,6 +5516,10 @@
     window.addEventListener("resize", () => {
       if (currentOverlayType === "volume") updateVolumeOverlayLayout();
     });
+    window.addEventListener("resize", () => {
+      requestAnimationFrame(refreshFloatingSpacing);
+    });
+    requestAnimationFrame(refreshFloatingSpacing);
 
     if (chartSpeedCard) {
       chartSpeedCard.addEventListener("click", () => openChartOverlay("speed"));
@@ -5232,8 +5804,27 @@
       return { text, html };
     }
 
+    function buildKpiContextKey() {
+      return `${selectedRoute || ""}|${selectedVariant || ""}|${selectedCategory || ""}`;
+    }
+
+    function setKpiLoading(isLoading) {
+      if (!kpiPanel) return;
+      kpiPanel.classList.toggle("kpi-panel--loading", Boolean(isLoading));
+    }
+
+    function clearKpiDisplay() {
+      updateKpiDisplay(null);
+    }
+
     async function refreshKpis(force = false) {
       if (!kpiPanel) return;
+      updateFloatingContext();
+      const contextKey = buildKpiContextKey();
+      const requestToken = ++kpiRefreshToken;
+      kpiRefreshContextKey = contextKey;
+      clearKpiDisplay();
+      setKpiLoading(true);
       const fleetTotalsPromise = fetchFleetDistanceTotals();
       const fleetContext = {
         variant: selectedVariant && selectedVariant !== VARIANT_FILTER_ALL ? selectedVariant : null,
@@ -5241,7 +5832,13 @@
         category: selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL ? selectedCategory : null,
       };
       const showRow = async (row, context) => {
-        if (!row) return false;
+        if (requestToken !== kpiRefreshToken || contextKey !== kpiRefreshContextKey) return false;
+        if (!row) {
+          if (requestToken === kpiRefreshToken && contextKey === kpiRefreshContextKey) {
+            setKpiLoading(false);
+          }
+          return false;
+        }
         updateKpiDisplay(row, context);
         let totals = null;
         try {
@@ -5251,6 +5848,7 @@
         }
         const enhanced = applyFleetDistanceOverride(row, totals, fleetContext);
         updateKpiDisplay(enhanced, context);
+        setKpiLoading(false);
         return true;
       };
       const routeCandidates = getRouteLineCandidates();
@@ -5261,6 +5859,17 @@
         (!selectedRoute || selectedRoute === ROUTE_FILTER_ALL) &&
         (!selectedVariant || selectedVariant === VARIANT_FILTER_ALL) &&
         (!selectedCategory || selectedCategory === CATEGORY_FILTER_ALL);
+      // Show cached category KPIs immediately when filtering only by category.
+      const isCategoryOnlyMode =
+        (!selectedRoute || selectedRoute === ROUTE_FILTER_ALL) &&
+        (!selectedVariant || selectedVariant === VARIANT_FILTER_ALL) &&
+        Boolean(selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL);
+      if (isCategoryOnlyMode) {
+        const cachedCategoryRow = getCachedCategoryRow(selectedCategory);
+        if (cachedCategoryRow) {
+          showRow(cachedCategoryRow, buildCategoryContext(selectedCategory) || { text: selectedCategory }).catch(() => {});
+        }
+      }
       if (isGlobalMode) {
         const cachedGlobalRow = getCachedCategoryRow("global");
         if (cachedGlobalRow) {
@@ -5335,6 +5944,7 @@
       }
       const resolved = resolveRouteInputValue(value);
       selectedRoute = resolved;
+      clearCategoryFilter();
       if (resolved === ROUTE_FILTER_ALL) {
         routeInput.value = ROUTE_GLOBAL_LABEL;
       } else {
@@ -5349,6 +5959,7 @@
       refreshKpis(true);
       updateRouteClearVisibility();
       renderSelectedRoutePill();
+      updateRouteChartHintVisibility();
       routeInputWrapper?.classList.remove("input-focused");
     }
 
@@ -5445,19 +6056,11 @@
       return definirCategoria(label);
     }
 
-    function routeMatchesSelectedCategory(entry, baseId, labelOverride = "") {
-      if (selectedCategory === CATEGORY_FILTER_ALL) return true;
-      const label = labelOverride || entry?.label || baseId;
-      const category = categoryFromPattern(label || baseId, label);
-      return category === selectedCategory;
-    }
-
     function rebuildRouteSuggestions() {
       if (!routeDatalist) return;
       const entries = [];
       routeOptions.forEach((data, baseId) => {
         const label = data.label || baseId;
-        if (!routeMatchesSelectedCategory(data, baseId, label)) return;
         const baseLabel = data.label || baseId;
         entries.push({ id: baseId, label: baseLabel });
       });
@@ -5943,7 +6546,6 @@
         this.isInteracting = false;
         this._interactionTimeout = null;
         this.animationDuration = Math.max(300, Math.min(ANIMATION_MS, REFRESH_RATE_MS - 150));
-        L.control.zoom({ position: 'topright' }).addTo(this.map);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
           attribution: '&copy; OSM &copy; CARTO',
           subdomains: 'abcd',
@@ -6292,7 +6894,6 @@
           zoom: MAP_ZOOM,
           attributionControl: false
         });
-        this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
         await new Promise(resolve => this.map.once("load", resolve));
         this.initOverlayLayers();
 
@@ -8742,6 +9343,7 @@
     function applyRouteSelection(baseId) {
       if (!baseId) return;
       selectedRoute = String(baseId);
+      clearCategoryFilter();
       selectedVariant = VARIANT_FILTER_ALL;
       updateVariantOptions();
       syncRouteInputValue();
@@ -8759,8 +9361,8 @@
       refreshCharts(true).catch(() => {});
       refreshKpis(true);
       fetchData().catch(() => {});
-      setSidebarCollapsed(true);
       refreshActiveStopSchedule();
+      updateRouteChartHintVisibility();
     }
 
     function handlePopupRouteActions() {
@@ -8781,17 +9383,31 @@
         floatingSearch.classList.add("hidden");
         floatingSearch.classList.remove("visible");
       }
+      if (bodyEl) bodyEl.classList.remove("floating-search-open");
       if (floatingRoutePreview) floatingRoutePreview.innerHTML = "";
     }
 
-    function renderFloatingRoutePreview(query) {
-      if (!floatingRoutePreview) return;
-      const entries = previewEntries(query, { allowEmpty: true });
-      if (!entries.length) {
-        floatingRoutePreview.innerHTML = `<div class="preview-item" aria-hidden="true"><span class="preview-label">Sem resultados</span></div>`;
-        return;
+    function commitFloatingRoutePreviewSelection() {
+      if (!floatingRoutePreview) return false;
+      const firstEntry = floatingRoutePreview.querySelector(".preview-item[data-category], .preview-item[data-route-id]");
+      if (!firstEntry) return false;
+      const categoryValue = firstEntry.dataset.category;
+      if (categoryValue) {
+        closeFloatingSearch();
+        selectCategoryValue(categoryValue);
+        return true;
       }
-      const html = entries.map(({ id, label }) => {
+      const routeId = firstEntry.dataset.routeId;
+      if (routeId) {
+        closeFloatingSearch();
+        applyRouteSelection(routeId);
+        return true;
+      }
+      return false;
+    }
+
+    function buildSearchPreviewHtml(routeEntries, categoryEntries) {
+      const routeHtml = routeEntries.map(({ id, label }) => {
         const displayLabel = label || id;
         const style = pillStyleForRoute(displayLabel);
         const { code } = parseRouteCodeParts(displayLabel);
@@ -8805,23 +9421,69 @@
           <span class="preview-label">${pill} ${safeLabel}</span>
         </div>`;
       }).join("");
-      floatingRoutePreview.innerHTML = html;
-      Array.from(floatingRoutePreview.querySelectorAll(".preview-item")).forEach(item => {
+      const categoryHtml = categoryEntries
+        .map(entry => {
+          const safeLabel = escapeHtml(entry.label || entry.value || "");
+          const safeValue = escapeHtml(entry.value || CATEGORY_FILTER_ALL);
+          return `<div class="preview-item preview-category" role="option" data-category="${safeValue}">
+            <span class="preview-label">${safeLabel}</span>
+          </div>`;
+        })
+        .join("");
+      return `${routeHtml}${categoryHtml}`;
+    }
+
+    function bindSearchPreviewItems(previewEl, { onCategorySelect, onRouteSelect } = {}) {
+      if (!previewEl) return;
+      Array.from(previewEl.querySelectorAll(".preview-item")).forEach(item => {
         if (item.dataset.bound === "1") return;
         item.dataset.bound = "1";
         item.addEventListener("mousedown", (ev) => {
           ev.preventDefault();
+          const categoryValue = item.dataset.category;
+          if (categoryValue && typeof onCategorySelect === "function") {
+            onCategorySelect(categoryValue);
+            return;
+          }
           const rid = item.dataset.routeId || "";
-          if (rid) applyRouteSelection(rid);
-          closeFloatingSearch();
+          if (rid && typeof onRouteSelect === "function") {
+            onRouteSelect(rid);
+          }
         });
       });
     }
+
+    function renderFloatingRoutePreview(query) {
+      if (!floatingRoutePreview) return;
+      const routeEntries = previewEntries(query, { allowEmpty: true });
+      const categoryEntries = previewCategoryEntries(query);
+      if (!routeEntries.length && !categoryEntries.length) {
+        floatingRoutePreview.innerHTML = `<div class="preview-item" aria-hidden="true"><span class="preview-label">Sem resultados</span></div>`;
+        return;
+      }
+      floatingRoutePreview.innerHTML = buildSearchPreviewHtml(routeEntries, categoryEntries);
+      bindSearchPreviewItems(floatingRoutePreview, {
+        onCategorySelect: (value) => {
+          selectCategoryValue(value);
+          closeFloatingSearch();
+        },
+        onRouteSelect: (rid) => {
+          applyRouteSelection(rid);
+          closeFloatingSearch();
+        }
+      });
+    }
+
 
     function openFloatingSearch() {
       if (!floatingSearch || !floatingRouteInput) return;
       floatingSearch.classList.remove("hidden");
       floatingSearch.classList.add("visible");
+      if (bodyEl) bodyEl.classList.add("floating-search-open");
+      // Keep the preview list text spacing generous when the panel opens.
+      if (floatingRoutePreview) {
+        floatingRoutePreview.style.lineHeight = "1.5";
+      }
       if (!selectedRoute || selectedRoute === ROUTE_FILTER_ALL) {
         floatingRouteInput.value = "";
       } else {
@@ -8884,6 +9546,8 @@
       renderSelectedRoutePill();
       closeFloatingSearch();
       fetchData({ forceGlobal: true, preferCache: false }).catch(() => {});
+      clearCategoryFilter();
+      updateRouteChartHintVisibility();
     }
 
 	    function wireStopPopupPills(containerEl) {
@@ -9424,20 +10088,24 @@
     }
 
     function startKpiRefreshLoop() {
+      fetchCategoryKpis(true).catch(() => {});
       refreshKpis(true).catch(() => {});
       setInterval(() => {
+        fetchCategoryKpis(true).catch(() => {});
         // Force refresh to bypass caches so KPIs update even if other polling loops are quiet.
         refreshKpis(true).catch(() => {});
       }, KPI_REFRESH_INTERVAL_MS);
     }
 
-	    setSidebarCollapsed(window.matchMedia && window.matchMedia("(max-width: 900px)").matches);
-	    initCategoryFilter();
-	    initRouteFilter();
-	    initFloatingSearch();
-	    wireFloatingContextActions();
+    setSidebarCollapsed(window.matchMedia && window.matchMedia("(max-width: 900px)").matches);
+    initCategoryFilter();
+    initCategorySearch();
+    initRouteFilter();
+    initFloatingSearch();
+    wireFloatingContextActions();
     initVariantFilter();
     initPreviewCharts();
+    updateRouteChartHintVisibility();
 
 (async () => {
       await checkApiHealth().catch(() => {});
