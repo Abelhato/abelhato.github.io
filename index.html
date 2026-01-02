@@ -7306,6 +7306,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (currentOverlayType) {
         renderOverlayChart(currentOverlayType);
       }
+      if (pendingChartFocus && trendTimeline.length) {
+        openChartOverlay(pendingChartFocus);
+        pendingChartFocus = null;
+      }
     }
 
     function normalizeTimestampMs(value) {
@@ -8047,6 +8051,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         }
       }
       renderOverlayChart(type);
+      setHashChart(type);
     }
 
     function closeChartOverlay() {
@@ -8057,6 +8062,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       }
       resetOverlayTint();
       currentOverlayType = null;
+      setHashChart(null);
     }
 
     if (chartOverlayCanvas && !chartOverlayCanvas.dataset.tooltipClickBound) {
@@ -10559,27 +10565,33 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           } catch (e) {}
         };
 	        // Leaflet supports multiple events in a single string; MapLibre doesn't.
-	        if (adapter instanceof LeafletAdapter) {
-	          const handleStopsUpdate = () => scheduleRefreshStops(false);
-	          adapter.map.on("zoomend", () => {
-	            handleStopsUpdate();
-	            applyStopMarkerSize();
-	          });
-	          adapter.map.on("moveend", handleStopsUpdate);
-	          adapter.map.on("movestart", cancelGlobalStopsFetch);
-	          adapter.map.on("zoomstart", cancelGlobalStopsFetch);
-	          applyStopMarkerSize();
-	        } else if (adapter instanceof MapLibreAdapter) {
-	          const handleStopsUpdate = () => scheduleRefreshStops(false);
-	          adapter.map.on("zoomend", () => {
-	            handleStopsUpdate();
-	            applyStopMarkerSize();
-	            updateMapLibreStopLabels();
-	          });
-	          adapter.map.on("moveend", () => {
-	            handleStopsUpdate();
-	            updateMapLibreStopLabels();
-	          });
+        if (adapter instanceof LeafletAdapter) {
+          const handleStopsUpdate = () => scheduleRefreshStops(false);
+          adapter.map.on("zoomend", () => {
+            handleStopsUpdate();
+            applyStopMarkerSize();
+            scheduleHashCenterSync();
+          });
+          adapter.map.on("moveend", () => {
+            handleStopsUpdate();
+            scheduleHashCenterSync();
+          });
+          adapter.map.on("movestart", cancelGlobalStopsFetch);
+          adapter.map.on("zoomstart", cancelGlobalStopsFetch);
+          applyStopMarkerSize();
+        } else if (adapter instanceof MapLibreAdapter) {
+          const handleStopsUpdate = () => scheduleRefreshStops(false);
+          adapter.map.on("zoomend", () => {
+            handleStopsUpdate();
+            applyStopMarkerSize();
+            updateMapLibreStopLabels();
+            scheduleHashCenterSync();
+          });
+          adapter.map.on("moveend", () => {
+            handleStopsUpdate();
+            updateMapLibreStopLabels();
+            scheduleHashCenterSync();
+          });
 	          adapter.map.on("movestart", cancelGlobalStopsFetch);
 	          adapter.map.on("zoomstart", cancelGlobalStopsFetch);
 	          applyStopMarkerSize();
@@ -11693,6 +11705,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (card) card.classList.remove("visible");
       document.body.classList.remove("mobile-stop-open");
       activeStopPopup = null;
+      setHashFocus(null);
       if (adapter?.map && adapter.map.closePopup) {
         try { adapter.map.closePopup(); } catch (e) {}
       }
@@ -11843,6 +11856,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function applyRouteSelection(baseId) {
       if (!baseId) return;
       selectedRoute = String(baseId);
+      setHashFocus({ type: "route", id: selectedRoute });
       clearCategoryFilter();
       selectedVariant = VARIANT_FILTER_ALL;
       updateVariantOptions();
@@ -12098,12 +12112,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return results;
     }
 
-    function focusMapOnCoordinates(lat, lon) {
+    function focusMapOnCoordinates(lat, lon, forcedZoom = null) {
       if (!adapter?.map) return;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
       const map = adapter.map;
       const currentZoom = Number(map.getZoom?.());
-      const targetZoom = Math.max(MAP_ZOOM, Number.isFinite(currentZoom) ? currentZoom : MAP_ZOOM);
+      const baseZoom = Number.isFinite(forcedZoom) ? forcedZoom : currentZoom;
+      const targetZoom = Number.isFinite(baseZoom)
+        ? Math.max(MAP_ZOOM, baseZoom)
+        : Math.max(MAP_ZOOM, Number.isFinite(currentZoom) ? currentZoom : MAP_ZOOM);
       try {
         if (typeof map.easeTo === "function") {
           map.easeTo({ center: [lon, lat], zoom: targetZoom, duration: 0.6 });
@@ -12115,6 +12132,205 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       } catch (err) {
         console.warn("Falha ao centrar o mapa na paragem:", err);
       }
+    }
+
+    const HASH_CENTER_DECIMALS = { zoom: 2, coordinate: 5 };
+    const HASH_FOCUS_TYPES = new Set(["stop", "route", "vehicle"]);
+    let hashState = {
+      center: { lat: MAP_CENTER[0], lon: MAP_CENTER[1], zoom: MAP_ZOOM },
+      focus: null,
+      chart: null
+    };
+    let pendingVehicleFocusId = null;
+    let pendingChartFocus = null;
+    let initialHashSpec = null;
+
+    function formatNumber(value, decimals) {
+      if (!Number.isFinite(value)) return null;
+      const formatted = Number(value).toFixed(decimals);
+      if (!formatted) return null;
+      return String(Number(formatted));
+    }
+
+    function encodeMapSegment(center) {
+      if (!center) return null;
+      const lat = formatNumber(center.lat, HASH_CENTER_DECIMALS.coordinate);
+      const lon = formatNumber(center.lon, HASH_CENTER_DECIMALS.coordinate);
+      const zoom = formatNumber(center.zoom, HASH_CENTER_DECIMALS.zoom);
+      if (!lat || !lon || !zoom) return null;
+      return `${zoom},${lat},${lon}`;
+    }
+
+    function encodeFocusSegment(focus) {
+      if (!focus || !focus.type || !focus.id) return null;
+      const type = focus.type.toLowerCase();
+      if (!HASH_FOCUS_TYPES.has(type)) return null;
+      return `${type}:${encodeURIComponent(focus.id)}`;
+    }
+
+    function encodeChartSegment(chart) {
+      if (!chart) return null;
+      if (chart === "speed") return "velocitychart";
+      if (chart === "volume") return "vehiclechart";
+      return null;
+    }
+
+    function buildHashParams() {
+      const params = new URLSearchParams();
+      const mapValue = encodeMapSegment(hashState.center);
+      if (mapValue) params.set("map", mapValue);
+      const focusValue = encodeFocusSegment(hashState.focus);
+      if (focusValue) params.set("focus", focusValue);
+      const chartValue = encodeChartSegment(hashState.chart);
+      if (chartValue) params.set("chart", chartValue);
+      return params;
+    }
+
+    function syncHashState() {
+      const params = buildHashParams();
+      const hashValue = params.toString();
+      const normalized = hashValue ? `#${hashValue}` : "";
+      const currentHash = window.location.hash || "";
+      if (currentHash === normalized) return;
+      const base = `${window.location.pathname}${window.location.search}`.replace(/\/\/+/g, "/");
+      window.history.replaceState(null, "", `${base}${normalized}`);
+    }
+
+    function setHashCenter(center, { skipSync = false } = {}) {
+      if (!center) return;
+      const lat = Number(center.lat);
+      const lon = Number(center.lon);
+      const zoom = Number(center.zoom);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      const normalized = {
+        lat,
+        lon,
+        zoom: Number.isFinite(zoom) ? zoom : hashState.center.zoom
+      };
+      hashState.center = normalized;
+      if (!skipSync) syncHashState();
+    }
+
+    function setHashFocus(focus, { skipSync = false } = {}) {
+      const normalized = (focus && focus.type && focus.id)
+        ? { type: focus.type.toLowerCase(), id: String(focus.id || "").trim() }
+        : null;
+      if (normalized && !HASH_FOCUS_TYPES.has(normalized.type)) return;
+      const existing = hashState.focus;
+      if (existing?.type === normalized?.type && existing?.id === normalized?.id) return;
+      hashState.focus = normalized;
+      if (!skipSync) syncHashState();
+    }
+
+    function setHashChart(chartType, { skipSync = false } = {}) {
+      const normalized = (chartType === "speed" || chartType === "volume") ? chartType : null;
+      if (hashState.chart === normalized) return;
+      hashState.chart = normalized;
+      if (!skipSync) syncHashState();
+    }
+
+    function updateHashCenterFromMap() {
+      if (!adapter?.map) return;
+      const map = adapter.map;
+      const center = map.getCenter ? map.getCenter() : null;
+      if (!center) return;
+      const lat = Number(center?.lat);
+      const lon = Number(center?.lng ?? center?.lon);
+      const zoom = Number(map.getZoom?.());
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      setHashCenter({ lat, lon, zoom });
+    }
+
+    const scheduleHashCenterSync = debounce(() => {
+      updateHashCenterFromMap();
+    }, 200);
+
+    function parseMapSegment(segment) {
+      if (!segment) return null;
+      const parts = segment.split(",").map(part => part.trim());
+      if (parts.length !== 3) return null;
+      const zoom = Number(parts[0]);
+      const lat = Number(parts[1]);
+      const lon = Number(parts[2]);
+      if (!Number.isFinite(zoom) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return { zoom, lat, lon };
+    }
+
+    function parseFocusSegment(segment) {
+      if (!segment) return null;
+      const idx = segment.indexOf(":");
+      if (idx === -1) return null;
+      const type = segment.slice(0, idx).toLowerCase();
+      const value = decodeURIComponent(segment.slice(idx + 1) || "").trim();
+      if (!HASH_FOCUS_TYPES.has(type) || !value) return null;
+      return { type, id: value };
+    }
+
+    function parseChartSegment(segment) {
+      if (!segment) return null;
+      const normalized = segment.toLowerCase();
+      if (normalized === "velocitychart") return "speed";
+      if (normalized === "vehiclechart") return "volume";
+      return null;
+    }
+
+    function parseHashSpec() {
+      const raw = (window.location.hash || "").replace(/^#/, "");
+      if (!raw) return null;
+      const params = new URLSearchParams(raw);
+      return {
+        center: parseMapSegment(params.get("map")),
+        focus: parseFocusSegment(params.get("focus")),
+        chart: parseChartSegment(params.get("chart"))
+      };
+    }
+
+    initialHashSpec = parseHashSpec();
+
+    async function applyInitialHashSpec(spec) {
+      if (!spec) return;
+      if (spec.chart) {
+        setHashChart(spec.chart, { skipSync: true });
+        pendingChartFocus = spec.chart;
+      }
+      if (spec.center) {
+        setHashCenter(spec.center, { skipSync: true });
+        await adapterReady;
+        focusMapOnCoordinates(spec.center.lat, spec.center.lon, spec.center.zoom);
+      }
+      if (spec.focus) {
+        setHashFocus(spec.focus, { skipSync: true });
+      }
+      if (spec.focus?.type === "route") {
+        await loadRoutesCatalog();
+        const resolved = resolveBaseIdFromLabel(spec.focus.id) || spec.focus.id;
+        if (resolved) {
+          applyRouteSelection(resolved);
+        }
+      } else if (spec.focus?.type === "stop") {
+        await preloadStopCatalog();
+        const match = stopCatalogEntries.find(entry =>
+          entry.stopId === spec.focus.id || entry.displayNumber === spec.focus.id
+        );
+        openStopScheduleFromSearch(match || { stopId: spec.focus.id, stopName: spec.focus.id || "" });
+      } else if (spec.focus?.type === "vehicle") {
+        pendingVehicleFocusId = spec.focus.id;
+      }
+    }
+
+    function applyPendingVehicleFocusIfNeeded() {
+      if (!pendingVehicleFocusId) return;
+      const candidate = (String(pendingVehicleFocusId || "")).trim();
+      if (!candidate || !Array.isArray(lastVehicles)) return;
+      const normalizedTarget = candidate.toLowerCase();
+      const match = lastVehicles.find(v => {
+        const id = String(v?.id ?? v?.vehicleId ?? v?.vehicle ?? "").trim();
+        return id && id.toLowerCase() === normalizedTarget;
+      });
+      if (!match) return;
+      focusMapOnCoordinates(match.lat, match.lon);
+      setHashFocus({ type: "vehicle", id: candidate });
+      pendingVehicleFocusId = null;
     }
 
     function extractStopPreviewData(item) {
@@ -12180,6 +12396,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         });
         activeStopPopup = { stopId, stopName, target: null };
       }
+      setHashFocus({ type: "stop", id: stopId });
     }
 
     function buildSearchPreviewHtml(routeEntries, categoryEntries, stopEntries, { stopFirst = false } = {}) {
@@ -12343,6 +12560,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       fetchData({ forceGlobal: true, preferCache: false }).catch(() => {});
       clearCategoryFilter();
       updateRouteChartHintVisibility();
+      setHashFocus(null);
     }
 
 	    function wireStopPopupPills(containerEl) {
@@ -12671,6 +12889,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const visibleCount = typeof adapter.setVisibleIds === "function"
         ? adapter.setVisibleIds(visibleIds)
         : filtered.length;
+      applyPendingVehicleFocusIfNeeded();
       return visibleCount;
     }
 
@@ -12915,6 +13134,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 (async () => {
       await checkApiHealth().catch(() => {});
       await Promise.allSettled([loadRouteTranslator(), loadRoutesCatalog()]);
+      await applyInitialHashSpec(initialHashSpec);
       await refreshCharts(true).catch(() => {});
       startChartRefreshLoop();
       startKpiRefreshLoop();
