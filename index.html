@@ -3862,6 +3862,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     const KNOWN_BACKEND_PORTS = [2026];
+    const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
     const MODE_REALTIME = "realtime";
     const HISTORY_PAGE_URL = (() => {
       if (location.protocol === "file:" || location.origin === "null") {
@@ -6376,6 +6377,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+      const isGithubPages = /\.github\.io$/i.test(hostname);
 
       // Prefer same-origin first so that dashboards served by the API itself stay on the same port.
       if (originOk && hostname) {
@@ -6389,6 +6391,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             bases.push(`${proto}//${loopHost}:${port}`);
           });
         });
+      }
+      if (isGithubPages) {
+        const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
+        if (normalizedFallback) bases.push(normalizedFallback);
       }
       return dedupeList(bases);
     }

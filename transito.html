@@ -1906,6 +1906,7 @@
 
       const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href).href;
       const KNOWN_BACKEND_PORTS = [2026];
+      const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
       function normalizeBackendUrl(raw) {
         if (!raw) return null;
         const value = raw.trim();
@@ -1933,6 +1934,7 @@
         const proto = originOk ? (location.protocol || "http:") : "http:";
         const hostname = originOk ? location.hostname : "";
         const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+        const isGithubPages = /\.github\.io$/i.test(hostname);
         if (originOk && hostname) out.push(location.origin);
         if (isLoopback) {
           ["127.0.0.1", "localhost"].forEach(loopHost => {
@@ -1940,6 +1942,10 @@
               out.push(`${proto}//${loopHost}:${port}`);
             });
           });
+        }
+        if (isGithubPages) {
+          const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
+          if (normalizedFallback) out.push(normalizedFallback);
         }
         return Array.from(new Set(out));
       })();

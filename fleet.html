@@ -2500,8 +2500,101 @@
       const typologySummary = document.getElementById('fleet-typology-summary');
       const FLEET_VEHICLES_PATH = "/frota/resumo-diario/veiculos";
       const FLEET_HISTORY_VEHICLES_PATH = "/frota/vehicles";
+      const KNOWN_BACKEND_PORTS = [2026];
+      const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
       const FLEET_MODEL_CSV_URL = new URL("frota.csv", location.href);
-      const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href);
+      const urlParams = new URLSearchParams(window.location.search);
+      function normalizeBackendUrl(raw) {
+        if (!raw) return null;
+        const value = String(raw).trim();
+        if (!value) return null;
+        const proto =
+          typeof location !== "undefined" && location.protocol && location.protocol !== "file:"
+            ? location.protocol
+            : "http:";
+        const host = typeof location !== "undefined" && location.hostname ? location.hostname : "127.0.0.1";
+        if (/^\d+$/.test(value)) return `${proto}//${host}:${value}`;
+        if (/^[\w.-]+:\d+$/i.test(value)) return `${proto}//${value}`;
+        if (/^https?:\/\//i.test(value)) return value.replace(/\/+$/u, "");
+        return null;
+      }
+      function dedupeBases(values = []) {
+        const seen = new Set();
+        return values
+          .map(value => (typeof value === "string" ? value.replace(/\/+$/u, "") : ""))
+          .filter(value => {
+            if (!value || seen.has(value)) return false;
+            seen.add(value);
+            return true;
+          });
+      }
+      function resolveFleetApiBases() {
+        const bases = [];
+        const override = urlParams.get("backend") || urlParams.get("api_base");
+        const normalizedOverride = normalizeBackendUrl(override);
+        if (normalizedOverride) bases.push(normalizedOverride);
+        const originOk =
+          typeof location !== "undefined" &&
+          location.origin &&
+          location.origin !== "null" &&
+          location.protocol !== "file:";
+        const proto = originOk ? (location.protocol || "http:") : "http:";
+        const hostname = originOk ? location.hostname : "";
+        const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+        const isGithubPages = /\.github\.io$/i.test(hostname);
+        if (originOk && hostname) bases.push(location.origin);
+        if (isLoopback) {
+          ["127.0.0.1", "localhost"].forEach(loopHost => {
+            KNOWN_BACKEND_PORTS.forEach(port => {
+              bases.push(`${proto}//${loopHost}:${port}`);
+            });
+          });
+        }
+        if (isGithubPages) {
+          const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
+          if (normalizedFallback) bases.push(normalizedFallback);
+        }
+        return dedupeBases(bases);
+      }
+      const FLEET_API_BASES = resolveFleetApiBases();
+      const ROUTES_DATA_URLS = dedupeBases([
+        new URL("gtfs/routes.txt", location.href).toString(),
+        ...FLEET_API_BASES.map(base => `${base}/gtfs/routes.txt`),
+      ]);
+      async function fetchFromFleetBases(path, options = {}) {
+        let lastError = null;
+        let lastResponse = null;
+        for (const base of FLEET_API_BASES) {
+          try {
+            const url = new URL(path, base).toString();
+            const response = await fetch(url, options);
+            if (response.ok) return response;
+            lastResponse = response;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        if (lastResponse) {
+          const err = new Error(`HTTP ${lastResponse.status} from ${lastResponse.url}`);
+          err.response = lastResponse;
+          throw err;
+        }
+        if (lastError) throw lastError;
+        throw new Error("Não foi possível contactar nenhum backend.");
+      }
+      async function fetchRoutesText() {
+        let lastError = null;
+        for (const url of ROUTES_DATA_URLS) {
+          try {
+            const resp = await fetch(url, { cache: "no-store" });
+            if (resp.ok) return await resp.text();
+            lastError = new Error(`HTTP ${resp.status} from ${url}`);
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("Falha ao carregar gtfs/routes.txt");
+      }
       const FLEET_REFRESH_INTERVAL_MS = 60 * 1000;
       let fleetModelRanges = [];
       let typologyChart = null;
@@ -2666,9 +2759,7 @@
           const cached = readCache("routes-txt");
           let text = cached?.text || "";
           if (!text) {
-            const resp = await fetch(ROUTES_DATA_URL, { cache: "no-store" });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            text = await resp.text();
+            text = await fetchRoutesText();
             writeCache("routes-txt", { text }, 24 * 60 * 60 * 1000);
           }
           const lines = text.replace(/\r/g, "\n").split("\n");
@@ -3876,14 +3967,14 @@
 
         await Promise.all([loadFleetModelRanges(), loadRoutesCatalog()]);
         const today = new Date().toISOString().split("T")[0];
-        const payload = await fetch(`${FLEET_VEHICLES_PATH}?date=${encodeURIComponent(today)}`, { cache: "no-store" })
+        const payload = await fetchFromFleetBases(`${FLEET_VEHICLES_PATH}?date=${encodeURIComponent(today)}`, { cache: "no-store" })
           .then(resp => resp.ok ? resp.json() : [])
           .catch(err => {
             console.warn("Falha ao carregar frota diária:", err);
             return [];
           });
 
-        const historyPayload = await fetch(FLEET_HISTORY_VEHICLES_PATH, { cache: "no-store" })
+        const historyPayload = await fetchFromFleetBases(FLEET_HISTORY_VEHICLES_PATH, { cache: "no-store" })
           .then(resp => resp.ok ? resp.json() : [])
           .catch(err => {
             console.warn("Falha ao carregar histórico de veículos:", err);
@@ -4201,13 +4292,13 @@
         await Promise.all([loadFleetModelRanges(), loadRoutesCatalog()]);
         const today = new Date().toISOString().split("T")[0];
         const [payload, historyPayload] = await Promise.all([
-          fetch(`${FLEET_VEHICLES_PATH}?date=${encodeURIComponent(today)}`, { cache: "no-store" })
+          fetchFromFleetBases(`${FLEET_VEHICLES_PATH}?date=${encodeURIComponent(today)}`, { cache: "no-store" })
             .then(resp => resp.ok ? resp.json() : [])
             .catch(err => {
               console.warn("Falha ao carregar frota diária:", err);
               return [];
             }),
-          fetch(FLEET_HISTORY_VEHICLES_PATH, { cache: "no-store" })
+          fetchFromFleetBases(FLEET_HISTORY_VEHICLES_PATH, { cache: "no-store" })
             .then(resp => resp.ok ? resp.json() : [])
             .catch(err => {
               console.warn("Falha ao carregar histórico de veículos:", err);

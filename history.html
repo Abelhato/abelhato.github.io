@@ -3564,6 +3564,7 @@
       }
 
       const KNOWN_BACKEND_PORTS = [2026];
+      const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
 
       function resolveHistoricBases() {
         const bases = [];
@@ -3575,12 +3576,17 @@
           const hostname = location.hostname;
           const proto = location.protocol || "http:";
           const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+          const isGithubPages = /\.github\.io$/i.test(hostname);
           if (isLoopback) {
             ["127.0.0.1", "localhost"].forEach(loopHost => {
               KNOWN_BACKEND_PORTS.forEach(port => {
                 bases.push(`${proto}//${loopHost}:${port}`);
               });
             });
+          }
+          if (isGithubPages) {
+            const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
+            if (normalizedFallback) bases.push(normalizedFallback);
           }
         }
         return dedupeBases(bases);
