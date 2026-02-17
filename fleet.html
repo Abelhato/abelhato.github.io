@@ -1,0 +1,4508 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+  <title>Frota · Dashboard Carris</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+    :root {
+      color-scheme: light dark;
+      --sidebar-width: 280px;
+      --sidebar-motion-ms: 280ms;
+      --sidebar-fade-ms: 220ms;
+      --sidebar-ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --mobile-safe-top: max(12px, env(safe-area-inset-top, 0px));
+      --mobile-safe-start: max(12px, env(safe-area-inset-left, 0px));
+      --mobile-safe-end: max(12px, env(safe-area-inset-right, 0px));
+      --mobile-action-diameter: 48px;
+      --accent-strong: #f59f00;
+      --accent-soft: rgba(245, 159, 0, 0.18);
+      --panel-outline: rgba(15, 23, 42, 0.12);
+      --panel-glow: 0 20px 60px rgba(12, 20, 40, 0.18);
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      overscroll-behavior: none;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
+    body {
+      --bg-app: #f6f8fb;
+      --sidebar-bg: rgba(255, 255, 255, 0.95);
+      --sidebar-border: rgba(15, 23, 42, 0.08);
+      --text-primary: #0f172a;
+      --text-muted: rgba(15, 23, 42, 0.6);
+      --surface-1: rgba(255, 255, 255, 0.96);
+      --surface-2: rgba(255, 255, 255, 0.9);
+      --chart-axis-color: #0f172a;
+      --chart-grid-color: rgba(15, 23, 42, 0.12);
+      --border-strong: rgba(15, 23, 42, 0.12);
+      --shadow-strong: 0 24px 40px rgba(5, 10, 25, 0.12);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-app);
+      color: var(--text-primary);
+      display: flex;
+      transition: background 0.3s ease;
+    }
+
+    body.theme-dark {
+      --bg-app: radial-gradient(circle at top, #0f172a 0%, #020617 55%, #000 100%);
+      --sidebar-bg: rgba(15, 23, 42, 0.92);
+      --sidebar-border: rgba(255, 255, 255, 0.08);
+      --text-primary: #f9fafb;
+      --text-muted: rgba(248, 250, 252, 0.7);
+      --surface-1: rgba(15, 23, 42, 0.9);
+      --surface-2: rgba(15, 23, 42, 0.82);
+      --chart-axis-color: #f9fafb;
+      --chart-grid-color: rgba(255, 255, 255, 0.18);
+      --border-strong: rgba(255, 255, 255, 0.12);
+      --shadow-strong: 0 24px 50px rgba(0, 0, 0, 0.32);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto {
+        --bg-app: radial-gradient(circle at top, #0f172a 0%, #020617 55%, #000 100%);
+        --sidebar-bg: rgba(15, 23, 42, 0.92);
+        --sidebar-border: rgba(255, 255, 255, 0.08);
+        --text-primary: #f9fafb;
+        --text-muted: rgba(248, 250, 252, 0.7);
+        --surface-1: rgb(30, 41, 59);
+        --surface-2: rgb(15, 23, 42);
+        --chart-axis-color: #f9fafb;
+        --chart-grid-color: rgba(255, 255, 255, 0.18);
+        --border-strong: rgba(255, 255, 255, 0.12);
+        --shadow-strong: 0 24px 50px rgba(0, 0, 0, 0.32);
+      }
+    }
+
+    #app-shell {
+      position: relative;
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      background: transparent;
+    }
+
+    #sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      max-width: var(--sidebar-width);
+      padding: 18px 20px 24px;      background: var(--sidebar-bg);
+      border-right: 1px solid var(--sidebar-border);
+      box-shadow: 24px 0 48px rgba(3, 7, 18, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      z-index: 4500;
+      backdrop-filter: blur(20px);
+      transition: transform var(--sidebar-motion-ms) var(--sidebar-ease), opacity var(--sidebar-fade-ms) ease;
+      will-change: transform, opacity;
+    }
+
+    body.sidebar-compact #sidebar {
+      left: 74px;
+      top: calc(20px + 22.5px);
+      bottom: auto;
+      height: auto;
+      width: auto;
+      min-width: 0;
+      max-width: none;
+      padding: 12px 10px 10px;
+      gap: 14px;
+      transform: translateY(-50%);
+      border: 0px solid var(--sidebar-border);
+      border-radius: 20px;
+      box-shadow: 0 16px 36px rgba(3, 7, 18, 0.22);
+    }
+
+    body.sidebar-compact #sidebar .sidebar-header {
+      justify-content: center;
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0;
+      margin-top: -5px;
+      width: 100%;
+    }
+
+    .mode-switch {
+      width: auto;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 48px));
+      gap: 8px;
+    }
+
+    .mode-card {
+      width: 100%;
+      border: 1px solid var(--border-strong);
+      border-radius: 18px;
+      background: var(--surface-1);
+      color: var(--text-primary);
+      font-size: 1.5rem;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+    }
+
+    .mode-card__emoji {
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .mode-card:focus-visible {
+      outline: 2px solid var(--accent-strong);
+      outline-offset: 3px;
+    }
+
+    .mode-card:not(.mode-card--active):hover {
+      border-color: rgba(15, 23, 42, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .mode-card--active {
+      border-color: var(--accent-strong);
+      background: var(--accent-soft);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    }
+
+    #sidebar-close,
+    #sidebar-toggle {
+      border: 1px solid var(--border-strong);
+      border-radius: 50%;
+      background: var(--surface-1);
+      color: var(--text-primary);
+      width: 45px;
+      height: 45px;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+      transition: transform var(--sidebar-motion-ms) var(--sidebar-ease), box-shadow 0.2s ease, opacity var(--sidebar-fade-ms) ease;
+      will-change: transform, opacity;
+    }
+
+    #sidebar-close {
+      position: fixed;
+      top: 20px;
+      left: 24px;
+      z-index: 4601;
+      transform: translateX(0) scale(1);
+    }
+
+    #sidebar-toggle {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      z-index: 4600;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-10px) scale(0.96);
+    }
+
+    body.sidebar-collapsed #sidebar {
+      transform: translateX(-105%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.sidebar-collapsed #sidebar-close {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-10px) scale(0.96);
+    }
+
+    body.sidebar-collapsed #sidebar-toggle {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0) scale(1);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    #fleet-main {
+      flex: 1;
+      min-width: 0;
+      margin-left: var(--sidebar-width);
+      padding: clamp(24px, 4vw, 48px) clamp(20px, 6vw, 72px);
+      display: grid;
+      gap: 24px;
+      box-sizing: border-box;
+    }
+
+    body.sidebar-compact #fleet-main {
+      margin-left: 0;
+    }
+
+    body.sidebar-collapsed #fleet-main {
+      margin-left: 0;
+    }
+
+    .fleet-hero {
+      background: var(--surface-2);
+      border: 1px solid var(--panel-outline);
+      border-radius: 28px;
+      padding: 0 clamp(16px, 2.6vw, 22px);
+      box-shadow: var(--panel-glow);
+      height: clamp(78px, 10vw, 92px);
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+    }
+
+    .fleet-hero h1 {
+      margin: 0;
+      font-size: clamp(2rem, 3vw, 2.8rem);
+    }
+
+    .fleet-hero p {
+      margin: 0;
+      color: var(--text-muted);
+      max-width: 580px;
+      line-height: 1.6;
+    }
+
+    .page-end-credit {
+      margin-top: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .page-end-credit-inner {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+
+    .page-end-author-link {
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      font-size: 0.95rem;
+      position: relative;
+      padding-bottom: 4px;
+      display: inline-flex;
+      gap: 6px;
+      color: var(--text-primary);
+    }
+
+    .page-end-author-link::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      background: var(--accent-strong);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.2s ease;
+    }
+
+    .page-end-author-link:hover::after,
+    .page-end-author-link:focus-visible::after {
+      transform: scaleX(1);
+    }
+
+    .page-end-author-handle {
+      color: var(--accent-strong);
+    }
+
+    .sidebar-info-button {
+      width: 20px;
+      height: 20px;
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      background: var(--surface-1);
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+
+    .sidebar-info-button:hover,
+    .sidebar-info-button:focus-visible {
+      border-color: var(--accent-strong);
+      background: rgba(245, 159, 0, 0.12);
+      color: var(--text-primary);
+    }
+
+    .sidebar-info-popover {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 12px);
+      transform: translate(-50%, 6px);
+      width: min(280px, calc(100vw - 84px));
+      padding: 10px 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--surface-1);
+      color: var(--text-muted);
+      box-shadow: 0 14px 26px rgba(2, 6, 23, 0.2);
+      font-size: 0.76rem;
+      line-height: 1.45;
+      letter-spacing: 0;
+      text-transform: none;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 2;
+    }
+
+    .sidebar-info-popover.visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+      pointer-events: auto;
+    }
+
+    .sidebar-info-popover::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 100%;
+      transform: translateX(-50%);
+      border-width: 6px;
+      border-style: solid;
+      border-color: var(--surface-1) transparent transparent transparent;
+    }
+
+    .sidebar-info-popover p {
+      margin: 0;
+    }
+
+    .fleet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+    }
+
+    .fleet-tabs {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 10px;
+      padding: 6px;
+      border-radius: 18px;
+      background: var(--surface-2);
+      border: 1px solid var(--panel-outline);
+      box-shadow: var(--panel-glow);
+      align-items: stretch;
+      height: 54px;
+      overflow: hidden;
+      width: 100%;
+      box-sizing: border-box;
+      align-self: stretch;
+    }
+
+    .fleet-tab {
+      flex: 1 1 0;
+      min-width: 0;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 0.98rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: nowrap;
+      min-height: 42px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      height: 100%;
+      line-height: 1;
+    }
+
+    .fleet-tab-emoji {
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .fleet-tab-label--mobile {
+      display: none;
+    }
+
+    .fleet-tab.is-active {
+      color: var(--text-primary);
+      background: var(--surface-1);
+      border-color: var(--panel-outline);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    }
+
+    .fleet-tab:focus-visible {
+      outline: 2px solid var(--accent-strong);
+      outline-offset: 2px;
+    }
+
+    .fleet-tabs.fleet-tabs--compact {
+      height: 46px;
+      padding: 4px;
+      max-width: 360px;
+    }
+
+    .fleet-tabs.fleet-tabs--compact .fleet-tab {
+      font-size: 0.9rem;
+      min-height: 36px;
+      padding: 6px 12px;
+    }
+
+    .fleet-tab-panels {
+      display: grid;
+      gap: 20px;
+      min-height: clamp(420px, 60vh, 720px);
+    }
+
+    .fleet-tab-panel {
+      display: none;
+      gap: 18px;
+      min-height: inherit;
+    }
+
+    .fleet-tab-panel.is-active {
+      display: grid;
+    }
+
+    .fleet-kpi-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .fleet-kpi-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .fleet-overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    #fleet-tab-vehicle .fleet-overview-grid {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      gap: 12px;
+    }
+
+    #fleet-tab-vehicle .fleet-panel {
+      order: 1;
+    }
+
+    #fleet-tab-vehicle .fleet-vehicle-card {
+      order: 2;
+    }
+
+
+    .fleet-section {
+      background: var(--surface-2);
+      border: 1px solid var(--panel-outline);
+      border-radius: 22px;
+      padding: 18px 20px;
+      box-shadow: var(--panel-glow);
+      display: grid;
+      gap: 16px;
+    }
+
+    .fleet-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .fleet-section-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .fleet-section-header p {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+    }
+
+    .fleet-table-wrapper {
+      border-radius: 16px;
+      border: 1px solid var(--panel-outline);
+      background: var(--surface-1);
+      overflow: auto;
+      max-height: 280px;
+    }
+
+    .fleet-table-wrapper.fleet-table-wrapper--tall {
+      max-height: 460px;
+    }
+
+    .fleet-loading {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 14px;
+      font-size: 0.92rem;
+    }
+
+    .fleet-table-wrapper .fleet-table th {
+      position: sticky;
+      top: 0;
+      background: var(--surface-2);
+      z-index: 1;
+    }
+
+    .fleet-table-wrapper .fleet-table--readable th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .fleet-chart-card {
+      background: var(--surface-2);
+      border: 1px solid var(--panel-outline);
+      border-radius: 22px;
+      padding: 18px 20px;
+      box-shadow: var(--panel-glow);
+      display: grid;
+      gap: 16px;
+    }
+
+    .fleet-chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .fleet-chart-header h3 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .fleet-chart-header p {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .fleet-chart-visual {
+      position: relative;
+      min-height: 220px;
+    }
+
+    .fleet-chart-visual.fleet-chart-visual--compact {
+      min-height: 475px;
+      max-height: 560px;
+    }
+
+    .fleet-chart-visual.fleet-chart-visual--compact-sm {
+      min-height: 300px;
+      max-height: 600px;
+    }
+
+    .fleet-chart-visual canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .fleet-chart-visual--scroll {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .fleet-series-route-chart-inner {
+      display: grid;
+      gap: 12px;
+      min-width: 100%;
+    }
+
+    .fleet-series-route-canvas {
+      height: 240px;
+    }
+
+    .overlay-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-primary);
+      background: rgba(245, 159, 0, 0.16);
+      border: 1px solid rgba(245, 159, 0, 0.35);
+    }
+
+    .route-pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--pill-border, rgba(15, 23, 42, 0.12));
+      color: var(--pill-fg, #0b1220);
+      background: var(--pill-bg, #e2e8f0);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .route-pill--inline {
+      margin-right: 6px;
+    }
+
+    .fleet-vehicle-card .route-pill {
+      color: #ffffff;
+    }
+
+    #fleet-vehicle-last-route {
+      display: flex;
+      flex-wrap: wrap;
+      column-gap: 6px;
+      row-gap: 12px;
+    }
+
+    body.theme-dark .route-pill {
+      border-color: rgba(255, 255, 255, 0.16);
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .fleet-panel {
+      background: var(--surface-2);
+      border: 1px solid var(--panel-outline);
+      border-radius: 22px;
+      padding: 20px;
+      box-shadow: var(--panel-glow);
+      display: grid;
+      gap: 12px;
+    }
+
+    .fleet-series-controls {
+      display: grid;
+      grid-template-columns: minmax(220px, 320px) 1fr;
+      gap: 18px;
+      align-items: end;
+    }
+
+    .fleet-typology-controls {
+      grid-template-columns: minmax(180px, 1fr) auto minmax(220px, 320px) 1fr;
+      align-items: end;
+      gap: 14px;
+    }
+
+    .fleet-typology-controls > div:first-child {
+      min-width: 180px;
+      align-self: start;
+    }
+
+    .fleet-typology-controls .fleet-typology-toggle,
+    .fleet-typology-controls .fleet-select,
+    .fleet-typology-controls .fleet-chip-row {
+      align-self: end;
+    }
+
+    @media (max-width: 960px) {
+      .fleet-typology-controls {
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+    }
+
+    .fleet-series-search {
+      position: relative;
+      width: 100%;
+      max-width: 320px;
+      justify-self: start;
+    }
+
+    .fleet-select {
+      display: grid;
+      gap: 6px;
+      position: relative;
+    }
+
+    .fleet-select span {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .fleet-select select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--panel-outline);
+      background: var(--surface-1);
+      color: var(--text-primary);
+      font-size: 0.98rem;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+      background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+    }
+
+    .fleet-series-input-wrapper {
+      position: relative;
+      width: 100%;
+      overflow: visible;
+    }
+
+    .fleet-series-selected-pill {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--surface-1);
+      border: 1px solid var(--panel-outline);
+      box-shadow: var(--panel-glow);
+      cursor: text;
+      z-index: 2;
+    }
+
+    .fleet-series-selected-pill.hidden {
+      display: none;
+    }
+
+    .fleet-series-input-wrapper.pill-visible input {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .fleet-series-input-wrapper.input-focused .fleet-series-selected-pill {
+      display: none;
+    }
+
+    .fleet-series-selected-meta {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .fleet-series-selected-meta strong {
+      font-size: 0.98rem;
+    }
+
+    .fleet-series-selected-meta span {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fleet-series-clear {
+      border: none;
+      background: transparent;
+      color: var(--text-primary);
+      font-size: 1rem;
+      line-height: 1;
+      font-weight: 500;
+      padding: 4px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 120ms ease, transform 120ms ease;
+    }
+
+    .fleet-series-clear:hover {
+      background: rgba(245, 159, 0, 0.16);
+      color: var(--text-primary);
+      transform: translateY(-1px);
+    }
+
+    .fleet-series-clear:active {
+      transform: translateY(0px);
+    }
+
+    body.theme-dark .fleet-series-clear {
+      color: #f8fafc;
+    }
+
+    .fleet-series-results {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: var(--surface-1);
+      border: 1px solid var(--panel-outline);
+      border-radius: 16px;
+      box-shadow: var(--panel-glow);
+      max-height: 240px;
+      overflow: auto;
+      display: none;
+      z-index: 4;
+      padding: 6px;
+    }
+
+    .fleet-series-results.is-open {
+      display: grid;
+      gap: 8px;
+    }
+
+    .fleet-series-result.is-active,
+    .fleet-series-result:hover {
+      border-color: rgba(245, 159, 0, 0.6);
+      box-shadow: 0 10px 22px rgba(245, 159, 0, 0.12);
+    }
+
+    .fleet-series-route-pills {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+      box-sizing: border-box;
+    }
+
+    .fleet-series-route-pills span {
+      display: flex;
+      justify-content: center;
+      justify-self: center;
+    }
+
+    .fleet-series-route-pills .route-pill {
+      margin-right: 0;
+    }
+
+    .fleet-series-route-pills.is-compact .route-pill {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+    }
+
+    .fleet-series-route-pills.is-compact span {
+      max-width: 100%;
+    }
+
+    .fleet-series-table-title {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .fleet-sort-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: none;
+      background: none;
+      color: inherit;
+      font: inherit;
+      font-weight: 600;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .fleet-sort-button::after {
+      content: "↕";
+      font-size: 0.75rem;
+      opacity: 0.4;
+    }
+
+    .fleet-sort-button.is-active::after {
+      opacity: 0.85;
+    }
+
+    .fleet-sort-button.is-active[data-dir="asc"]::after {
+      content: "↑";
+    }
+
+    .fleet-sort-button.is-active[data-dir="desc"]::after {
+      content: "↓";
+    }
+
+    .fleet-search {
+      display: grid;
+      gap: 10px;
+    }
+
+    .fleet-vehicle-input-wrapper {
+      position: relative;
+      width: 100%;
+      overflow: visible;
+    }
+
+    .fleet-search input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--panel-outline);
+      background: var(--surface-1);
+      color: var(--text-primary);
+      font-size: 0.98rem;
+    }
+
+
+    .fleet-vehicle-selected-pill {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--surface-1);
+      border: 1px solid var(--panel-outline);
+      box-shadow: var(--panel-glow);
+      cursor: text;
+      z-index: 2;
+    }
+
+
+    .fleet-vehicle-selected-pill.hidden {
+      display: none;
+    }
+
+    .fleet-vehicle-input-wrapper.pill-visible input {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .fleet-vehicle-input-wrapper.input-focused .fleet-vehicle-selected-pill {
+      display: none;
+    }
+
+    .fleet-vehicle-selected-meta {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .fleet-vehicle-selected-meta strong {
+      font-size: 0.98rem;
+    }
+
+    .fleet-vehicle-selected-meta span {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fleet-vehicle-clear {
+      border: none;
+      background: transparent;
+      color: var(--text-primary);
+      font-size: 1rem;
+      line-height: 1;
+      font-weight: 500;
+      padding: 4px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 120ms ease, transform 120ms ease;
+    }
+
+    .fleet-vehicle-clear:hover {
+      background: rgba(15, 23, 42, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .fleet-vehicle-clear:active {
+      transform: translateY(0px);
+    }
+
+    body.theme-dark .fleet-vehicle-clear {
+      color: #f8fafc;
+    }
+
+    .fleet-search-results {
+      display: grid;
+      gap: 8px;
+      max-height: 280px;
+      overflow: auto;
+      padding-right: 6px;
+    }
+
+    .fleet-series-results {
+      display: none;
+    }
+
+    .fleet-series-results.is-open {
+      display: grid;
+      gap: 8px;
+    }
+
+    .fleet-vehicle-results {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      width: 100%;
+      max-height: 240px;
+      padding: 8px 10px;
+      background: var(--surface-1);
+      border-radius: 12px;
+      border: 1px solid var(--panel-outline);
+      box-shadow: var(--panel-glow);
+      z-index: 30;
+      box-sizing: border-box;
+    }
+
+    .fleet-vehicle-results.is-open {
+      display: grid;
+    }
+
+    .fleet-search-result {
+      border: 1px solid var(--panel-outline);
+      background: var(--surface-1);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    }
+
+    .fleet-search-result:hover {
+      border-color: rgba(15, 23, 42, 0.2);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    }
+
+    .fleet-search-result__meta {
+      display: grid;
+      gap: 2px;
+    }
+
+    .fleet-search-result__meta strong {
+      font-size: 0.98rem;
+    }
+
+    .fleet-search-result__meta span {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .fleet-vehicle-card {
+      background: var(--surface-2);
+      border: 1px solid var(--panel-outline);
+      border-radius: 22px;
+      padding: 18px 20px;
+      box-shadow: var(--panel-glow);
+      display: grid;
+      gap: 14px;
+    }
+
+    .fleet-vehicle-card h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .fleet-vehicle-kpis {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .fleet-vehicle-kpi {
+      background: var(--surface-1);
+      border: 1px solid var(--panel-outline);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .fleet-vehicle-kpi span {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .fleet-vehicle-kpi strong {
+      font-size: 0.98rem;
+    }
+
+    .fleet-vehicle-kpi--full {
+      grid-column: 1 / -1;
+    }
+
+    .fleet-activity-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .fleet-activity-table th,
+    .fleet-activity-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--panel-outline);
+    }
+
+    .fleet-activity-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--surface-2);
+    }
+
+    .fleet-panel h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .fleet-panel p {
+      margin: 0;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .fleet-panel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .fleet-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .fleet-chip {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--surface-1);
+      border: 1px solid var(--panel-outline);
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+
+    .fleet-mini-bars {
+      display: grid;
+      gap: 8px;
+    }
+
+    .fleet-mini-bar {
+      display: grid;
+      grid-template-columns: 110px 1fr 50px;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .fleet-mini-bar span {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .fleet-mini-bar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+
+    .fleet-mini-bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(245, 159, 0, 0.75), rgba(250, 204, 21, 0.9));
+      width: 48%;
+    }
+
+    .fleet-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .fleet-list li {
+      background: var(--surface-1);
+      border: 1px solid var(--panel-outline);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .fleet-list strong {
+      font-size: 0.95rem;
+    }
+
+    .fleet-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .fleet-series-table {
+      table-layout: fixed;
+    }
+
+    .fleet-table th,
+    .fleet-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--panel-outline);
+    }
+
+    .fleet-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--surface-2);
+    }
+
+    .fleet-table th:last-child,
+    .fleet-table td:last-child {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .fleet-series-table th:last-child,
+    .fleet-series-table td:last-child {
+      text-align: left;
+    }
+
+    .fleet-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .fleet-table--readable th,
+    .fleet-table--readable td {
+      padding: 10px 12px;
+      vertical-align: middle;
+    }
+
+    .fleet-table--readable th {
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      background: color-mix(in srgb, var(--surface-2) 92%, var(--surface-1) 8%);
+    }
+
+    .fleet-table--readable td {
+      line-height: 1.35;
+    }
+
+    .fleet-table--readable th .fleet-sort-button {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .fleet-table--readable tbody tr:nth-child(odd) td {
+      background: rgba(15, 23, 42, 0.03);
+    }
+
+    .fleet-table--readable tbody tr:hover td {
+      background: rgba(15, 23, 42, 0.06);
+    }
+
+    .fleet-table--readable td:nth-child(n + 2) {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .fleet-table--routes,
+    .fleet-table--entries,
+    .fleet-table--activity,
+    .fleet-table--series {
+      table-layout: fixed;
+    }
+
+    .fleet-table--routes {
+      min-width: 560px;
+    }
+
+    .fleet-table--entries {
+      min-width: 860px;
+    }
+
+    .fleet-table--activity {
+      min-width: 520px;
+    }
+
+    .fleet-table--series {
+      min-width: 860px;
+    }
+
+    .fleet-table--routes th:nth-child(2),
+    .fleet-table--routes td:nth-child(2),
+    .fleet-table--activity th:nth-child(2),
+    .fleet-table--activity td:nth-child(2),
+    .fleet-table--activity th:nth-child(3),
+    .fleet-table--activity td:nth-child(3) {
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .fleet-table--routes th:nth-child(2),
+    .fleet-table--routes td:nth-child(2),
+    .fleet-table--entries th:nth-child(4),
+    .fleet-table--entries td:nth-child(4),
+    .fleet-table--series th:nth-child(2),
+    .fleet-table--series td:nth-child(2) {
+      border-left: 1px solid var(--panel-outline);
+    }
+
+    .fleet-table--entries th:nth-child(4),
+    .fleet-table--entries td:nth-child(4),
+    .fleet-table--entries th:nth-child(5),
+    .fleet-table--entries td:nth-child(5) {
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .fleet-table--series th:nth-child(2),
+    .fleet-table--series td:nth-child(2) {
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .fleet-table--series th:nth-child(2) .fleet-sort-button {
+      justify-content: center;
+    }
+
+    .fleet-table--routes th:last-child,
+    .fleet-table--routes td:last-child {
+      text-align: left;
+    }
+
+    .fleet-table--entries th:last-child,
+    .fleet-table--entries td:last-child {
+      text-align: center;
+    }
+
+    body.theme-dark .fleet-table--readable th {
+      background: rgba(15, 23, 42, 0.9);
+      color: #cbd5e1;
+    }
+
+    body.theme-dark .fleet-table--readable tbody tr:nth-child(odd) td {
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    body.theme-dark .fleet-table--readable tbody tr:hover td {
+      background: rgba(148, 163, 184, 0.15);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .fleet-table--readable th {
+        background: rgba(15, 23, 42, 0.9);
+        color: #cbd5e1;
+      }
+
+      body.theme-auto .fleet-table--readable tbody tr:nth-child(odd) td {
+        background: rgba(148, 163, 184, 0.08);
+      }
+
+      body.theme-auto .fleet-table--readable tbody tr:hover td {
+        background: rgba(148, 163, 184, 0.15);
+      }
+    }
+
+    .fleet-card {
+      background: var(--surface-1);
+      border: 1px solid var(--panel-outline);
+      border-radius: 20px;
+      padding: 18px 20px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 10px;
+    }
+
+    .fleet-card h2 {
+      font-size: 1.1rem;
+      margin: 0;
+    }
+
+    .fleet-card span {
+      font-size: 1.6rem;
+    }
+
+    .fleet-card p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 900px) {
+      #sidebar {
+        width: min(360px, 92vw);
+        min-width: min(360px, 92vw);
+        max-width: min(360px, 92vw);
+      }
+
+      body.sidebar-compact #sidebar {
+        left: 0;
+        top: calc(var(--mobile-safe-top) + var(--mobile-action-diameter) + 12px);
+        right: 0;
+        bottom: auto;
+        width: fit-content;
+        min-width: 0;
+        max-width: calc(100vw - (var(--mobile-safe-start) + var(--mobile-safe-end)));
+        margin-inline: auto;
+        padding: 10px 12px;
+        gap: 10px;
+        border: 1px solid var(--sidebar-border);
+        border-radius: 16px;
+        box-shadow: var(--shadow-strong);
+      }
+
+      body.sidebar-compact:not(.sidebar-collapsed) #sidebar {
+        transform: none;
+      }
+
+      body.sidebar-compact #sidebar .sidebar-header {
+        justify-content: center;
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+
+      body.sidebar-compact #sidebar .mode-card {
+        padding: 4px;
+      }
+
+      .sidebar-header {
+        justify-content: center;
+        margin-top: 65px;
+        margin-bottom: -24px;
+      }
+
+      .mode-switch {
+        grid-template-columns: repeat(4, minmax(0, 68px));
+        gap: 10px;
+        justify-content: center;
+        margin-inline: auto;
+      }
+
+      .mode-card {
+        font-size: 2rem;
+      }
+
+      #fleet-main {
+        margin-left: 0;
+        padding: calc(var(--mobile-safe-top) + 54px) 10px 14px;
+        gap: 12px;
+      }
+
+      .fleet-hero {
+        border-radius: 16px;
+        padding: 0 12px;
+        height: 56px;
+      }
+
+      .fleet-hero h1 {
+        font-size: 1.32rem;
+        line-height: 1.1;
+      }
+
+      .fleet-tab-panels {
+        gap: 12px;
+        min-height: 0;
+      }
+
+      .fleet-tab-panel {
+        gap: 12px;
+      }
+
+      .fleet-overview-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .fleet-vehicle-kpis {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .fleet-section,
+      .fleet-chart-card,
+      .fleet-panel,
+      .fleet-vehicle-card {
+        border-radius: 16px;
+        padding: 12px;
+        gap: 10px;
+      }
+
+      .fleet-section-header {
+        gap: 8px;
+      }
+
+      .fleet-section-header h2,
+      .fleet-vehicle-card h3,
+      .fleet-panel h3,
+      .fleet-chart-header h3 {
+        font-size: 0.98rem;
+      }
+
+      .fleet-section-header p,
+      .fleet-chart-header p,
+      .fleet-panel p {
+        margin-top: 2px;
+        font-size: 0.78rem;
+        line-height: 1.25;
+      }
+
+      .fleet-chart-visual {
+        min-height: 170px;
+      }
+
+      .fleet-chart-visual.fleet-chart-visual--compact {
+        min-height: 310px;
+        max-height: 370px;
+      }
+
+      .fleet-chart-visual.fleet-chart-visual--compact-sm {
+        min-height: 220px;
+        max-height: 320px;
+      }
+
+      .fleet-series-route-canvas {
+        height: 190px;
+      }
+
+      .overlay-pill {
+        font-size: 0.66rem;
+        letter-spacing: 0.08em;
+        padding: 4px 8px;
+      }
+
+      .fleet-tabs {
+        overflow: hidden;
+        height: 44px;
+        padding: 3px;
+        gap: 6px;
+        border-radius: 12px;
+      }
+
+      .fleet-tab {
+        white-space: nowrap;
+        min-height: 34px;
+        font-size: 0.76rem;
+        padding: 6px 7px;
+      }
+
+      .fleet-tab-main {
+        gap: 4px;
+      }
+
+      .fleet-tab-main .fleet-tab-label--full {
+        display: none;
+      }
+
+      .fleet-tab-main .fleet-tab-label--mobile {
+        display: inline;
+      }
+
+      .fleet-tabs.fleet-tabs--compact {
+        height: 40px;
+        max-width: 100%;
+      }
+
+      .fleet-tabs.fleet-tabs--compact .fleet-tab {
+        min-height: 30px;
+        font-size: 0.74rem;
+        padding: 4px 8px;
+      }
+
+      .fleet-series-controls,
+      .fleet-typology-controls {
+        gap: 10px;
+      }
+
+      .fleet-select select,
+      .fleet-search input {
+        padding: 9px 11px;
+        border-radius: 10px;
+        font-size: 0.86rem;
+      }
+
+      .fleet-select span {
+        font-size: 0.68rem;
+      }
+
+      .fleet-series-selected-pill,
+      .fleet-vehicle-selected-pill {
+        padding: 8px 10px;
+        border-radius: 10px;
+      }
+
+      .fleet-series-selected-meta strong,
+      .fleet-vehicle-selected-meta strong {
+        font-size: 0.86rem;
+      }
+
+      .fleet-series-selected-meta span,
+      .fleet-vehicle-selected-meta span {
+        font-size: 0.74rem;
+      }
+
+      .fleet-chip-row {
+        gap: 6px;
+      }
+
+      .fleet-chip {
+        padding: 4px 8px;
+        font-size: 0.74rem;
+      }
+
+      .fleet-mini-bar {
+        grid-template-columns: 76px 1fr 40px;
+        gap: 8px;
+        font-size: 0.8rem;
+      }
+
+      .fleet-section[aria-label="Novas entradas de frota"] .route-pill {
+        padding: 2px 6px;
+        font-size: 0.64rem;
+      }
+
+      .fleet-section[aria-label="Novas entradas de frota"] .route-pill--inline {
+        margin-right: 4px;
+      }
+
+      .fleet-section[aria-label="Novas entradas de frota"] .fleet-table--entries th:nth-child(4),
+      .fleet-section[aria-label="Novas entradas de frota"] .fleet-table--entries td:nth-child(4),
+      .fleet-section[aria-label="Novas entradas de frota"] .fleet-table--entries th:nth-child(5),
+      .fleet-section[aria-label="Novas entradas de frota"] .fleet-table--entries td:nth-child(5) {
+        white-space: normal;
+        line-height: 1.18;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] {
+        padding: 10px;
+        gap: 8px;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] .fleet-series-table-title {
+        font-size: 0.92rem;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] .fleet-table-wrapper.fleet-table-wrapper--tall {
+        max-height: 220px;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] .fleet-table--readable {
+        font-size: 0.7rem;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] .fleet-table--readable th,
+      .fleet-section[aria-label="Tabela da modelo"] .fleet-table--readable td {
+        padding: 3px 5px;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] .fleet-table--readable th {
+        font-size: 0.56rem;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] .route-pill {
+        padding: 1px 5px;
+        font-size: 0.62rem;
+      }
+
+      .fleet-section[aria-label="Tabela da modelo"] .route-pill--inline {
+        margin-right: 4px;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] {
+        padding: 10px;
+        gap: 8px;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-section-header h2 {
+        font-size: 0.9rem;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-section-header p {
+        font-size: 0.72rem;
+        line-height: 1.2;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table-wrapper.fleet-table-wrapper--tall {
+        max-height: 210px;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--readable {
+        font-size: 0.72rem;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--readable th,
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--readable td {
+        padding: 4px 6px;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--readable th {
+        font-size: 0.56rem;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .route-pill {
+        padding: 2px 7px;
+        font-size: 0.66rem;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--routes th:nth-child(1),
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--routes td:nth-child(1) {
+        width: 28%;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--routes th:nth-child(2),
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--routes td:nth-child(2) {
+        width: 23%;
+      }
+
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--routes th:nth-child(3),
+      .fleet-section[aria-label="Distribuição frota hoje"] .fleet-table--routes td:nth-child(3) {
+        width: 49%;
+      }
+
+      .fleet-series-controls {
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+
+      #sidebar-toggle,
+      #sidebar-close {
+        top: var(--mobile-safe-top);
+        left: var(--mobile-safe-start);
+        width: var(--mobile-action-diameter);
+        height: var(--mobile-action-diameter);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .fleet-table-wrapper {
+        border-radius: 10px;
+        max-height: 220px;
+      }
+
+      .fleet-table-wrapper.fleet-table-wrapper--tall {
+        max-height: 260px;
+      }
+
+      .fleet-table--readable {
+        font-size: 0.76rem;
+      }
+
+      .fleet-table--readable th,
+      .fleet-table--readable td {
+        padding: 5px 6px;
+      }
+
+      .fleet-table--readable th {
+        font-size: 0.58rem;
+        letter-spacing: 0.02em;
+      }
+
+      .fleet-sort-button {
+        width: 100%;
+        justify-content: space-between;
+        gap: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .fleet-table--routes {
+        min-width: 390px;
+      }
+
+      .fleet-table--entries {
+        min-width: 620px;
+      }
+
+      .fleet-table--activity {
+        min-width: 420px;
+      }
+
+      .fleet-table--series {
+        min-width: 540px;
+      }
+
+      .fleet-table--entries th:nth-child(1),
+      .fleet-table--entries td:nth-child(1) {
+        width: 14%;
+      }
+
+      .fleet-table--entries th:nth-child(2),
+      .fleet-table--entries td:nth-child(2) {
+        width: 20%;
+      }
+
+      .fleet-table--entries th:nth-child(3),
+      .fleet-table--entries td:nth-child(3) {
+        width: 24%;
+      }
+
+      .fleet-table--entries th:nth-child(4),
+      .fleet-table--entries td:nth-child(4),
+      .fleet-table--entries th:nth-child(5),
+      .fleet-table--entries td:nth-child(5) {
+        width: 21%;
+      }
+
+      .fleet-table--activity th:nth-child(1),
+      .fleet-table--activity td:nth-child(1) {
+        width: 24%;
+      }
+
+      .fleet-table--activity th:nth-child(2),
+      .fleet-table--activity td:nth-child(2),
+      .fleet-table--activity th:nth-child(3),
+      .fleet-table--activity td:nth-child(3) {
+        width: 38%;
+        white-space: normal;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      .fleet-table--series th:nth-child(1),
+      .fleet-table--series td:nth-child(1) {
+        width: 14%;
+      }
+
+      .fleet-table--series th:nth-child(2),
+      .fleet-table--series td:nth-child(2) {
+        width: 18%;
+      }
+
+      .fleet-table--series th:nth-child(3),
+      .fleet-table--series td:nth-child(3) {
+        width: 43%;
+      }
+
+      .fleet-table--series th:nth-child(4),
+      .fleet-table--series td:nth-child(4) {
+        width: 25%;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .fleet-table-wrapper {
+        max-height: 200px;
+      }
+
+      .fleet-table--routes {
+        min-width: 350px;
+      }
+
+      .fleet-table--entries {
+        min-width: 560px;
+      }
+
+      .fleet-table--activity {
+        min-width: 390px;
+      }
+
+      .fleet-table--series {
+        min-width: 500px;
+      }
+    }
+  </style>
+</head>
+<body class="theme-auto sidebar-compact sidebar-collapsed">
+  <div id="app-shell">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="mode-switch" role="tablist" aria-label="Escolha o modo do painel">
+          <button class="mode-card" type="button" role="tab" aria-pressed="false" data-mode="realtime">
+            <span class="mode-card__emoji" aria-hidden="true">📡</span>
+            <span class="sr-only">Tempo real</span>
+          </button>
+          <button class="mode-card" type="button" role="tab" aria-pressed="false" data-mode="history">
+            <span class="mode-card__emoji" aria-hidden="true">📜</span>
+            <span class="sr-only">Histórico</span>
+          </button>
+          <button class="mode-card" type="button" role="tab" aria-pressed="false" data-mode="transit">
+            <span class="mode-card__emoji" aria-hidden="true">🚦</span>
+            <span class="sr-only">Trânsito</span>
+          </button>
+          <button class="mode-card mode-card--active" type="button" role="tab" aria-pressed="true" data-mode="fleet">
+            <span class="mode-card__emoji" aria-hidden="true">🚍</span>
+            <span class="sr-only">Frota</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+    <button id="sidebar-close" type="button" aria-label="Fechar filtros">✕</button>
+    <main id="fleet-main">
+      <section class="fleet-hero">
+        <h1>🚍 Análise de Frota </h1>
+      </section>
+      <nav class="fleet-tabs" role="tablist" aria-label="Secoes da frota">
+        <button class="fleet-tab fleet-tab-main is-active" type="button" role="tab" aria-selected="true" aria-controls="fleet-tab-overview" id="fleet-tab-overview-btn" data-tab="overview"><span class="fleet-tab-emoji" aria-hidden="true">📊</span><span class="fleet-tab-label--full">Visão Geral</span><span class="fleet-tab-label--mobile">Geral</span></button>
+        <button class="fleet-tab fleet-tab-main" type="button" role="tab" aria-selected="false" aria-controls="fleet-tab-vehicle" id="fleet-tab-vehicle-btn" data-tab="vehicle"><span class="fleet-tab-emoji" aria-hidden="true">🚍</span><span class="fleet-tab-label--full">Veículos</span><span class="fleet-tab-label--mobile">Veículos</span></button>
+        <button class="fleet-tab fleet-tab-main" type="button" role="tab" aria-selected="false" aria-controls="fleet-tab-series" id="fleet-tab-series-btn" data-tab="series"><span class="fleet-tab-emoji" aria-hidden="true">🏷️</span><span class="fleet-tab-label--full">Modelos</span><span class="fleet-tab-label--mobile">Modelos</span></button>
+        <button class="fleet-tab fleet-tab-main" type="button" role="tab" aria-selected="false" aria-controls="fleet-tab-typology" id="fleet-tab-typology-btn" data-tab="typology"><span class="fleet-tab-emoji" aria-hidden="true">🚌🚋</span><span class="fleet-tab-label--full">Tipologias</span><span class="fleet-tab-label--mobile">Tipo</span></button>
+      </nav>
+      <section class="fleet-tab-panels">
+        <section class="fleet-tab-panel is-active" id="fleet-tab-overview" role="tabpanel" aria-labelledby="fleet-tab-overview-btn" tabindex="0">
+          <div class="fleet-overview-grid">
+            <section class="fleet-section" aria-label="Distribuição frota hoje">
+              <div class="fleet-section-header">
+                <div>
+                  <h2>Alocação de frota</h2>
+                  <p>Carreiras com mais veículos alocados.</p>
+                </div>
+                <span class="overlay-pill">Hoje</span>
+              </div>
+              <div class="fleet-table-wrapper fleet-table-wrapper--tall" role="region" aria-label="carreiras com mais veículos">
+                <table class="fleet-table fleet-table--readable fleet-table--routes">
+                  <thead>
+                    <tr>
+                      <th>Carreira</th>
+                      <th>Nº Veículos</th>
+                      <th>Tipologia</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fleet-top-routes-table">
+                    <tr>
+                      <td><span class="route-pill route-pill--inline">—</span></td>
+                      <td>—</td>
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <td><span class="route-pill route-pill--inline">—</span></td>
+                      <td>—</td>
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <td><span class="route-pill route-pill--inline">—</span></td>
+                      <td>—</td>
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <td><span class="route-pill route-pill--inline">—</span></td>
+                      <td>—</td>
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <td><span class="route-pill route-pill--inline">—</span></td>
+                      <td>—</td>
+                      <td>—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <article class="fleet-chart-card">
+              <div class="fleet-chart-header">
+                <div>
+                  <h3>Distribuição por tipologias</h3>
+                </div>
+                <span class="overlay-pill">Hoje</span>
+              </div>
+              <div class="fleet-chart-visual fleet-chart-visual--compact">
+                <canvas id="fleet-typology-chart" aria-label="Distribuição de tipologias usadas"></canvas>
+              </div>
+            </article>
+          </div>
+
+          <article class="fleet-chart-card">
+            <div class="fleet-chart-header">
+              <div>
+                <h3>Distribuição por modelos</h3>
+              </div>
+              <span class="overlay-pill">Hoje</span>
+            </div>
+            <div class="fleet-chart-visual">
+              <canvas id="fleet-series-chart" aria-label="Distribuição de modelos na frota"></canvas>
+            </div>
+          </article>
+
+          <section class="fleet-section" aria-label="Novas entradas de frota">
+            <div class="fleet-section-header">
+              <div>
+                <h2>Últimas entradas na Frota</h2>
+                <p>Veículos com atividade mais recente.</p>
+              </div>
+            </div>
+            <div class="fleet-table-wrapper" role="region" aria-label="Novas entradas de frota">
+              <table class="fleet-table fleet-table--readable fleet-table--entries">
+                <thead>
+                  <tr>
+                    <th>Veículo</th>
+                    <th>Modelo</th>
+                    <th>Últimas carreiras</th>
+                    <th>Primeira atividade</th>
+                    <th>Última atividade</th>
+                  </tr>
+                </thead>
+                <tbody id="fleet-new-entries-table">
+                  <tr>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+        <section class="fleet-tab-panel" id="fleet-tab-vehicle" role="tabpanel" aria-labelledby="fleet-tab-vehicle-btn" tabindex="0">
+          <div class="fleet-overview-grid">
+            <section class="fleet-panel">
+              <div class="fleet-section-header">
+                <div>
+                  <h2>Pesquisa por veículo</h2>
+                </div>
+              </div>
+              <div class="fleet-search">
+                <div class="fleet-vehicle-input-wrapper">
+                  <input id="fleet-vehicle-search" type="search" placeholder="Pesquisar por ID, chapa ou modelo" autocomplete="off">
+                  <div id="fleet-vehicle-selected-pill" class="fleet-vehicle-selected-pill hidden" role="button" tabindex="0" aria-label="Veículo selecionado">
+                    <div class="fleet-vehicle-selected-meta">
+                      <strong id="fleet-vehicle-selected-id">—</strong>
+                      <span id="fleet-vehicle-selected-model">—</span>
+                    </div>
+                    <button id="fleet-vehicle-clear" class="fleet-vehicle-clear" type="button" aria-label="Limpar seleção">×</button>
+                  </div>
+                  <div id="fleet-vehicle-results" class="fleet-search-results fleet-vehicle-results" role="listbox" aria-label="Resultados da pesquisa">
+                    <div class="fleet-loading">A carregar…</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="fleet-vehicle-card" aria-label="Detalhe do veículo">
+              <h3 id="fleet-vehicle-title">Veículo —</h3>
+              <div class="fleet-vehicle-kpis">
+                <div class="fleet-vehicle-kpi">
+                  <span>Modelo</span>
+                  <strong id="fleet-vehicle-model">—</strong>
+                </div>
+                <div class="fleet-vehicle-kpi">
+                  <span>Tipologia</span>
+                  <strong id="fleet-vehicle-category">—</strong>
+                </div>
+                <div class="fleet-vehicle-kpi">
+                  <span>Última atividade</span>
+                  <strong id="fleet-vehicle-last-ping">—</strong>
+                </div>
+                <div class="fleet-vehicle-kpi fleet-vehicle-kpi--full">
+                  <span>Últimas carreiras</span>
+                  <strong id="fleet-vehicle-last-route">—</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+          <section class="fleet-section" aria-label="Atividade do dia">
+            <div class="fleet-section-header">
+              <div>
+                <h2>Atividade</h2>
+              </div>
+              <span class="overlay-pill">Hoje</span>
+            </div>
+            <div class="fleet-table-wrapper fleet-table-wrapper--tall">
+              <table class="fleet-activity-table fleet-table--readable fleet-table--activity">
+                <thead>
+                  <tr>
+                    <th>Serviço</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                  </tr>
+                </thead>
+                <tbody id="fleet-vehicle-activity">
+                  <tr>
+                    <td colspan="3" class="fleet-loading">Selecione um veículo para ver a atividade.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+        <section class="fleet-tab-panel" id="fleet-tab-series" role="tabpanel" aria-labelledby="fleet-tab-series-btn" tabindex="0">
+          <section class="fleet-section" aria-label="Modelo em foco">
+            <div class="fleet-section-header">
+              <div>
+                <h2>Pesquisa por modelo</h2>
+              </div>
+              <span class="overlay-pill">Hoje</span>
+            </div>
+            <div class="fleet-series-controls fleet-typology-controls">
+              <div class="fleet-search fleet-series-search" role="combobox" aria-expanded="false" aria-owns="fleet-series-results" aria-haspopup="listbox">
+                <label class="fleet-select" for="fleet-series-search">
+                </label>
+                <div class="fleet-series-input-wrapper">
+                  <input id="fleet-series-search" type="search" placeholder="Pesquisar modelo..." autocomplete="off" aria-controls="fleet-series-results" aria-autocomplete="list" />
+                  <div id="fleet-series-selected-pill" class="fleet-series-selected-pill hidden" role="button" tabindex="0" aria-label="Modelo selecionada">
+                    <div class="fleet-series-selected-meta">
+                      <strong id="fleet-series-selected-label">—</strong>
+                    </div>
+                    <button id="fleet-series-clear" class="fleet-series-clear" type="button" aria-label="Limpar seleção">×</button>
+                  </div>
+                  <div class="fleet-search-results fleet-series-results" id="fleet-series-results" role="listbox"></div>
+                </div>
+              </div>
+              <div class="fleet-chip-row">
+                <span class="fleet-chip" id="fleet-series-units">Unidades Totais: —</span>
+                <span class="fleet-chip" id="fleet-series-routes">Carreiras ativas: —</span>
+              </div>
+            </div>
+            <article class="fleet-chart-card">
+              <div class="fleet-chart-header">
+                <div>
+                  <h3>Distribuição por carreiras</h3>
+                </div>
+              </div>
+              <div class="fleet-chart-visual fleet-chart-visual--scroll">
+                <div class="fleet-series-route-chart-inner" id="fleet-series-route-chart-inner">
+                  <div class="fleet-series-route-canvas">
+                    <canvas id="fleet-series-route-chart" aria-label="Distribuição do modelo por carreiras"></canvas>
+                  </div>
+                  <div class="fleet-series-route-pills" id="fleet-series-route-pills"></div>
+                </div>
+              </div>
+            </article>
+          </section>
+          <section class="fleet-section" aria-label="Tabela da modelo">
+            <div class="fleet-section-header">
+              <div>
+                <h2 class="fleet-series-table-title" id="fleet-series-table-title">📊 Modelo: — —</h2>
+              </div>
+            </div>
+            <div class="fleet-table-wrapper fleet-table-wrapper--tall" role="region" aria-label="Veículos do Modelo">
+              <table class="fleet-table fleet-series-table fleet-table--readable fleet-table--series">
+                <colgroup>
+                  <col style="width:15%">
+                  <col style="width:16%">
+                  <col>
+                  <col style="width:11%">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>
+                      <button class="fleet-sort-button fleet-series-sort" type="button" data-sort="vehicle" aria-label="Ordenar por veículo">
+                        Veículo
+                      </button>
+                    </th>
+                    <th>
+                      <button class="fleet-sort-button fleet-series-sort" type="button" data-sort="lastActivity" aria-label="Ordenar por última atividade">
+                        Última atividade
+                      </button>
+                    </th>
+                    <th>Últimas carreiras</th>
+                    <th>Último serviço</th>
+                  </tr>
+                </thead>
+                <tbody id="fleet-series-table-body">
+                  <tr>
+                    <td colspan="4" class="fleet-loading">A carregar…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+        <section class="fleet-tab-panel" id="fleet-tab-typology" role="tabpanel" aria-labelledby="fleet-tab-typology-btn" tabindex="0">
+          <article class="fleet-panel">
+            <div class="fleet-series-controls fleet-typology-controls">
+              <div>
+                <h3>Pesquisa por Tipologia</h3>
+              </div>
+              <div class="fleet-tabs fleet-tabs--compact fleet-typology-toggle" role="tablist" aria-label="Selecionar tipo de frota">
+                <button class="fleet-tab is-active" type="button" role="tab" aria-selected="true" data-type="Autocarro">Autocarro</button>
+                <button class="fleet-tab" type="button" role="tab" aria-selected="false" data-type="Elétrico">Elétrico</button>
+              </div>
+              <label class="fleet-select" for="fleet-typology-select">
+                <select id="fleet-typology-select" aria-label="Selecionar tipologia">
+                  <option value="">A carregar…</option>
+                </select>
+              </label>
+              <div class="fleet-chip-row" id="fleet-typology-summary">
+                <span class="fleet-chip">Modelos: —</span>
+                <span class="fleet-chip">Carreiras: —</span>
+                <span class="fleet-chip">Veículos: —</span>
+              </div>
+            </div>
+          </article>
+          <div class="fleet-panel-grid">
+            <article class="fleet-chart-card">
+              <div class="fleet-chart-header">
+                <div>
+                  <h3 id="fleet-typology-distribution-title">Distribuição de tipologias</h3>
+                </div>
+                <span class="overlay-pill">Hoje</span>
+              </div>
+              <div class="fleet-chart-visual fleet-chart-visual--compact fleet-chart-visual--compact-sm">
+                <canvas id="fleet-typology-distribution-chart" aria-label="Distribuição de tipologias"></canvas>
+              </div>
+            </article>
+            <article class="fleet-chart-card">
+              <div class="fleet-chart-header">
+                <div>
+                  <h3 id="fleet-typology-model-title">Distribuição de modelos na tipologia</h3>
+                </div>
+                <span class="overlay-pill">Hoje</span>
+              </div>
+              <div class="fleet-chart-visual fleet-chart-visual--compact fleet-chart-visual--compact-sm">
+                <canvas id="fleet-typology-model-chart" aria-label="Distribuição de modelos"></canvas>
+              </div>
+            </article>
+          </div>
+          <article class="fleet-chart-card">
+            <div class="fleet-chart-header">
+              <div>
+                <h3>Distribuição por carreiras</h3>
+              </div>
+              <span class="overlay-pill">Hoje</span>
+            </div>
+            <div class="fleet-chart-visual fleet-chart-visual--scroll">
+              <div class="fleet-series-route-chart-inner" id="fleet-typology-route-chart-inner">
+                <div class="fleet-series-route-canvas">
+                  <canvas id="fleet-typology-route-chart" aria-label="Distribuição da tipologia por carreiras"></canvas>
+                </div>
+                <div class="fleet-series-route-pills" id="fleet-typology-route-pills"></div>
+              </div>
+            </div>
+          </article>
+        </section>
+      </section>
+      <footer class="page-end-credit">
+        <div class="page-end-credit-inner" data-carris-info>
+          <a
+            class="page-end-author-link"
+            href="https://discord.com/users/666907356789080066"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span>Feito por</span>
+            <span class="page-end-author-handle">@Abelhato</span>
+          </a>
+          <button
+            class="sidebar-info-button"
+            type="button"
+            aria-label="Informação sobre os dados"
+            aria-expanded="false"
+            data-carris-info-btn
+          >
+            i
+          </button>
+          <div class="sidebar-info-popover" role="note" hidden data-carris-info-popover>
+            <p>Informação baseada em dados da API pública da Carris. Os valores apresentados são estimativas e não refletem a operação com exatidão. Este é um projeto pessoal que procura ajudar a compreender melhor a operação e contribuir para a melhoria da mobilidade em Lisboa.</p>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+  <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Mostrar filtros">☰</button>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    (function () {
+      const body = document.body;
+      const sidebarToggle = document.getElementById('sidebar-toggle');
+      const sidebarClose = document.getElementById('sidebar-close');
+      const modeButtons = Array.from(document.querySelectorAll('.mode-card[data-mode]'));
+      const realtimePageUrl = new URL('dashboard.html', location.href).href;
+      const historyPageUrl = new URL('history.html', location.href).href;
+      const transitPageUrl = new URL('transito.html', location.href).href;
+      const mql = window.matchMedia('(max-width: 900px)');
+
+      function setSidebarCollapsed(collapsed) {
+        body.classList.toggle('sidebar-collapsed', collapsed);
+        if (sidebarToggle) {
+          sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+        }
+      }
+
+      function syncCollapsed() {
+        const shouldCollapse = body.classList.contains('sidebar-collapsed') || mql.matches;
+        setSidebarCollapsed(shouldCollapse);
+      }
+
+      if (mql.addEventListener) {
+        mql.addEventListener('change', syncCollapsed);
+      } else if (mql.addListener) {
+        mql.addListener(syncCollapsed);
+      }
+
+      syncCollapsed();
+
+      sidebarToggle?.addEventListener('click', () => setSidebarCollapsed(false));
+      sidebarClose?.addEventListener('click', () => setSidebarCollapsed(true));
+
+      function setActiveMode(modeName) {
+        modeButtons.forEach(btn => {
+          const isActive = btn.dataset.mode === modeName;
+          btn.classList.toggle('mode-card--active', isActive);
+          btn.setAttribute('aria-pressed', String(isActive));
+        });
+      }
+
+      const currentPage = location.pathname.split('/').pop()?.toLowerCase();
+      const defaultModeFromPath = currentPage === 'fleet.html'
+        ? 'fleet'
+        : currentPage === 'history.html'
+          ? 'history'
+          : currentPage === 'transito.html'
+            ? 'transit'
+          : 'realtime';
+
+      setActiveMode(defaultModeFromPath);
+
+      modeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const nextMode = button.dataset.mode;
+          if (nextMode === 'realtime') {
+            location.href = realtimePageUrl;
+            return;
+          }
+          if (nextMode === 'history') {
+            location.href = historyPageUrl;
+            return;
+          }
+          if (nextMode === 'transit') {
+            location.href = transitPageUrl;
+            return;
+          }
+          setActiveMode(nextMode);
+        });
+      });
+
+      const tabButtons = Array.from(document.querySelectorAll('.fleet-tab-main'));
+      const tabPanels = Array.from(document.querySelectorAll('.fleet-tab-panel'));
+
+      function setActiveTab(tabName) {
+        tabButtons.forEach(button => {
+          const isActive = button.dataset.tab === tabName;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-selected', String(isActive));
+        });
+        tabPanels.forEach(panel => {
+          const isActive = panel.id === `fleet-tab-${tabName}`;
+          panel.classList.toggle('is-active', isActive);
+        });
+        if (tabName === "series") {
+          requestAnimationFrame(() => {
+            handleSeriesChartResize();
+            requestAnimationFrame(() => handleSeriesChartResize());
+          });
+        }
+        if (tabName === "typology") {
+          requestAnimationFrame(() => {
+            handleTypologyChartResize();
+            requestAnimationFrame(() => handleTypologyChartResize());
+          });
+        }
+      }
+
+      tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const nextTab = button.dataset.tab;
+          setActiveTab(nextTab);
+        });
+      });
+
+
+      const typologyChartCanvas = document.getElementById('fleet-typology-chart');
+      const seriesChartCanvas = document.getElementById('fleet-series-chart');
+      const seriesRouteChartCanvas = document.getElementById('fleet-series-route-chart');
+      const typologyDistributionChartCanvas = document.getElementById('fleet-typology-distribution-chart');
+      const typologyModelChartCanvas = document.getElementById('fleet-typology-model-chart');
+      const typologyRouteChartCanvas = document.getElementById('fleet-typology-route-chart');
+      const typologyRoutePills = document.getElementById('fleet-typology-route-pills');
+      const typologyDistributionTitle = document.getElementById('fleet-typology-distribution-title');
+      const typologyModelTitle = document.getElementById('fleet-typology-model-title');
+      const topRoutesTableBody = document.getElementById('fleet-top-routes-table');
+      const newEntriesTableBody = document.getElementById('fleet-new-entries-table');
+      const seriesSearchInput = document.getElementById('fleet-series-search');
+      const seriesSelectedPill = document.getElementById('fleet-series-selected-pill');
+      const seriesSelectedLabel = document.getElementById('fleet-series-selected-label');
+      const seriesSearchClear = document.getElementById('fleet-series-clear');
+      const seriesInputWrapper = document.querySelector('.fleet-series-input-wrapper');
+      const seriesResults = document.getElementById('fleet-series-results');
+      const seriesSearchBox = document.querySelector('.fleet-series-search');
+      const seriesUnitsChip = document.getElementById('fleet-series-units');
+      const seriesRoutesChip = document.getElementById('fleet-series-routes');
+      const seriesRoutePills = document.getElementById('fleet-series-route-pills');
+      const seriesTableTitle = document.getElementById('fleet-series-table-title');
+      const seriesTableBody = document.getElementById('fleet-series-table-body');
+      const seriesSortButtons = Array.from(document.querySelectorAll('.fleet-series-sort'));
+      const typologyToggleButtons = Array.from(document.querySelectorAll('.fleet-typology-toggle .fleet-tab'));
+      const typologySelect = document.getElementById('fleet-typology-select');
+      const typologySummary = document.getElementById('fleet-typology-summary');
+      const FLEET_VEHICLES_PATH = "/frota/resumo-diario/veiculos";
+      const FLEET_HISTORY_VEHICLES_PATH = "/frota/vehicles";
+      const FLEET_MODEL_CSV_URL = new URL("frota.csv", location.href);
+      const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href);
+      const FLEET_REFRESH_INTERVAL_MS = 60 * 1000;
+      let fleetModelRanges = [];
+      let typologyChart = null;
+      let seriesChart = null;
+      let seriesRouteChart = null;
+      let typologyDistributionChart = null;
+      let typologyModelChart = null;
+      let typologyRouteChart = null;
+      let currentSeriesSelection = "";
+      let lastFleetPayload = [];
+      let lastHistoryPayload = [];
+      let seriesModelsCache = [];
+      let currentTypologyMode = "Autocarro";
+      let currentTypologySelection = "";
+      let seriesTableSortKey = "vehicle";
+      let seriesTableSortDir = "asc";
+      let seriesInputCleared = false;
+      let seriesJustSelectedAt = 0;
+      let seriesSelectionCleared = false;
+      const routeLabelById = new Map();
+      let routesCatalogLoaded = false;
+      const STORAGE_PREFIX = "fleet-overview:";
+
+      const ZONE_COLOR_BY_NAME = {
+        Bairro: "#FFE113",
+        Centro: "#FF7F00",
+        Ocidental: "#FF0078",
+        Madrugada: "#0060A9",
+        Transversal: "#808080",
+        Oriental: "#F70002",
+        Noroeste: "#00A0EF",
+        Norte: "#39BA2E"
+      };
+
+      const ZONE_ROUTE_BASES = {
+        Centro: new Set([
+          "12E", "24E", "25E", "28E", "51E", "52E", "53E", "54E", "55E",
+          "702", "706", "709", "712", "713", "730", "734", "737", "740",
+          "773", "774", "790", "797"
+        ]),
+        Ocidental: new Set([
+          "15E", "18E", "714", "723", "732", "748", "751", "760", "776",
+          "784", "786"
+        ]),
+        Madrugada: new Set([
+          "201", "202", "203", "204", "205", "206", "207", "208", "209", "210"
+        ]),
+        Transversal: new Set([
+          "701", "703", "720", "727", "728", "728F", "738", "742", "750", "752",
+          "753", "756", "767"
+        ]),
+        Oriental: new Set([
+          "16E", "705", "708", "718", "722", "725", "731", "744", "745", "749",
+          "755", "759", "779", "781", "782", "783", "793", "794"
+        ]),
+        Noroeste: new Set([
+          "711", "716", "724", "726", "729", "746", "754", "758", "763", "764",
+          "765", "768", "770", "771", "780", "799"
+        ]),
+        Norte: new Set([
+          "717", "735", "736", "747", "757", "777", "778", "796", "798"
+        ])
+      };
+
+      function parseFleetModelCsv(text) {
+        if (!text) return [];
+        const cleaned = text.replace(/\r/g, "\n");
+        const lines = cleaned.split("\n").map(line => line.trim()).filter(Boolean);
+        if (lines.length <= 1) return [];
+        const ranges = [];
+        for (let i = 1; i < lines.length; i += 1) {
+          const parts = lines[i].split(",");
+          if (parts.length < 6) continue;
+          const start = Number.parseInt(parts[0], 10);
+          const end = Number.parseInt(parts[1], 10);
+          if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+          ranges.push({
+            start,
+            end,
+            model: (parts[2] || "").trim(),
+            type: (parts[3] || "").trim(),
+            category: (parts[4] || "").trim(),
+            energy: (parts[5] || "").trim()
+          });
+        }
+        return ranges;
+      }
+
+      function splitCsvLine(line) {
+        const result = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const char = line[i];
+          if (char === '"' && line[i + 1] === '"') {
+            current += '"';
+            i += 1;
+            continue;
+          }
+          if (char === '"') {
+            inQuotes = !inQuotes;
+            continue;
+          }
+          if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = "";
+            continue;
+          }
+          current += char;
+        }
+        result.push(current);
+        return result;
+      }
+
+      function normalizeRouteKey(value) {
+        if (value == null) return "";
+        return String(value).trim();
+      }
+
+      function getBaseRouteKey(value) {
+        const normalized = normalizeRouteKey(value);
+        if (!normalized) return "";
+        const [base] = normalized.split("_");
+        return base || normalized;
+      }
+
+      function parseRouteCodeParts(routeIdOrName) {
+        const rawLabel = String(routeIdOrName ?? "").trim();
+        const normalizedInput = normalizeRouteKey(rawLabel);
+        const leading = rawLabel.match(/^\s*([0-9]{1,3}[A-Z]?)(?=[^0-9A-Z]|$)/i);
+        if (leading) {
+          const code = leading[1].toUpperCase();
+          const digits = code.match(/(\d{1,3})/);
+          const codeBase = (/^\d{3}[01]$/.test(code)) ? code.slice(0, 3) : (digits ? digits[1] : code);
+          return { code, codeBase };
+        }
+        if (normalizedInput && !normalizedInput.includes("_")) {
+          const simpleMatch = normalizedInput.match(/^([0-9]{1,3}[A-Z]?)/i);
+          if (simpleMatch && simpleMatch[0].length === normalizedInput.length) {
+            const code = simpleMatch[1].toUpperCase();
+            const digits = code.match(/(\d{1,3})/);
+            const codeBase = (/^\d{3}[01]$/.test(code)) ? code.slice(0, 3) : (digits ? digits[1] : code);
+            return { code, codeBase };
+          }
+        }
+        const base = getBaseRouteKey(normalizedInput);
+        const candidate = (routeLabelById.get(normalizedInput) || routeLabelById.get(base) || rawLabel || base || "").toUpperCase();
+        const normalizedCandidate = candidate.replace(/[^A-Z0-9]/g, "");
+        const match = normalizedCandidate.match(/(\d{1,3}[A-Z]?)/);
+        const code = match ? match[1] : normalizedCandidate;
+        const codeBase = (() => {
+          if (/^\d{3}[01]$/.test(code)) return code.slice(0, 3);
+          const digits = code.match(/(\d{1,3})/);
+          return digits ? digits[1] : code;
+        })();
+        return { code, codeBase };
+      }
+
+      async function loadRoutesCatalog() {
+        if (routesCatalogLoaded) return;
+        try {
+          const cached = readCache("routes-txt");
+          let text = cached?.text || "";
+          if (!text) {
+            const resp = await fetch(ROUTES_DATA_URL, { cache: "no-store" });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            text = await resp.text();
+            writeCache("routes-txt", { text }, 24 * 60 * 60 * 1000);
+          }
+          const lines = text.replace(/\r/g, "\n").split("\n");
+          if (!lines.length) return;
+          const header = splitCsvLine(lines[0]).map(h => h.replace(/^\ufeff/, "").trim());
+          const idxRouteId = header.indexOf("route_id");
+          const idxShort = header.indexOf("route_short_name");
+          if (idxRouteId < 0 || idxShort < 0) return;
+          for (let i = 1; i < lines.length; i += 1) {
+            const rawLine = lines[i];
+            if (!rawLine || !rawLine.trim()) continue;
+            const parts = splitCsvLine(rawLine);
+            const routeId = (parts[idxRouteId] || "").trim();
+            const shortName = (parts[idxShort] || "").trim();
+            if (!routeId || !shortName) continue;
+            const baseId = getBaseRouteKey(routeId);
+            if (!routeLabelById.has(baseId)) routeLabelById.set(baseId, shortName);
+            if (!routeLabelById.has(routeId)) routeLabelById.set(routeId, shortName);
+          }
+          routesCatalogLoaded = true;
+        } catch (err) {
+          console.warn("Falha ao carregar gtfs/routes.txt:", err);
+        }
+      }
+
+      function resolvePublicRouteLabel(value) {
+        const raw = normalizeRouteKey(value);
+        const base = getBaseRouteKey(raw);
+        return routeLabelById.get(base) || routeLabelById.get(raw) || base || raw;
+      }
+
+      function definirZona(routeIdOrName) {
+        const { code, codeBase } = parseRouteCodeParts(routeIdOrName);
+        if (!code && !codeBase) return "";
+        if (code.endsWith("B")) return "Bairro";
+        if (ZONE_ROUTE_BASES.Madrugada.has(codeBase)) return "Madrugada";
+        for (const [zone, routes] of Object.entries(ZONE_ROUTE_BASES)) {
+          if (routes.has(code) || routes.has(codeBase)) return zone;
+        }
+        return "";
+      }
+
+      function getZoneColor(zoneName) {
+        return ZONE_COLOR_BY_NAME[zoneName] || null;
+      }
+
+      function pillStyleForRoute(label) {
+        const zone = definirZona(label);
+        const color = getZoneColor(zone);
+        const bg = color || "#e2e8f0";
+        const fg = "#ffffff";
+        const border = color || "rgba(15, 23, 42, 0.12)";
+        const title = zone || "Carreira";
+        return { bg, fg, border, title };
+      }
+
+      async function loadFleetModelRanges() {
+        if (fleetModelRanges.length) return fleetModelRanges;
+        try {
+          const cached = readCache("frota-csv");
+          if (cached?.text) {
+            fleetModelRanges = parseFleetModelCsv(cached.text);
+            if (fleetModelRanges.length) return fleetModelRanges;
+          }
+          const resp = await fetch(FLEET_MODEL_CSV_URL, { cache: "no-store" });
+          if (!resp.ok) return fleetModelRanges;
+          const text = await resp.text();
+          fleetModelRanges = parseFleetModelCsv(text);
+          if (fleetModelRanges.length) writeCache("frota-csv", { text }, 24 * 60 * 60 * 1000);
+        } catch (err) {
+          console.warn("Falha ao carregar frota.csv", err);
+        }
+        return fleetModelRanges;
+      }
+
+      function fleetCategoryForId(value) {
+        const candidate = value == null ? "" : String(value).trim().replace(/^#/, "");
+        const numericId = Number.parseInt(candidate, 10);
+        if (!Number.isFinite(numericId)) return "";
+        for (const range of fleetModelRanges) {
+          if (numericId >= range.start && numericId <= range.end) {
+            return range.category || "";
+          }
+        }
+        return "";
+      }
+
+      function fleetModelForId(value) {
+        const candidate = value == null ? "" : String(value).trim().replace(/^#/, "");
+        const numericId = Number.parseInt(candidate, 10);
+        if (!Number.isFinite(numericId)) return "";
+        for (const range of fleetModelRanges) {
+          if (numericId >= range.start && numericId <= range.end) {
+            return range.model || "";
+          }
+        }
+        return "";
+      }
+
+      function fleetTypeForId(value) {
+        const candidate = value == null ? "" : String(value).trim().replace(/^#/, "");
+        const numericId = Number.parseInt(candidate, 10);
+        if (!Number.isFinite(numericId)) return "";
+        for (const range of fleetModelRanges) {
+          if (numericId >= range.start && numericId <= range.end) {
+            return range.type || "";
+          }
+        }
+        return "";
+      }
+
+      function fleetEnergyForId(value) {
+        const candidate = value == null ? "" : String(value).trim().replace(/^#/, "");
+        const numericId = Number.parseInt(candidate, 10);
+        if (!Number.isFinite(numericId)) return "";
+        for (const range of fleetModelRanges) {
+          if (numericId >= range.start && numericId <= range.end) {
+            return range.energy || "";
+          }
+        }
+        return "";
+      }
+
+      function normalizeEnergyLabel(value) {
+        if (!value) return "";
+        const raw = String(value).trim();
+        if (!raw) return "";
+        const lower = raw.toLowerCase();
+        if (lower.startsWith("ele")) return "Elétrico";
+        if (lower.startsWith("gasó") || lower.startsWith("gaso") || lower.includes("diesel")) return "Gasóleo";
+        if (lower.startsWith("gás") || lower.startsWith("gas") || lower.includes("gnc")) return "Gás";
+        return raw;
+      }
+
+      function normalizeTypeLabel(value) {
+        if (!value) return "";
+        const raw = String(value).trim();
+        if (!raw) return "";
+        const lower = raw.toLowerCase();
+        if (lower.startsWith("auto")) return "Autocarro";
+        if (lower.startsWith("elé") || lower.startsWith("ele")) return "Elétrico";
+        return raw;
+      }
+
+      function chartColors(count) {
+        const palette = ['#f59f00', '#f97316', '#eab308', '#22c55e', '#38bdf8', '#6366f1'];
+        return Array.from({ length: count }, (_, idx) => palette[idx % palette.length]);
+      }
+
+      function resolveChartColors() {
+        const styles = getComputedStyle(document.body);
+        return {
+          axis: (styles.getPropertyValue('--chart-axis-color') || '#0f172a').trim(),
+          grid: (styles.getPropertyValue('--chart-grid-color') || 'rgba(15, 23, 42, 0.12)').trim()
+        };
+      }
+
+      function toRgba(color, alpha) {
+        if (!color) return `rgba(245, 159, 0, ${alpha})`;
+        const trimmed = String(color).trim();
+        if (trimmed.startsWith("rgba(")) return trimmed.replace(/rgba\(([^,]+),([^,]+),([^,]+),([^)]+)\)/, `rgba($1,$2,$3,${alpha})`);
+        if (trimmed.startsWith("rgb(")) return trimmed.replace(/rgb\(([^,]+),([^,]+),([^)]+)\)/, `rgba($1,$2,$3,${alpha})`);
+        if (!trimmed.startsWith("#")) return trimmed;
+        const hex = trimmed.slice(1);
+        const full = hex.length === 3
+          ? hex.split("").map(ch => ch + ch).join("")
+          : hex.padEnd(6, "0").slice(0, 6);
+        const r = Number.parseInt(full.slice(0, 2), 16);
+        const g = Number.parseInt(full.slice(2, 4), 16);
+        const b = Number.parseInt(full.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+
+      function seriesRouteBarColors(labels) {
+        if (!Array.isArray(labels)) return chartColors(1);
+        return labels.map(label => pillStyleForRoute(label).bg);
+      }
+
+      function seriesEnergyBarColors(energies) {
+        if (!Array.isArray(energies) || !energies.length) return ['#94a3b8'];
+        return energies.map(label => {
+          const normalized = normalizeEnergyLabel(label);
+          if (normalized === "Elétrico") return "#f59f00";
+          if (normalized === "Gás") return "#22c55e";
+          if (normalized === "Gasóleo") return "#94a3b8";
+          return "#94a3b8";
+        });
+      }
+
+      function syncSeriesChartHeight(count) {
+        if (!seriesChartCanvas) return;
+        const wrapper = seriesChartCanvas.closest(".fleet-chart-visual");
+        if (!wrapper) return;
+        const safeCount = Number.isFinite(count) && count > 0 ? count : 1;
+        const base = 220;
+        const perBar = 28;
+        const target = Math.max(base, safeCount * perBar + 60);
+        wrapper.style.minHeight = `${target}px`;
+      }
+
+      function integerTickOptions(color) {
+        return {
+          color,
+          precision: 0,
+          stepSize: 20,
+          callback: value => (Number.isInteger(value) ? value : null)
+        };
+      }
+
+      function renderTypologyChart(labels, values) {
+        if (!typologyChartCanvas || !window.Chart) return;
+        const { axis } = resolveChartColors();
+        if (typologyChart) {
+          typologyChart.data.labels = labels;
+          typologyChart.data.datasets[0].data = values;
+          typologyChart.data.datasets[0].backgroundColor = chartColors(values.length || 1);
+          typologyChart.options.plugins.legend.labels.color = axis;
+          typologyChart.update();
+          return;
+        }
+        typologyChart = new Chart(typologyChartCanvas.getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              backgroundColor: chartColors(values.length || 1),
+              borderColor: 'rgba(255, 255, 255, 0.9)',
+              borderWidth: 2,
+              hoverOffset: 6,
+              spacing: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: axis,
+                  boxWidth: 10,
+                  boxHeight: 10,
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                  padding: 16
+                }
+              }
+            },
+            cutout: '68%'
+          }
+        });
+      }
+
+      function renderSeriesChart(labels, values, energies) {
+        if (!seriesChartCanvas || !window.Chart) return;
+        const { axis, grid } = resolveChartColors();
+        const barColors = seriesEnergyBarColors(energies);
+        const barFill = barColors.map(color => toRgba(color, 0.5));
+        syncSeriesChartHeight(labels.length);
+        if (seriesChart) {
+          seriesChart.data.labels = labels;
+          seriesChart.data.datasets[0].data = values;
+          seriesChart.data.datasets[0].backgroundColor = barFill;
+          seriesChart.data.datasets[0].borderColor = barColors;
+          seriesChart.options.indexAxis = "y";
+          seriesChart.options.scales.x.ticks = integerTickOptions(axis);
+          seriesChart.options.scales.x.grid.color = grid;
+          seriesChart.options.scales.y.ticks.color = axis;
+          seriesChart.options.scales.y.grid.display = false;
+          seriesChart.update();
+          return;
+        }
+        seriesChart = new Chart(seriesChartCanvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Veículos',
+              data: values,
+              backgroundColor: barFill,
+              borderColor: barColors,
+              borderWidth: 1.5,
+              borderRadius: 10
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            scales: {
+              x: {
+                ticks: integerTickOptions(axis),
+                grid: { color: grid }
+              },
+              y: {
+                ticks: { color: axis },
+                grid: { display: false }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+
+      function renderSeriesRouteChart(labels, values) {
+        if (!seriesRouteChartCanvas || !window.Chart) return;
+        const { axis, grid } = resolveChartColors();
+        const barColors = seriesRouteBarColors(labels);
+        const barFill = barColors.map(color => toRgba(color, 0.45));
+        syncSeriesRouteChartLayout(labels.length);
+        if (seriesRouteChart) {
+          seriesRouteChart.data.labels = labels;
+          seriesRouteChart.data.datasets[0].data = values;
+          seriesRouteChart.data.datasets[0].backgroundColor = barFill;
+          seriesRouteChart.data.datasets[0].borderColor = barColors;
+          seriesRouteChart.options.scales.x.ticks.color = axis;
+          seriesRouteChart.options.scales.y.ticks = integerTickOptions(axis);
+          seriesRouteChart.options.scales.y.grid.color = grid;
+          seriesRouteChart.update();
+          requestAnimationFrame(() => {
+            syncSeriesRouteChartLayout(labels.length);
+            syncSeriesRoutePillsAlignment();
+          });
+          return;
+        }
+        seriesRouteChart = new Chart(seriesRouteChartCanvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Veículos',
+              data: values,
+              backgroundColor: barFill,
+              borderColor: barColors,
+              borderWidth: 1.5,
+              borderRadius: 10
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                ticks: { color: axis, display: false },
+                grid: { display: false }
+              },
+              y: {
+                ticks: integerTickOptions(axis),
+                grid: { color: grid }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+        requestAnimationFrame(() => {
+          syncSeriesRouteChartLayout(labels.length);
+          syncSeriesRoutePillsAlignment();
+        });
+      }
+
+      function renderTypologyDistributionChart(labels, values) {
+        if (!typologyDistributionChartCanvas || !window.Chart) return;
+        const { axis } = resolveChartColors();
+        if (typologyDistributionChart) {
+          typologyDistributionChart.data.labels = labels;
+          typologyDistributionChart.data.datasets[0].data = values;
+          typologyDistributionChart.data.datasets[0].backgroundColor = chartColors(values.length || 1);
+          typologyDistributionChart.options.plugins.legend.labels.color = axis;
+          typologyDistributionChart.update();
+          return;
+        }
+        typologyDistributionChart = new Chart(typologyDistributionChartCanvas.getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              backgroundColor: chartColors(values.length || 1),
+              borderColor: 'rgba(255, 255, 255, 0.9)',
+              borderWidth: 2,
+              hoverOffset: 6,
+              spacing: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: axis,
+                  boxWidth: 10,
+                  boxHeight: 10,
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                  padding: 16
+                }
+              }
+            },
+            cutout: '68%'
+          }
+        });
+      }
+
+      function renderTypologyModelChart(labels, values) {
+        if (!typologyModelChartCanvas || !window.Chart) return;
+        const { axis } = resolveChartColors();
+        if (typologyModelChart) {
+          typologyModelChart.data.labels = labels;
+          typologyModelChart.data.datasets[0].data = values;
+          typologyModelChart.data.datasets[0].backgroundColor = chartColors(values.length || 1);
+          typologyModelChart.options.plugins.legend.labels.color = axis;
+          typologyModelChart.update();
+          return;
+        }
+        typologyModelChart = new Chart(typologyModelChartCanvas.getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              backgroundColor: chartColors(values.length || 1),
+              borderColor: 'rgba(255, 255, 255, 0.9)',
+              borderWidth: 2,
+              hoverOffset: 6,
+              spacing: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: axis,
+                  boxWidth: 10,
+                  boxHeight: 10,
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                  padding: 16
+                }
+              }
+            },
+            cutout: '68%'
+          }
+        });
+      }
+
+      function renderTypologyRouteChart(labels, values) {
+        if (!typologyRouteChartCanvas || !window.Chart) return;
+        const { axis, grid } = resolveChartColors();
+        const barColors = seriesRouteBarColors(labels);
+        const barFill = barColors.map(color => toRgba(color, 0.45));
+        syncTypologyRouteChartLayout(labels.length);
+        if (typologyRouteChart) {
+          typologyRouteChart.data.labels = labels;
+          typologyRouteChart.data.datasets[0].data = values;
+          typologyRouteChart.data.datasets[0].backgroundColor = barFill;
+          typologyRouteChart.data.datasets[0].borderColor = barColors;
+          typologyRouteChart.options.scales.x.ticks.color = axis;
+          typologyRouteChart.options.scales.y.ticks = integerTickOptions(axis);
+          typologyRouteChart.options.scales.y.grid.color = grid;
+          typologyRouteChart.update();
+          requestAnimationFrame(() => {
+            syncTypologyRouteChartLayout(labels.length);
+            syncTypologyRoutePillsAlignment();
+          });
+          return;
+        }
+        typologyRouteChart = new Chart(typologyRouteChartCanvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Veículos',
+              data: values,
+              backgroundColor: barFill,
+              borderColor: barColors,
+              borderWidth: 1.5,
+              borderRadius: 10
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                ticks: { color: axis, display: false },
+                grid: { display: false }
+              },
+              y: {
+                ticks: integerTickOptions(axis),
+                grid: { color: grid }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+        requestAnimationFrame(() => {
+          syncTypologyRouteChartLayout(labels.length);
+          syncTypologyRoutePillsAlignment();
+        });
+      }
+
+      function syncSeriesRouteChartLayout(count) {
+        const total = Math.max(1, Number(count || 0));
+        const minBarWidth = 44;
+        const host = document.getElementById("fleet-series-route-chart-inner");
+        if (!host || !seriesRouteChartCanvas) return;
+        const container = host.parentElement;
+        const containerWidth = container?.clientWidth || container?.getBoundingClientRect?.().width || seriesRouteChartCanvas.clientWidth || 480;
+        const targetWidth = Math.max(containerWidth, total * minBarWidth);
+        host.style.width = `${targetWidth}px`;
+        const canvasWrap = seriesRouteChartCanvas.parentElement;
+        if (canvasWrap) canvasWrap.style.width = `${targetWidth}px`;
+        if (seriesRoutePills) {
+          seriesRoutePills.style.width = `${targetWidth}px`;
+          seriesRoutePills.style.gridTemplateColumns = `repeat(${total}, minmax(0, 1fr))`;
+          seriesRoutePills.classList.toggle("is-compact", total > 14);
+        }
+      }
+
+      function syncTypologyRouteChartLayout(count) {
+        const total = Math.max(1, Number(count || 0));
+        const minBarWidth = 44;
+        const host = document.getElementById("fleet-typology-route-chart-inner");
+        if (!host || !typologyRouteChartCanvas) return;
+        const container = host.parentElement;
+        const containerWidth = container?.clientWidth || container?.getBoundingClientRect?.().width || typologyRouteChartCanvas.clientWidth || 480;
+        const targetWidth = Math.max(containerWidth, total * minBarWidth);
+        host.style.width = `${targetWidth}px`;
+        const canvasWrap = typologyRouteChartCanvas.parentElement;
+        if (canvasWrap) canvasWrap.style.width = `${targetWidth}px`;
+        if (typologyRoutePills) {
+          typologyRoutePills.style.width = `${targetWidth}px`;
+          typologyRoutePills.style.gridTemplateColumns = `repeat(${total}, minmax(0, 1fr))`;
+          typologyRoutePills.classList.toggle("is-compact", total > 14);
+        }
+      }
+
+      function syncTypologyRoutePillsAlignment() {
+        if (!typologyRouteChart || !typologyRoutePills) return;
+        const chartArea = typologyRouteChart.chartArea;
+        const canvas = typologyRouteChart.canvas;
+        if (!chartArea || !canvas) return;
+        const totalWidth = canvas.clientWidth || canvas.width || 0;
+        const padLeft = Math.max(0, chartArea.left);
+        const padRight = Math.max(0, totalWidth - chartArea.right);
+        typologyRoutePills.style.paddingLeft = `${padLeft}px`;
+        typologyRoutePills.style.paddingRight = `${padRight}px`;
+      }
+
+      function syncSeriesRoutePillsAlignment() {
+        if (!seriesRouteChart || !seriesRoutePills) return;
+        const chartArea = seriesRouteChart.chartArea;
+        const canvas = seriesRouteChart.canvas;
+        if (!chartArea || !canvas) return;
+        const totalWidth = canvas.clientWidth || canvas.width || 0;
+        const padLeft = Math.max(0, chartArea.left);
+        const padRight = Math.max(0, totalWidth - chartArea.right);
+        seriesRoutePills.style.paddingLeft = `${padLeft}px`;
+        seriesRoutePills.style.paddingRight = `${padRight}px`;
+      }
+
+      function handleSeriesChartResize() {
+        if (!seriesRouteChart) return;
+        seriesRouteChart.resize();
+        const count = Array.isArray(seriesRouteChart.data?.labels) ? seriesRouteChart.data.labels.length : 0;
+        syncSeriesRouteChartLayout(count);
+        requestAnimationFrame(() => syncSeriesRoutePillsAlignment());
+      }
+
+      function handleTypologyChartResize() {
+        if (!typologyRouteChart) return;
+        typologyRouteChart.resize();
+        const count = Array.isArray(typologyRouteChart.data?.labels) ? typologyRouteChart.data.labels.length : 0;
+        syncTypologyRouteChartLayout(count);
+        requestAnimationFrame(() => syncTypologyRoutePillsAlignment());
+      }
+
+      function updateSeriesSortUI() {
+        if (!seriesSortButtons.length) return;
+        seriesSortButtons.forEach(button => {
+          const key = button.dataset.sort;
+          const isActive = key === seriesTableSortKey;
+          button.classList.toggle("is-active", isActive);
+          button.dataset.dir = isActive ? seriesTableSortDir : "";
+          button.setAttribute("aria-pressed", String(isActive));
+          const th = button.closest("th");
+          if (th) {
+            th.setAttribute("aria-sort", isActive ? (seriesTableSortDir === "asc" ? "ascending" : "descending") : "none");
+          }
+        });
+      }
+
+      function limitChartCategories(labels, values, maxItems) {
+        if (!Array.isArray(labels) || !Array.isArray(values)) return { labels: [], values: [] };
+        const paired = labels.map((label, idx) => ({ label, value: Number(values[idx] || 0) }));
+        paired.sort((a, b) => b.value - a.value);
+        if (!maxItems || paired.length <= maxItems) {
+          return { labels: paired.map(item => item.label), values: paired.map(item => item.value) };
+        }
+        const keep = paired.slice(0, maxItems);
+        const rest = paired.slice(maxItems);
+        const restValue = rest.reduce((sum, item) => sum + item.value, 0);
+        return {
+          labels: [...keep.map(item => item.label), "Outros"],
+          values: [...keep.map(item => item.value), restValue]
+        };
+      }
+
+      function formatTimestamp(ts) {
+        const num = Number(ts);
+        if (!Number.isFinite(num)) return "—";
+        const date = new Date(num * 1000);
+        if (Number.isNaN(date.getTime())) return "—";
+        return date.toLocaleString("pt-PT", { hour12: false });
+      }
+
+      function formatTimeAgo(secondsTimestamp) {
+        const ts = Number(secondsTimestamp);
+        if (!Number.isFinite(ts)) return "—";
+        const now = Date.now();
+        const diffMs = now - ts * 1000;
+        if (!Number.isFinite(diffMs)) return "—";
+        if (diffMs <= 0) return "agora";
+        const minute = 60 * 1000;
+        const hour = 60 * minute;
+        const day = 24 * hour;
+        if (diffMs < minute) return "agora";
+        if (diffMs < hour) {
+          const mins = Math.round(diffMs / minute);
+          return `há ${mins} min`;
+        }
+        if (diffMs < day) {
+          const hours = Math.round(diffMs / hour);
+          return `há ${hours} h`;
+        }
+        const days = Math.round(diffMs / day);
+        return `há ${days} dias`;
+      }
+
+      function readCache(key) {
+        try {
+          const raw = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") return null;
+          if (parsed.expiresAt && Date.now() > parsed.expiresAt) return null;
+          return parsed;
+        } catch (err) {
+          return null;
+        }
+      }
+
+      function writeCache(key, data, ttlMs) {
+        try {
+          const payload = {
+            ...data,
+            expiresAt: ttlMs ? Date.now() + ttlMs : null
+          };
+          localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(payload));
+        } catch (err) {
+          // ignore storage errors
+        }
+      }
+
+      function setTablePlaceholder(tbody, columns) {
+        if (!tbody) return;
+        tbody.innerHTML = `<tr><td colspan="${columns}" class="fleet-loading">A carregar…</td></tr>`;
+      }
+
+      function setActivityPlaceholder(text) {
+        const tbody = document.getElementById("fleet-vehicle-activity");
+        if (!tbody) return;
+        tbody.innerHTML = `<tr><td colspan="3" class="fleet-loading">${text}</td></tr>`;
+      }
+
+      function formatVehicleLabel(value) {
+        if (value == null) return "—";
+        const trimmed = String(value).trim();
+        return trimmed ? `#${trimmed}` : "—";
+      }
+
+      function formatRouteLabel(label) {
+        const resolved = resolvePublicRouteLabel(label);
+        return resolved || "—";
+      }
+
+      function buildRoutePill(label) {
+        const display = resolvePublicRouteLabel(label) || "—";
+        const style = pillStyleForRoute(display);
+        const safeLabel = display.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const safeTitle = (style.title || "Carreira").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return `<span class="route-pill route-pill--inline" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}" title="${safeTitle}">${safeLabel}</span>`;
+      }
+
+      function updateTopRoutesTable(rows) {
+        if (!topRoutesTableBody) return;
+        if (!rows.length) {
+          setTablePlaceholder(topRoutesTableBody, 3);
+          return;
+        }
+        topRoutesTableBody.innerHTML = rows.map(row => `
+          <tr>
+            <td>${buildRoutePill(row.route)}</td>
+            <td>${row.count}</td>
+            <td>${row.tipologias || "—"}</td>
+          </tr>
+        `).join("");
+      }
+
+      function updateNewEntriesTable(rows) {
+        if (!newEntriesTableBody) return;
+        if (!rows.length) {
+          setTablePlaceholder(newEntriesTableBody, 5);
+          return;
+        }
+        newEntriesTableBody.innerHTML = rows.map(row => `
+          <tr>
+            <td>#${row.id}</td>
+            <td>${row.model || "—"}</td>
+            <td>${row.routesHtml || "—"}</td>
+            <td>${formatTimestamp(row.first)}</td>
+            <td>${formatTimestamp(row.last)}</td>
+          </tr>
+        `).join("");
+      }
+
+      function setSeriesResultsOpen(isOpen) {
+        if (!seriesResults) return;
+        seriesResults.classList.toggle("is-open", isOpen);
+        if (seriesSearchBox) {
+          seriesSearchBox.setAttribute("aria-expanded", String(isOpen));
+        }
+      }
+
+      function renderSeriesResults(list, activeValue) {
+        if (!seriesResults) return;
+        if (!list.length) {
+          seriesResults.innerHTML = `<div class="fleet-loading">Sem resultados.</div>`;
+          return;
+        }
+        seriesResults.innerHTML = list.map(model => {
+          const isActive = model === activeValue;
+          return `
+            <div class="fleet-search-result fleet-series-result${isActive ? " is-active" : ""}" role="option" data-value="${model}">
+              <div class="fleet-search-result__meta">
+                <strong>${model}</strong>
+                <span>Série</span>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function filterSeriesModels(query) {
+        const normalized = (query || "").trim().toLowerCase();
+        if (!normalized) return seriesModelsCache.slice(0, 12);
+        return seriesModelsCache.filter(model => model.toLowerCase().includes(normalized)).slice(0, 12);
+      }
+
+      let seriesSearchHasInteracted = false;
+
+      function markSeriesSearchInteracted() {
+        if (seriesSearchHasInteracted) return;
+        seriesSearchHasInteracted = true;
+        setSeriesResultsOpen(true);
+      }
+
+      function clearSelectedSeries() {
+        currentSeriesSelection = "";
+        seriesSelectionCleared = true;
+        seriesInputCleared = false;
+        if (seriesSearchInput) seriesSearchInput.value = "";
+        renderSelectedSeriesPill();
+        const list = filterSeriesModels("");
+        renderSeriesResults(list, "");
+        setSeriesResultsOpen(true);
+        updateSeriesTab(lastFleetPayload, lastHistoryPayload);
+        seriesInputWrapper?.classList.remove("pill-visible");
+        seriesInputWrapper?.classList.add("input-focused");
+        seriesSearchInput?.focus();
+        seriesSearchInput?.select();
+      }
+
+      function renderSelectedSeriesPill() {
+        if (!seriesSelectedPill || !seriesSelectedLabel || !seriesInputWrapper) return;
+        if (!currentSeriesSelection) {
+          seriesSelectedPill.classList.add("hidden");
+          seriesInputWrapper.classList.remove("pill-visible");
+          return;
+        }
+        seriesSelectedLabel.textContent = currentSeriesSelection;
+        seriesSelectedPill.classList.remove("hidden");
+        if (!seriesInputWrapper.classList.contains("input-focused")) {
+          seriesInputWrapper.classList.add("pill-visible");
+        }
+      }
+
+      function applySeriesSelection(value) {
+        currentSeriesSelection = value || "";
+        seriesSelectionCleared = false;
+        if (seriesSearchInput) {
+          seriesSearchInput.value = currentSeriesSelection;
+        }
+        seriesJustSelectedAt = Date.now();
+        seriesInputCleared = false;
+        setSeriesResultsOpen(false);
+        seriesInputWrapper?.classList.remove("input-focused");
+        if (currentSeriesSelection) {
+          seriesInputWrapper?.classList.add("pill-visible");
+        }
+        seriesSearchInput?.blur();
+        renderSelectedSeriesPill();
+        updateSeriesTab(lastFleetPayload, lastHistoryPayload);
+        updateTypologyTab(lastFleetPayload, lastHistoryPayload);
+      }
+
+      function normalizeModelLabel(value) {
+        const trimmed = String(value ?? "").trim();
+        return trimmed || "";
+      }
+
+      function buildSeriesVehiclesFromPayloads(payload, historyPayload) {
+        const combined = new Map();
+
+        if (Array.isArray(historyPayload)) {
+          historyPayload.forEach(row => {
+            const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+            if (!id) return;
+            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id));
+            const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? null;
+            const routes = Array.isArray(row?.last_routes) ? row.last_routes : (row?.last_route ? [row.last_route] : []);
+            const plate = row?.plate ?? row?.placa ?? row?.chapa ?? "";
+            combined.set(String(id), {
+              id,
+              model,
+              lastPing,
+              lastRoutes: routes.filter(Boolean),
+              realtimeRoute: "",
+              plate
+            });
+          });
+        }
+
+        if (Array.isArray(payload)) {
+          payload.forEach(row => {
+            const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+            if (!id) return;
+            const entry = combined.get(String(id)) || { id, lastRoutes: [] };
+            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id)) || entry.model || "";
+            const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
+            const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? entry.lastPing ?? null;
+            const routes = Array.isArray(entry.lastRoutes) ? entry.lastRoutes.slice() : [];
+            if (route && !routes.includes(route)) routes.unshift(route);
+            combined.set(String(id), {
+              ...entry,
+              model,
+              lastPing,
+              lastRoutes: routes,
+              realtimeRoute: route || entry.realtimeRoute || ""
+            });
+          });
+        }
+
+        return Array.from(combined.values());
+      }
+
+      function buildTypologyVehiclesFromPayloads(payload, historyPayload) {
+        const combined = new Map();
+
+        if (Array.isArray(historyPayload)) {
+          historyPayload.forEach(row => {
+            const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+            if (!id) return;
+            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id));
+            const category = normalizeModelLabel(row?.categoria ?? row?.category ?? fleetCategoryForId(id)) || "—";
+            const type = normalizeTypeLabel(row?.tipo ?? row?.type ?? fleetTypeForId(id));
+            const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? null;
+            const routes = Array.isArray(row?.last_routes) ? row.last_routes : (row?.last_route ? [row.last_route] : []);
+            combined.set(String(id), {
+              id,
+              model,
+              category,
+              type,
+              lastPing,
+              lastRoutes: routes.filter(Boolean),
+              realtimeRoute: ""
+            });
+          });
+        }
+
+        if (Array.isArray(payload)) {
+          payload.forEach(row => {
+            const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+            if (!id) return;
+            const entry = combined.get(String(id)) || { id, lastRoutes: [] };
+            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id)) || entry.model || "";
+            const category = normalizeModelLabel(row?.categoria ?? row?.category ?? fleetCategoryForId(id)) || entry.category || "—";
+            const type = normalizeTypeLabel(row?.tipo ?? row?.type ?? fleetTypeForId(id)) || entry.type || "";
+            const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
+            const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? entry.lastPing ?? null;
+            const routes = Array.isArray(entry.lastRoutes) ? entry.lastRoutes.slice() : [];
+            if (route && !routes.includes(route)) routes.unshift(route);
+            combined.set(String(id), {
+              ...entry,
+              model,
+              category,
+              type,
+              lastPing,
+              lastRoutes: routes,
+              realtimeRoute: route || entry.realtimeRoute || ""
+            });
+          });
+        }
+
+        return Array.from(combined.values());
+      }
+
+      function getTypologyActiveVehicles(payload, historyPayload) {
+        const combined = buildTypologyVehiclesFromPayloads(payload, historyPayload);
+        if (Array.isArray(payload) && payload.length) {
+          const todayIds = new Set(payload.map(row => String(row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "")).filter(Boolean));
+          return combined.filter(vehicle => todayIds.has(String(vehicle.id)));
+        }
+        return combined;
+      }
+
+      function updateTypologyTab(payload, historyPayload) {
+        if (!typologyDistributionChartCanvas || !typologySelect) return;
+        const vehicles = getTypologyActiveVehicles(payload, historyPayload);
+        const filtered = vehicles.filter(vehicle => normalizeTypeLabel(vehicle.type) === currentTypologyMode);
+
+        const categoryCounts = new Map();
+        filtered.forEach(vehicle => {
+          const category = normalizeModelLabel(vehicle.category) || "—";
+          categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+        });
+
+        const categoryLabels = Array.from(categoryCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(entry => entry[0]);
+        const categoryValues = categoryLabels.map(label => categoryCounts.get(label));
+        if (typologyDistributionTitle) {
+          const modeLabel = currentTypologyMode ? `de ${currentTypologyMode}` : "";
+          const titleLabel = `Distribuição de tipologias ${modeLabel}`.trim();
+          typologyDistributionTitle.textContent = titleLabel;
+          if (typologyDistributionChartCanvas) {
+            typologyDistributionChartCanvas.setAttribute("aria-label", titleLabel);
+          }
+        }
+        renderTypologyDistributionChart(categoryLabels.length ? categoryLabels : ["Sem dados"], categoryValues.length ? categoryValues : [1]);
+
+        if (!categoryLabels.length) {
+          currentTypologySelection = "";
+          typologySelect.innerHTML = `<option value="">Sem dados</option>`;
+        } else {
+          if (!categoryLabels.includes(currentTypologySelection)) {
+            const standardLabel = categoryLabels.find(label => label.toLowerCase().includes("standard"));
+            currentTypologySelection = standardLabel || categoryLabels[0];
+          }
+          typologySelect.innerHTML = categoryLabels.map(label => {
+            const count = categoryCounts.get(label) || 0;
+            const selected = label === currentTypologySelection ? " selected" : "";
+            return `<option value="${label}"${selected}>${label} (${count})</option>`;
+          }).join("");
+          typologySelect.value = currentTypologySelection;
+        }
+
+        const activeCategory = currentTypologySelection;
+        if (typologyModelTitle) {
+          const titleLabel = activeCategory
+            ? `Distribuição de modelos ${activeCategory}`
+            : "Distribuição de modelos";
+          typologyModelTitle.textContent = titleLabel;
+          if (typologyModelChartCanvas) {
+            typologyModelChartCanvas.setAttribute("aria-label", titleLabel);
+          }
+        }
+        const filteredByCategory = filtered.filter(vehicle => (normalizeModelLabel(vehicle.category) || "—") === activeCategory);
+
+        const modelCounts = new Map();
+        filteredByCategory.forEach(vehicle => {
+          const model = normalizeModelLabel(vehicle.model) || "—";
+          modelCounts.set(model, (modelCounts.get(model) || 0) + 1);
+        });
+
+        const modelLabels = Array.from(modelCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(entry => entry[0]);
+        const modelValues = modelLabels.map(label => modelCounts.get(label));
+        renderTypologyModelChart(modelLabels.length ? modelLabels : ["Sem dados"], modelValues.length ? modelValues : [1]);
+
+        const routeCounts = new Map();
+        filteredByCategory.forEach(vehicle => {
+          const route = vehicle.realtimeRoute || (Array.isArray(vehicle.lastRoutes) ? vehicle.lastRoutes[0] : "") || "";
+          const routeKey = route ? getBaseRouteKey(route) : "";
+          if (!routeKey) return;
+          routeCounts.set(routeKey, (routeCounts.get(routeKey) || 0) + 1);
+        });
+
+        const routeEntries = Array.from(routeCounts.entries()).sort((a, b) => b[1] - a[1]);
+        const routeLabels = routeEntries.map(entry => formatRouteLabel(entry[0]));
+        const routeValues = routeEntries.map(entry => entry[1]);
+        renderTypologyRouteChart(routeLabels.length ? routeLabels : ["—"], routeValues.length ? routeValues : [0]);
+
+        if (typologyRoutePills) {
+          if (!routeEntries.length) {
+            typologyRoutePills.innerHTML = `<span class="fleet-loading">Sem carreiras detetadas.</span>`;
+          } else {
+            typologyRoutePills.innerHTML = routeEntries.map(([routeId]) => {
+              const pill = buildRoutePill(routeId);
+              return `<span>${pill}</span>`;
+            }).join("");
+          }
+        }
+
+        if (typologySummary) {
+          const modelsCount = modelCounts.size;
+          const routesCount = routeCounts.size;
+          const vehiclesCount = filteredByCategory.length;
+          typologySummary.innerHTML = `
+            <span class="fleet-chip">Modelos: ${modelsCount || 0}</span>
+            <span class="fleet-chip">carreiras: ${routesCount || 0}</span>
+            <span class="fleet-chip">Veículos: ${vehiclesCount || 0}</span>
+          `;
+        }
+      }
+
+      function updateSeriesTab(payload, historyPayload) {
+        if (!seriesSearchInput || !seriesTableBody) return;
+
+        const seriesVehicles = buildSeriesVehiclesFromPayloads(payload, historyPayload);
+        const modelSet = new Set();
+        seriesVehicles.forEach(vehicle => {
+          const model = normalizeModelLabel(vehicle.model);
+          if (model) modelSet.add(model);
+        });
+        const models = Array.from(modelSet).sort((a, b) => a.localeCompare(b, "pt-PT", { numeric: true }));
+        seriesModelsCache = models;
+
+        if (!models.length) {
+          seriesSearchInput.value = "";
+          seriesSearchInput.disabled = true;
+          if (seriesResults) seriesResults.innerHTML = "";
+          currentSeriesSelection = "";
+          renderSelectedSeriesPill();
+          if (seriesUnitsChip) seriesUnitsChip.textContent = "Unidades Totais: —";
+          if (seriesRoutesChip) seriesRoutesChip.textContent = "Carreiras ativas: —";
+          if (seriesTableTitle) seriesTableTitle.textContent = "📊 Modelo: — —";
+          setTablePlaceholder(seriesTableBody, 4);
+          renderSeriesRouteChart(["—"], [0]);
+          if (seriesRoutePills) seriesRoutePills.innerHTML = "";
+          return;
+        }
+
+        seriesSearchInput.disabled = false;
+        const isSeriesFocused = seriesSearchInput === document.activeElement;
+
+        if (!currentSeriesSelection || !models.includes(currentSeriesSelection)) {
+          currentSeriesSelection = seriesSelectionCleared ? "" : models[0];
+        }
+        if (!currentSeriesSelection) {
+          if (!isSeriesFocused) {
+            seriesSearchInput.value = "";
+          }
+          seriesInputCleared = false;
+          renderSelectedSeriesPill();
+          if (seriesUnitsChip) seriesUnitsChip.textContent = "Unidades totais: —";
+          if (seriesRoutesChip) seriesRoutesChip.textContent = "Carreiras ativas: —";
+          if (seriesTableTitle) seriesTableTitle.textContent = "📊 Modelo: — —";
+          setTablePlaceholder(seriesTableBody, 4);
+          renderSeriesRouteChart(["—"], [0]);
+          if (seriesRoutePills) seriesRoutePills.innerHTML = "";
+          return;
+        }
+        if (!isSeriesFocused) {
+          seriesSearchInput.value = currentSeriesSelection;
+        }
+        seriesInputCleared = false;
+        seriesSelectionCleared = false;
+        renderSelectedSeriesPill();
+        if (seriesResults && seriesSearchInput === document.activeElement) {
+          const justSelected = Date.now() - seriesJustSelectedAt < 350;
+          if (justSelected) {
+            setSeriesResultsOpen(false);
+            return;
+          }
+          const list = filterSeriesModels(seriesSearchInput.value);
+          renderSeriesResults(list, currentSeriesSelection);
+          setSeriesResultsOpen(true);
+        }
+
+        const filtered = seriesVehicles.filter(vehicle => normalizeModelLabel(vehicle.model) === currentSeriesSelection);
+        const unitsCount = filtered.length;
+
+        const historyModelById = new Map();
+        if (Array.isArray(historyPayload)) {
+          historyPayload.forEach(row => {
+            const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+            if (!id) return;
+            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? "");
+            if (model) historyModelById.set(String(id), model);
+          });
+        }
+
+        const seriesVehiclesToday = Array.isArray(payload)
+          ? payload.map(row => {
+              const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+              if (!id) return null;
+              const modelFromPayload = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? "");
+              const model = modelFromPayload || historyModelById.get(String(id)) || fleetModelForId(id);
+              const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
+              return {
+                id,
+                model,
+                realtimeRoute: route || "",
+                lastRoutes: []
+              };
+            }).filter(Boolean)
+          : [];
+
+        const filteredToday = seriesVehiclesToday.filter(vehicle => normalizeModelLabel(vehicle.model) === currentSeriesSelection);
+        const routeCounts = new Map();
+        filteredToday.forEach(vehicle => {
+          const route = vehicle.realtimeRoute || vehicle.lastRoutes?.[0] || "";
+          const routeKey = route ? getBaseRouteKey(route) : "";
+          if (!routeKey) return;
+          routeCounts.set(routeKey, (routeCounts.get(routeKey) || 0) + 1);
+        });
+
+        const routeEntries = Array.from(routeCounts.entries()).sort((a, b) => b[1] - a[1]);
+        const routeLabels = routeEntries.map(entry => formatRouteLabel(entry[0]));
+        const routeValues = routeEntries.map(entry => entry[1]);
+
+        renderSeriesRouteChart(routeLabels.length ? routeLabels : ["—"], routeValues.length ? routeValues : [0]);
+
+        if (seriesRoutePills) {
+          if (!routeEntries.length) {
+            seriesRoutePills.innerHTML = `<span class="fleet-loading">Sem carreiras detetadas.</span>`;
+          } else {
+            seriesRoutePills.innerHTML = routeEntries.map(([routeId]) => {
+              const pill = buildRoutePill(routeId);
+              return `<span>${pill}</span>`;
+            }).join("");
+          }
+        }
+
+        if (seriesUnitsChip) seriesUnitsChip.textContent = `Unidades totais: ${unitsCount}`;
+        if (seriesRoutesChip) seriesRoutesChip.textContent = `Carreiras ativas: ${routeCounts.size || 0}`;
+        if (seriesTableTitle) seriesTableTitle.textContent = `📊 Modelo: ${currentSeriesSelection} — ${unitsCount} unidades`;
+
+        if (!filtered.length) {
+          setTablePlaceholder(seriesTableBody, 4);
+          return;
+        }
+
+        const tableRows = filtered
+          .slice()
+          .sort((a, b) => {
+            let base = 0;
+            if (seriesTableSortKey === "vehicle") {
+              const left = String(a.id || "").trim();
+              const right = String(b.id || "").trim();
+              base = left.localeCompare(right, "pt-PT", { numeric: true, sensitivity: "base" });
+            } else {
+              base = Number(a.lastPing || 0) - Number(b.lastPing || 0);
+            }
+            return seriesTableSortDir === "asc" ? base : -base;
+          })
+          .map(vehicle => {
+            const routes = Array.isArray(vehicle.lastRoutes) ? vehicle.lastRoutes : [];
+            const uniqueRoutes = Array.from(new Set(routes.filter(Boolean))).slice(0, 5);
+            const routesHtml = uniqueRoutes.length
+              ? uniqueRoutes.map(buildRoutePill).join(" ")
+              : (vehicle.realtimeRoute ? buildRoutePill(vehicle.realtimeRoute) : "—");
+            return `
+              <tr>
+                <td>${formatVehicleLabel(vehicle.id)}</td>
+                <td>${formatTimeAgo(vehicle.lastPing)}</td>
+                <td>${routesHtml}</td>
+                <td>${vehicle.plate || "—"}</td>
+              </tr>
+            `;
+          });
+
+        seriesTableBody.innerHTML = tableRows.join("");
+      }
+
+      async function refreshFleetOverview() {
+        setTablePlaceholder(topRoutesTableBody, 3);
+        setTablePlaceholder(newEntriesTableBody, 5);
+        renderTypologyChart(["A carregar…"], [1]);
+        renderSeriesChart(["A carregar…"], [0], [""]);
+
+        await Promise.all([loadFleetModelRanges(), loadRoutesCatalog()]);
+        const today = new Date().toISOString().split("T")[0];
+        const payload = await fetch(`${FLEET_VEHICLES_PATH}?date=${encodeURIComponent(today)}`, { cache: "no-store" })
+          .then(resp => resp.ok ? resp.json() : [])
+          .catch(err => {
+            console.warn("Falha ao carregar frota diária:", err);
+            return [];
+          });
+
+        const historyPayload = await fetch(FLEET_HISTORY_VEHICLES_PATH, { cache: "no-store" })
+          .then(resp => resp.ok ? resp.json() : [])
+          .catch(err => {
+            console.warn("Falha ao carregar histórico de veículos:", err);
+            return [];
+          });
+
+        lastFleetPayload = Array.isArray(payload) ? payload : [];
+        lastHistoryPayload = Array.isArray(historyPayload) ? historyPayload : [];
+
+        if (!lastFleetPayload.length) {
+          updateTopRoutesTable([]);
+          renderTypologyChart(["Sem dados"], [1]);
+          renderSeriesChart(["—"], [0], [""]);
+        } else {
+          const routeBuckets = new Map();
+          const typologyCounts = new Map();
+          const modelCounts = new Map();
+          const modelEnergyByLabel = new Map();
+
+          lastFleetPayload.forEach(row => {
+            const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+            const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
+            const rawCategory = row?.categoria ?? row?.category ?? "";
+            const category = rawCategory || fleetCategoryForId(id) || "—";
+            const routeKey = route ? getBaseRouteKey(route) : "—";
+            const energy = normalizeEnergyLabel(fleetEnergyForId(id)) || "";
+
+            if (!routeBuckets.has(routeKey)) {
+              routeBuckets.set(routeKey, { count: 0, typologies: new Map() });
+            }
+            const bucket = routeBuckets.get(routeKey);
+            bucket.count += 1;
+            bucket.typologies.set(category, (bucket.typologies.get(category) || 0) + 1);
+
+            typologyCounts.set(category, (typologyCounts.get(category) || 0) + 1);
+
+            const modelLabel = fleetModelForId(id) || "—";
+            modelCounts.set(modelLabel, (modelCounts.get(modelLabel) || 0) + 1);
+            if (energy && modelLabel && !modelEnergyByLabel.has(modelLabel)) {
+              modelEnergyByLabel.set(modelLabel, energy);
+            }
+          });
+
+          const topRoutes = Array.from(routeBuckets.entries())
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 20)
+            .map(([route, data]) => {
+              const tipologias = Array.from(data.typologies.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(entry => entry[0])
+                .slice(0, 3)
+                .join(", ");
+              return { route, count: data.count, tipologias };
+            });
+
+          updateTopRoutesTable(topRoutes);
+
+          const typologyLabels = Array.from(typologyCounts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(entry => entry[0]);
+          const typologyValues = typologyLabels.map(label => typologyCounts.get(label));
+          renderTypologyChart(typologyLabels.length ? typologyLabels : ["Sem dados"], typologyValues.length ? typologyValues : [1]);
+
+          const seriesLabels = Array.from(modelCounts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(entry => entry[0]);
+          const seriesValues = seriesLabels.map(label => modelCounts.get(label));
+          const seriesEnergies = seriesLabels.map(label => modelEnergyByLabel.get(label) || "");
+          renderSeriesChart(seriesLabels.length ? seriesLabels : ["—"], seriesValues.length ? seriesValues : [0], seriesEnergies.length ? seriesEnergies : [""]);
+        }
+
+        if (lastHistoryPayload.length) {
+          const todayLastPingById = new Map();
+          if (Array.isArray(lastFleetPayload) && lastFleetPayload.length) {
+            lastFleetPayload.forEach(row => {
+              const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+              if (!id) return;
+              const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? null;
+              if (lastPing != null) todayLastPingById.set(String(id), lastPing);
+            });
+          }
+          const newEntries = lastHistoryPayload
+            .map(row => {
+              const routes = Array.isArray(row?.last_routes) ? row.last_routes : (row?.last_route ? [row.last_route] : []);
+              const routesHtml = routes.slice(0, 3).map(buildRoutePill).join(" ");
+              const modelFromPayload = row?.modelo ?? row?.model ?? row?.vehicle_model ?? null;
+              const fallbackModel = fleetModelForId(row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo);
+              const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "—";
+              const todayLastPing = todayLastPingById.get(String(id));
+              return {
+                id,
+                model: modelFromPayload || fallbackModel || "",
+                routesHtml,
+                first: row?.first_ping ?? row?.primeiro_ping ?? row?.timestamp_inicio,
+                last: todayLastPing ?? row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim
+              };
+            })
+            .sort((a, b) => Number(b.first || 0) - Number(a.first || 0))
+            .slice(0, 10);
+
+          updateNewEntriesTable(newEntries);
+        } else {
+          updateNewEntriesTable([]);
+        }
+
+        updateSeriesTab(lastFleetPayload, lastHistoryPayload);
+        updateTypologyTab(lastFleetPayload, lastHistoryPayload);
+      }
+
+      let fleetVehiclesCache = [];
+      let historyVehiclesCache = [];
+      const vehicleSearchInput = document.getElementById("fleet-vehicle-search");
+      const vehicleResults = document.getElementById("fleet-vehicle-results");
+      const vehicleSelectedPill = document.getElementById("fleet-vehicle-selected-pill");
+      const vehicleSelectedId = document.getElementById("fleet-vehicle-selected-id");
+      const vehicleSelectedModel = document.getElementById("fleet-vehicle-selected-model");
+      const vehicleClear = document.getElementById("fleet-vehicle-clear");
+      const vehicleInputWrapper = document.querySelector(".fleet-vehicle-input-wrapper");
+
+      function vehicleSearchPlaceholder(text) {
+        if (!vehicleResults) return;
+        vehicleResults.innerHTML = `<div class="fleet-loading">${text}</div>`;
+      }
+
+      function buildVehicleSearchRow(vehicle) {
+        const label = formatVehicleLabel(vehicle.id);
+        const model = vehicle.model || "—";
+        return `
+          <div class="fleet-search-result" role="option" data-id="${vehicle.id}">
+            <div class="fleet-search-result__meta">
+              <strong>${label}</strong>
+              <span>${model}</span>
+            </div>
+            <span class="fleet-kpi-label">${vehicle.routeLabel || "—"}</span>
+          </div>
+        `;
+      }
+
+      let selectedVehicle = null;
+
+      function renderSelectedVehiclePill() {
+        if (!vehicleSelectedPill || !vehicleSelectedId || !vehicleSelectedModel || !vehicleInputWrapper) return;
+        if (!selectedVehicle) {
+          vehicleSelectedPill.classList.add("hidden");
+          vehicleInputWrapper.classList.remove("pill-visible");
+          return;
+        }
+        const label = formatVehicleLabel(selectedVehicle.id);
+        const model = selectedVehicle.model || "—";
+        vehicleSelectedId.textContent = label || "—";
+        vehicleSelectedModel.textContent = model;
+        vehicleSelectedPill.classList.remove("hidden");
+        if (!vehicleInputWrapper.classList.contains("input-focused")) {
+          vehicleInputWrapper.classList.add("pill-visible");
+        }
+      }
+
+      function updateVehicleCard(vehicle) {
+        selectedVehicle = vehicle || null;
+        renderSelectedVehiclePill();
+        const titleEl = document.getElementById("fleet-vehicle-title");
+        const modelEl = document.getElementById("fleet-vehicle-model");
+        const categoryEl = document.getElementById("fleet-vehicle-category");
+        const lastRouteEl = document.getElementById("fleet-vehicle-last-route");
+        const lastPingEl = document.getElementById("fleet-vehicle-last-ping");
+
+        if (!vehicle) {
+          if (titleEl) titleEl.textContent = "Veículo —";
+          if (modelEl) modelEl.textContent = "—";
+          if (categoryEl) categoryEl.textContent = "—";
+          if (lastRouteEl) lastRouteEl.textContent = "—";
+          if (lastPingEl) lastPingEl.textContent = "—";
+          setActivityPlaceholder("Selecione um veículo para ver a atividade.");
+          return;
+        }
+
+        if (vehicleSearchInput) {
+          vehicleSearchInput.value = formatVehicleLabel(vehicle.id);
+        }
+        if (titleEl) titleEl.textContent = `Veículo ${formatVehicleLabel(vehicle.id)}`;
+        if (modelEl) modelEl.textContent = vehicle.model || "—";
+        if (categoryEl) {
+          const parts = [vehicle.type, vehicle.category].filter(Boolean);
+          categoryEl.textContent = parts.length ? parts.join(" ") : "—";
+        }
+        if (lastRouteEl) {
+          const routes = Array.isArray(vehicle.lastRoutes) ? vehicle.lastRoutes : (vehicle.lastRoute ? [vehicle.lastRoute] : []);
+          const html = routes.length
+            ? routes.slice(0, 5).map(buildRoutePill).join(" ")
+            : "—";
+          lastRouteEl.innerHTML = html;
+        }
+        if (lastPingEl) lastPingEl.textContent = formatTimestamp(vehicle.lastPing);
+
+        const activityBody = document.getElementById("fleet-vehicle-activity");
+        if (!activityBody) return;
+        const activityRows = vehicle.activity?.length ? vehicle.activity : [];
+        if (!activityRows.length) {
+          setActivityPlaceholder("Sem atividade disponível.");
+          return;
+        }
+        activityBody.innerHTML = activityRows.map(row => `
+          <tr>
+            <td>${row.route ? buildRoutePill(row.route) : "—"}</td>
+            <td>${formatTimestamp(row.start)}</td>
+            <td>${formatTimestamp(row.end)}</td>
+          </tr>
+        `).join("");
+      }
+
+      function buildCombinedVehicles() {
+        const combined = new Map();
+
+        historyVehiclesCache.forEach(entry => {
+          const id = entry.id;
+          if (!id) return;
+          const modelFromHistory = entry.model || fleetModelForId(id) || "";
+          const categoryFromHistory = entry.category || fleetCategoryForId(id) || "";
+          combined.set(String(id), {
+            id,
+            model: modelFromHistory,
+            type: entry.type || "",
+            category: categoryFromHistory,
+            plate: entry.plate || entry.chapa || "",
+            lastRoute: entry.lastRoute || "",
+            lastRoutes: entry.lastRoutes || [],
+            lastPing: entry.lastPing || null,
+            activity: []
+          });
+        });
+
+        fleetVehiclesCache.forEach(vehicle => {
+          const id = vehicle.id;
+          if (!id) return;
+          const key = String(id);
+          const existing = combined.get(key) || { id, activity: [] };
+          combined.set(key, {
+            ...existing,
+            model: vehicle.model || existing.model || "",
+            type: vehicle.type || existing.type || "",
+            category: vehicle.category || existing.category || "",
+            plate: vehicle.plate || existing.plate || "",
+            lastRoute: vehicle.route || existing.lastRoute || "",
+            lastRoutes: existing.lastRoutes || [],
+            lastPing: vehicle.lastPing || existing.lastPing || null,
+            activity: vehicle.activity?.length ? vehicle.activity : existing.activity
+          });
+        });
+
+        return Array.from(combined.values()).sort((a, b) => {
+          const aId = String(a.id || "");
+          const bId = String(b.id || "");
+          return aId.localeCompare(bId, "pt-PT", { numeric: true });
+        });
+      }
+
+      let vehicleSearchHasInteracted = false;
+
+      function setVehicleResultsOpen(isOpen) {
+        if (!vehicleResults) return;
+        vehicleResults.classList.toggle("is-open", isOpen);
+      }
+
+      function markVehicleSearchInteracted() {
+        if (vehicleSearchHasInteracted) return;
+        vehicleSearchHasInteracted = true;
+        setVehicleResultsOpen(true);
+      }
+
+      function renderVehicleResults(query = "") {
+        if (!vehicleResults) return;
+        const normalized = (query || "").trim().toLowerCase();
+        const list = buildCombinedVehicles();
+        const filtered = normalized
+          ? list.filter(item =>
+              String(item.id || "").toLowerCase().includes(normalized) ||
+              String(item.model || "").toLowerCase().includes(normalized) ||
+              String(item.plate || "").toLowerCase().includes(normalized)
+            )
+          : list;
+        if (!filtered.length) {
+          vehicleSearchPlaceholder("Sem veículos encontrados.");
+          return;
+        }
+        vehicleResults.innerHTML = filtered.map(buildVehicleSearchRow).join("");
+      }
+
+      function bindVehicleSelection() {
+        if (!vehicleResults) return;
+        vehicleResults.addEventListener("click", event => {
+          const target = event.target.closest(".fleet-search-result");
+          if (!target) return;
+          const id = target.getAttribute("data-id");
+          const list = buildCombinedVehicles();
+          const selected = list.find(item => String(item.id) === String(id));
+          updateVehicleCard(selected || null);
+          setVehicleResultsOpen(false);
+        });
+      }
+
+      function clearSelectedVehicle() {
+        selectedVehicle = null;
+        if (vehicleSearchInput) vehicleSearchInput.value = "";
+        updateVehicleCard(null);
+        renderVehicleResults("");
+        setVehicleResultsOpen(true);
+        vehicleInputWrapper?.classList.remove("pill-visible");
+        vehicleInputWrapper?.classList.add("input-focused");
+        vehicleSearchInput?.focus();
+      }
+
+      async function refreshVehicleTab() {
+        vehicleSearchPlaceholder("A carregar veículos...");
+        setActivityPlaceholder("A carregar atividade...");
+        await Promise.all([loadFleetModelRanges(), loadRoutesCatalog()]);
+        const today = new Date().toISOString().split("T")[0];
+        const [payload, historyPayload] = await Promise.all([
+          fetch(`${FLEET_VEHICLES_PATH}?date=${encodeURIComponent(today)}`, { cache: "no-store" })
+            .then(resp => resp.ok ? resp.json() : [])
+            .catch(err => {
+              console.warn("Falha ao carregar frota diária:", err);
+              return [];
+            }),
+          fetch(FLEET_HISTORY_VEHICLES_PATH, { cache: "no-store" })
+            .then(resp => resp.ok ? resp.json() : [])
+            .catch(err => {
+              console.warn("Falha ao carregar histórico de veículos:", err);
+              return [];
+            })
+        ]);
+
+        fleetVehiclesCache = (Array.isArray(payload) ? payload : []).map(row => {
+          const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+          const modelFromPayload = row?.modelo ?? row?.model ?? row?.vehicle_model ?? null;
+          const modelFallback = fleetModelForId(id);
+          const model = modelFromPayload || modelFallback || "";
+          const type = row?.tipo ?? row?.type ?? "";
+          const categoryFromPayload = row?.categoria ?? row?.category ?? null;
+          const categoryFallback = fleetCategoryForId(id);
+          const category = categoryFromPayload || categoryFallback || "";
+          const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
+          return {
+            id,
+            model,
+            type,
+            category,
+            route,
+            routeLabel: formatRouteLabel(route),
+            lastPing: row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? null,
+            activity: route ? [{ route, start: row?.first_ping ?? row?.primeiro_ping ?? null, end: row?.last_ping ?? row?.ultimo_ping ?? null }] : []
+          };
+        });
+
+        historyVehiclesCache = (Array.isArray(historyPayload) ? historyPayload : []).map(row => ({
+          id: row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "",
+          model: row?.modelo ?? row?.model ?? row?.vehicle_model ?? "",
+          type: row?.tipo ?? row?.type ?? "",
+          category: row?.categoria ?? row?.category ?? "",
+          plate: row?.plate ?? row?.placa ?? row?.chapa ?? "",
+          lastRoute: row?.last_route ?? "",
+          lastPing: row?.last_ping ?? row?.ultimo_ping ?? null,
+          lastRoutes: Array.isArray(row?.last_routes) ? row.last_routes : []
+        }));
+
+        renderVehicleResults(vehicleSearchInput?.value || "");
+        setVehicleResultsOpen(vehicleSearchHasInteracted);
+        const combined = buildCombinedVehicles();
+        if (combined.length) {
+          updateVehicleCard(combined[0]);
+        } else {
+          updateVehicleCard(null);
+        }
+      }
+
+      vehicleSearchInput?.addEventListener("input", event => {
+        markVehicleSearchInteracted();
+        renderVehicleResults(event.target.value);
+        setVehicleResultsOpen(true);
+      });
+
+      vehicleSearchInput?.addEventListener("focus", () => {
+        markVehicleSearchInteracted();
+        renderVehicleResults(vehicleSearchInput.value);
+        vehicleInputWrapper?.classList.add("input-focused");
+        vehicleInputWrapper?.classList.remove("pill-visible");
+      });
+
+      vehicleSearchInput?.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        if (!vehicleResults) return;
+        const first = vehicleResults.querySelector(".fleet-search-result");
+        if (!first) return;
+        const id = first.getAttribute("data-id");
+        if (!id) return;
+        const list = buildCombinedVehicles();
+        const selected = list.find(item => String(item.id) === String(id));
+        if (!selected) return;
+        event.preventDefault();
+        updateVehicleCard(selected);
+        setVehicleResultsOpen(false);
+      });
+
+      vehicleSearchInput?.addEventListener("blur", () => {
+        vehicleInputWrapper?.classList.remove("input-focused");
+        if (selectedVehicle) {
+          vehicleInputWrapper?.classList.add("pill-visible");
+        }
+      });
+
+
+      if (vehicleSelectedPill) {
+        const focusVehicleInput = () => {
+          vehicleInputWrapper?.classList.remove("pill-visible");
+          vehicleInputWrapper?.classList.add("input-focused");
+          vehicleSearchInput?.focus();
+          vehicleSearchInput?.select();
+        };
+        vehicleSelectedPill.addEventListener("click", focusVehicleInput);
+        vehicleSelectedPill.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            focusVehicleInput();
+          }
+        });
+      }
+
+      vehicleClear?.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        clearSelectedVehicle();
+      });
+
+      seriesSearchInput?.addEventListener("input", event => {
+        markSeriesSearchInteracted();
+        const list = filterSeriesModels(event.target.value);
+        renderSeriesResults(list, currentSeriesSelection);
+        setSeriesResultsOpen(true);
+      });
+
+      seriesSearchInput?.addEventListener("keydown", event => {
+        if (!seriesSearchInput) return;
+        if (event.key === "Enter") {
+          const first = seriesResults?.querySelector(".fleet-series-result");
+          if (first) {
+            event.preventDefault();
+            const value = first.getAttribute("data-value");
+            if (value) applySeriesSelection(value);
+          }
+          return;
+        }
+        const isPrintable = event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+        if (isPrintable && !seriesInputCleared && seriesSearchInput.value === currentSeriesSelection) {
+          seriesSearchInput.value = "";
+          seriesInputCleared = true;
+          renderSelectedSeriesPill();
+        }
+      });
+
+      seriesSearchInput?.addEventListener("focus", event => {
+        markSeriesSearchInteracted();
+        const list = filterSeriesModels(event.target.value);
+        renderSeriesResults(list, currentSeriesSelection);
+        setSeriesResultsOpen(true);
+        seriesInputWrapper?.classList.add("input-focused");
+        seriesInputWrapper?.classList.remove("pill-visible");
+      });
+
+      seriesSearchInput?.addEventListener("blur", () => {
+        seriesInputCleared = false;
+        seriesInputWrapper?.classList.remove("input-focused");
+        if (currentSeriesSelection) {
+          seriesInputWrapper?.classList.add("pill-visible");
+        }
+        setTimeout(() => setSeriesResultsOpen(false), 150);
+      });
+
+      document.addEventListener("click", event => {
+        if (!seriesSearchBox) return;
+        if (!seriesSearchBox.contains(event.target)) {
+          setSeriesResultsOpen(false);
+        }
+      });
+
+      seriesSearchClear?.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        clearSelectedSeries();
+      });
+
+      seriesResults?.addEventListener("click", event => {
+        const target = event.target.closest(".fleet-series-result");
+        if (!target) return;
+        const value = target.getAttribute("data-value");
+        if (!value) return;
+        applySeriesSelection(value);
+      });
+
+      if (seriesSelectedPill) {
+        const focusSeriesInput = () => {
+          seriesInputWrapper?.classList.remove("pill-visible");
+          seriesInputWrapper?.classList.add("input-focused");
+          seriesSearchInput?.focus();
+          seriesSearchInput?.select();
+        };
+        seriesSelectedPill.addEventListener("click", focusSeriesInput);
+        seriesSelectedPill.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            focusSeriesInput();
+          }
+        });
+      }
+
+      if (typologyToggleButtons.length) {
+        typologyToggleButtons.forEach(button => {
+          button.addEventListener("click", () => {
+            const nextType = button.dataset.type || "Autocarro";
+            currentTypologyMode = nextType;
+            typologyToggleButtons.forEach(btn => {
+              const isActive = btn.dataset.type === nextType;
+              btn.classList.toggle("is-active", isActive);
+              btn.setAttribute("aria-selected", String(isActive));
+            });
+            updateTypologyTab(lastFleetPayload, lastHistoryPayload);
+          });
+        });
+      }
+
+      if (typologySelect) {
+        typologySelect.addEventListener("change", () => {
+          currentTypologySelection = typologySelect.value || "";
+          updateTypologyTab(lastFleetPayload, lastHistoryPayload);
+        });
+      }
+
+      if (seriesSortButtons.length) {
+        updateSeriesSortUI();
+        seriesSortButtons.forEach(button => {
+          button.addEventListener("click", () => {
+            const key = button.dataset.sort;
+            if (!key) return;
+            if (seriesTableSortKey === key) {
+              seriesTableSortDir = seriesTableSortDir === "asc" ? "desc" : "asc";
+            } else {
+              seriesTableSortKey = key;
+              seriesTableSortDir = key === "vehicle" ? "asc" : "desc";
+            }
+            updateSeriesSortUI();
+            updateSeriesTab(lastFleetPayload, lastHistoryPayload);
+          });
+        });
+      }
+
+      bindVehicleSelection();
+
+      refreshFleetOverview();
+      refreshVehicleTab();
+
+      window.addEventListener("resize", () => {
+        handleSeriesChartResize();
+        handleTypologyChartResize();
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      const infoBlocks = Array.from(document.querySelectorAll("[data-carris-info]"));
+      if (!infoBlocks.length) return;
+
+      function closeInfoBlock(block) {
+        const button = block.querySelector("[data-carris-info-btn]");
+        const popover = block.querySelector("[data-carris-info-popover]");
+        if (!button || !popover) return;
+        popover.hidden = true;
+        popover.classList.remove("visible");
+        button.setAttribute("aria-expanded", "false");
+      }
+
+      function openInfoBlock(block) {
+        const button = block.querySelector("[data-carris-info-btn]");
+        const popover = block.querySelector("[data-carris-info-popover]");
+        if (!button || !popover) return;
+        popover.hidden = false;
+        button.setAttribute("aria-expanded", "true");
+        requestAnimationFrame(() => {
+          popover.classList.add("visible");
+        });
+      }
+
+      infoBlocks.forEach((block, index) => {
+        const button = block.querySelector("[data-carris-info-btn]");
+        const popover = block.querySelector("[data-carris-info-popover]");
+        if (!button || !popover) return;
+        if (!popover.id) {
+          popover.id = `carris-info-popover-${index + 1}`;
+        }
+        button.setAttribute("aria-controls", popover.id);
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const isHidden = popover.hidden;
+          infoBlocks.forEach(closeInfoBlock);
+          if (isHidden) openInfoBlock(block);
+        });
+      });
+
+      document.addEventListener("mousedown", (event) => {
+        infoBlocks.forEach((block) => {
+          const button = block.querySelector("[data-carris-info-btn]");
+          const popover = block.querySelector("[data-carris-info-popover]");
+          if (!button || !popover || popover.hidden) return;
+          if (block.contains(event.target) || button.contains(event.target)) return;
+          closeInfoBlock(block);
+        });
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        infoBlocks.forEach(closeInfoBlock);
+      });
+    })();
+  </script>
+</body>
+</html>

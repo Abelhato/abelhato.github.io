@@ -1,0 +1,3637 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+  <title>Trânsito · Dashboard Carris</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" crossorigin="">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+    :root {
+      color-scheme: light dark;
+      --sidebar-motion-ms: 280ms;
+      --sidebar-fade-ms: 220ms;
+      --sidebar-ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --mobile-safe-top: max(12px, env(safe-area-inset-top, 0px));
+      --mobile-safe-start: max(12px, env(safe-area-inset-left, 0px));
+      --mobile-safe-end: max(12px, env(safe-area-inset-right, 0px));
+      --mobile-action-diameter: 48px;
+      --accent: #f59f00;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    body {
+      --bg-app: #f6f8fb;
+      --sidebar-bg: rgba(255, 255, 255, 0.95);
+      --sidebar-border: rgba(15, 23, 42, 0.08);
+      --text-primary: #0f172a;
+      --text-muted: rgba(15, 23, 42, 0.62);
+      --surface-1: rgba(255, 255, 255, 0.96);
+      --surface-2: rgba(255, 255, 255, 0.9);
+      --border-strong: rgba(15, 23, 42, 0.12);
+      --shadow-strong: 0 24px 40px rgba(5, 10, 25, 0.16);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-app);
+      color: var(--text-primary);
+    }
+
+    body.theme-dark {
+      --bg-app: radial-gradient(circle at top, #0f172a 0%, #020617 55%, #000 100%);
+      --sidebar-bg: rgba(15, 23, 42, 0.92);
+      --sidebar-border: rgba(255, 255, 255, 0.08);
+      --text-primary: #f9fafb;
+      --text-muted: rgba(248, 250, 252, 0.7);
+      --surface-1: rgba(15, 23, 42, 0.9);
+      --surface-2: rgba(15, 23, 42, 0.84);
+      --border-strong: rgba(255, 255, 255, 0.12);
+      --shadow-strong: 0 24px 50px rgba(0, 0, 0, 0.35);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto {
+        --bg-app: radial-gradient(circle at top, #0f172a 0%, #020617 55%, #000 100%);
+        --sidebar-bg: rgba(15, 23, 42, 0.92);
+        --sidebar-border: rgba(255, 255, 255, 0.08);
+        --text-primary: #f9fafb;
+        --text-muted: rgba(248, 250, 252, 0.7);
+        --surface-1: rgba(30, 41, 59, 0.9);
+        --surface-2: rgba(15, 23, 42, 0.82);
+        --border-strong: rgba(255, 255, 255, 0.12);
+        --shadow-strong: 0 24px 50px rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    #app-shell {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: #111827;
+    }
+
+    @supports (height: 100dvh) {
+      #app-shell {
+        height: 100dvh;
+      }
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    #sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 280px;
+      min-width: 280px;
+      max-width: 280px;
+      padding: 24px 26px 30px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--sidebar-border);
+      box-shadow: 24px 0 48px rgba(3, 7, 18, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      overflow-y: auto;
+      z-index: 4500;
+      backdrop-filter: blur(20px);
+      transition: transform var(--sidebar-motion-ms) var(--sidebar-ease), opacity var(--sidebar-fade-ms) ease;
+      will-change: transform, opacity;
+    }
+
+    .sidebar-header {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: -5px;
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 48px));
+      gap: 10px;
+    }
+
+    .mode-card {
+      border: 1px solid var(--border-strong);
+      border-radius: 18px;
+      background: var(--surface-1);
+      color: var(--text-primary);
+      font-size: 1.5rem;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+    }
+
+    .mode-card--active {
+      border-color: var(--accent);
+      background: rgba(245, 159, 0, 0.12);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      border-top: 1px solid var(--border-strong);
+      padding-top: 16px;
+      display: flex;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+      flex-shrink: 0;
+    }
+
+    .sidebar-author-link {
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 0.95rem;
+      position: relative;
+      padding-bottom: 4px;
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    .sidebar-author-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+
+    .sidebar-author-label {
+      color: inherit;
+    }
+
+    .sidebar-author-handle {
+      color: var(--accent);
+    }
+
+    .sidebar-info-button {
+      width: 20px;
+      height: 20px;
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      background: var(--surface-1);
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+
+    .sidebar-info-button:hover,
+    .sidebar-info-button:focus-visible {
+      border-color: var(--accent);
+      background: rgba(245, 159, 0, 0.12);
+      color: var(--text-primary);
+    }
+
+    .sidebar-info-popover {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 12px);
+      transform: translate(-50%, 6px);
+      width: min(280px, calc(100vw - 84px));
+      padding: 10px 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--surface-1);
+      color: var(--text-muted);
+      box-shadow: 0 14px 26px rgba(2, 6, 23, 0.2);
+      font-size: 0.76rem;
+      line-height: 1.45;
+      letter-spacing: 0;
+      text-transform: none;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 2;
+    }
+
+    .sidebar-info-popover.visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+      pointer-events: auto;
+    }
+
+    .sidebar-info-popover::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 100%;
+      transform: translateX(-50%);
+      border-width: 6px;
+      border-style: solid;
+      border-color: var(--surface-1) transparent transparent transparent;
+    }
+
+    .sidebar-info-popover p {
+      margin: 0;
+    }
+
+    .sidebar-author-link::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.2s ease;
+    }
+
+    .sidebar-author-link:hover::after,
+    .sidebar-author-link:focus-visible::after {
+      transform: scaleX(1);
+    }
+
+    .mode-card:not(.mode-card--active):hover {
+      border-color: rgba(15, 23, 42, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    #sidebar-close,
+    #sidebar-toggle {
+      border: 1px solid var(--border-strong);
+      border-radius: 50%;
+      background: var(--surface-1);
+      color: var(--text-primary);
+      width: 45px;
+      height: 45px;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+      z-index: 4600;
+      transition: transform var(--sidebar-motion-ms) var(--sidebar-ease), box-shadow 0.2s ease, opacity var(--sidebar-fade-ms) ease;
+      will-change: transform, opacity;
+    }
+
+    #sidebar-close {
+      position: absolute;
+      top: 20px;
+      left: 25px;
+      z-index: 4601;
+      transform: translateX(0) scale(1);
+    }
+
+    #sidebar-toggle {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-10px) scale(0.96);
+    }
+
+    body.sidebar-collapsed #sidebar {
+      transform: translateX(-105%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.sidebar-collapsed #sidebar-close {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-10px) scale(0.96);
+    }
+
+    body.sidebar-collapsed #sidebar-toggle {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0) scale(1);
+    }
+
+    .sidebar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sidebar-placeholder {
+      min-height: 56px;
+    }
+
+    .sidebar-section label {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .transit-select {
+      display: grid;
+      gap: 6px;
+      position: relative;
+    }
+
+    .transit-select span {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .transit-native-select--sr {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      border: 0 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    .transit-picker {
+      position: relative;
+    }
+
+    .transit-picker-btn {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-1);
+      color: var(--text-primary);
+      font-size: 0.98rem;
+      font-weight: 600;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .transit-picker-btn:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(244, 159, 0, 0.3);
+    }
+
+    .transit-picker-caret {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      flex: 0 0 auto;
+      transition: transform 0.2s ease;
+    }
+
+    .transit-picker.is-open .transit-picker-caret {
+      transform: rotate(180deg);
+    }
+
+    .transit-picker-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: var(--surface-1);
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      box-shadow: var(--shadow-strong);
+      max-height: 220px;
+      overflow: auto;
+      display: grid;
+      gap: 6px;
+      padding: 6px;
+      z-index: 5000;
+    }
+
+    .transit-picker-option {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--text-primary);
+      text-align: left;
+      padding: 9px 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .transit-picker-option:hover,
+    .transit-picker-option.is-active {
+      border-color: rgba(245, 159, 0, 0.6);
+      box-shadow: 0 6px 14px rgba(245, 159, 0, 0.12);
+    }
+
+    .transit-hour-slider-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .transit-hour-range {
+      position: relative;
+      height: 30px;
+    }
+
+    .transit-hour-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--text-muted) 28%, transparent);
+    }
+
+    .transit-hour-fill {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(245, 159, 0, 0.75), rgba(250, 204, 21, 0.92));
+    }
+
+    .transit-hour-slider {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 100%;
+      height: 36px;
+      margin: 0;
+      background: transparent;
+      border: 0;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      pointer-events: none;
+    }
+
+    .transit-hour-slider::-webkit-slider-runnable-track {
+      height: 6px;
+      background: transparent;
+    }
+
+    .transit-hour-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 34px;
+      height: 20px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+      box-shadow: 0 6px 12px rgba(15, 23, 42, 0.16);
+      pointer-events: auto;
+      margin-top: -7px;
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+
+    .transit-hour-slider::-moz-range-track {
+      height: 6px;
+      background: transparent;
+      border: 0;
+    }
+
+    .transit-hour-slider::-moz-range-thumb {
+      width: 34px;
+      height: 20px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+      box-shadow: 0 6px 12px rgba(15, 23, 42, 0.16);
+      pointer-events: auto;
+    }
+
+    .transit-hour-slider:focus-visible::-webkit-slider-thumb {
+      border-color: rgba(245, 159, 0, 0.7);
+      box-shadow: 0 0 0 2px rgba(244, 159, 0, 0.25), 0 8px 14px rgba(15, 23, 42, 0.2);
+      transform: scale(1.04);
+    }
+
+    .transit-hour-slider:focus-visible::-moz-range-thumb {
+      border-color: rgba(245, 159, 0, 0.7);
+      box-shadow: 0 0 0 2px rgba(244, 159, 0, 0.25), 0 8px 14px rgba(15, 23, 42, 0.2);
+      transform: scale(1.04);
+    }
+
+    .transit-hour-slider[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .transit-hour-slider-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      border-radius: 10px;
+      padding: 7px 10px;
+    }
+
+    .transit-hour-scale {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      align-items: end;
+      gap: 4px;
+      margin-top: 2px;
+      opacity: 0.72;
+      pointer-events: none;
+    }
+
+    .transit-hour-scale span {
+      font-size: 0.66rem;
+      color: var(--text-muted);
+      text-align: center;
+      letter-spacing: 0.03em;
+      line-height: 1;
+    }
+
+    .spectrum-card {
+      display: grid;
+      gap: 9px;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--surface-2);
+      padding: 10px 10px 11px;
+    }
+
+    .spectrum-range {
+      position: relative;
+      height: 34px;
+    }
+
+    .spectrum-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--text-muted) 28%, transparent);
+    }
+
+    .spectrum-slider {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 100%;
+      margin: 0;
+      height: 36px;
+      border: 0;
+      outline: none;
+      background: transparent;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      pointer-events: none;
+    }
+
+    .spectrum-slider::-webkit-slider-runnable-track {
+      height: 8px;
+      background: transparent;
+    }
+
+    .spectrum-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 26px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+      box-shadow: 0 6px 12px rgba(15, 23, 42, 0.16);
+      pointer-events: auto;
+      margin-top: -5px;
+    }
+
+    .spectrum-slider::-moz-range-track {
+      height: 8px;
+      background: transparent;
+      border: 0;
+    }
+
+    .spectrum-slider::-moz-range-thumb {
+      width: 26px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+      box-shadow: 0 6px 12px rgba(15, 23, 42, 0.16);
+      pointer-events: auto;
+    }
+
+    .spectrum-slider:focus-visible::-webkit-slider-thumb {
+      border-color: rgba(245, 159, 0, 0.7);
+      box-shadow: 0 0 0 2px rgba(244, 159, 0, 0.25), 0 8px 14px rgba(15, 23, 42, 0.2);
+    }
+
+    .spectrum-slider:focus-visible::-moz-range-thumb {
+      border-color: rgba(245, 159, 0, 0.7);
+      box-shadow: 0 0 0 2px rgba(244, 159, 0, 0.25), 0 8px 14px rgba(15, 23, 42, 0.2);
+    }
+
+    .spectrum-scale {
+      position: relative;
+      height: 14px;
+      opacity: 0.72;
+      pointer-events: none;
+      margin-top: 2px;
+    }
+
+    .spectrum-scale span {
+      position: absolute;
+      top: 0;
+      left: 0;
+      font-size: 0.66rem;
+      color: var(--text-muted);
+      letter-spacing: 0.03em;
+      line-height: 1;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+
+    .spectrum-interval-cards {
+      display: grid;
+      gap: 6px;
+    }
+
+    .spectrum-interval-card {
+      display: grid;
+      grid-template-columns: 14px auto;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      background: var(--surface-1);
+      padding: 6px 8px;
+    }
+
+    .interval-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--swatch, #999);
+      border: 1px solid rgba(0, 0, 0, 0.14);
+    }
+
+    .interval-inputs {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .interval-sep {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .interval-unit {
+      font-size: 0.64rem;
+      color: var(--text-muted);
+      margin-left: 1px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .interval-input {
+      width: 44px;
+      height: 26px;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 0 4px;
+      -moz-appearance: textfield;
+    }
+
+    .interval-input::-webkit-outer-spin-button,
+    .interval-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .interval-input:focus-visible {
+      outline: none;
+      border-color: rgba(245, 159, 0, 0.72);
+      box-shadow: 0 0 0 2px rgba(245, 159, 0, 0.22);
+    }
+
+    .interval-input[readonly] {
+      opacity: 0.62;
+      cursor: default;
+    }
+
+    .spectrum-preview {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: linear-gradient(
+        90deg,
+        #000000 0%,
+        #8b0000 24%,
+        #ff8c00 50%,
+        #ffd500 75%,
+        #2e8b57 100%
+      );
+      opacity: 0.9;
+      z-index: 1;
+    }
+
+    .spectrum-slider {
+      z-index: 2;
+    }
+
+    .spectrum-note {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar-section select,
+    .sidebar-button,
+    .floating-route-input {
+      border-radius: 12px;
+      border: 1px solid var(--border-strong);
+      padding: 9px 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      background: var(--surface-1);
+      box-sizing: border-box;
+      width: 100%;
+    }
+
+    .floating-route-input {
+      line-height: 1.35;
+      text-align: left;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .floating-route-input::placeholder {
+      line-height: 1.35;
+      color: var(--text-muted);
+      opacity: 1;
+    }
+
+    .sidebar-button {
+      cursor: pointer;
+    }
+
+    .sidebar-button--primary {
+      border-color: var(--accent);
+      background: rgba(245, 159, 0, 0.18);
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .kpi-floating-context {
+      --floating-base-top: 75px;
+      --floating-base-left: 25px;
+      --floating-scroll-offset: 0px;
+      --floating-width: clamp(210px, 23vw, 270px);
+      position: absolute;
+      top: calc(var(--floating-base-top) + env(safe-area-inset-top, 0px) - var(--floating-scroll-offset));
+      left: calc(var(--floating-base-left) + env(safe-area-inset-left, 0px));
+      transform: none;
+      padding: 5px 12px;
+      border-radius: 16px;
+      background: var(--surface-1);
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow-strong);
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      z-index: 4600;
+      backdrop-filter: blur(12px);
+      width: var(--floating-width);
+      max-width: var(--floating-width);
+      min-width: var(--floating-width);
+      height: auto;
+    }
+
+    .kpi-floating-chip {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: flex-start;
+      gap: 8px;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      padding: 4px 0;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .kpi-floating-chip:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .transit-loading .kpi-floating-context {
+      animation: floating-context-pulse 1.25s ease-in-out infinite;
+    }
+
+    .kpi-floating-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.04);
+      color: inherit;
+      font-size: 0.85rem;
+      justify-self: start;
+    }
+
+    .transit-loading .kpi-floating-icon {
+      animation: floating-icon-breathe 1.05s ease-in-out infinite;
+    }
+
+    .transit-loading #kpi-floating-text {
+      animation: floating-title-fade 1.05s ease-in-out infinite;
+    }
+
+    .transit-loading .kpi-selected-routes {
+      animation: floating-title-fade 1.05s ease-in-out infinite;
+    }
+
+    @keyframes floating-context-pulse {
+      0% {
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-strong);
+      }
+      50% {
+        border-color: rgba(245, 159, 0, 0.48);
+        box-shadow: 0 0 0 2px rgba(245, 159, 0, 0.2), var(--shadow-strong);
+      }
+      100% {
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-strong);
+      }
+    }
+
+    @keyframes floating-icon-breathe {
+      0% { transform: scale(1); opacity: 0.94; }
+      50% { transform: scale(1.16); opacity: 1; }
+      100% { transform: scale(1); opacity: 0.94; }
+    }
+
+    @keyframes floating-title-fade {
+      0% { opacity: 1; }
+      50% { opacity: 0.58; }
+      100% { opacity: 1; }
+    }
+
+    body.theme-dark .kpi-floating-icon {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    #kpi-floating-text {
+      min-width: 0;
+      flex: 1 1 120px;
+      max-width: 100%;
+      line-height: 1.6;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: normal;
+      word-break: break-word;
+      max-height: calc(1.6em * 5);
+      transition: color 120ms ease;
+      align-self: flex-start;
+    }
+
+    #kpi-floating-text.kpi-floating-text--placeholder {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      white-space: nowrap;
+      max-height: calc(1.6em * 3);
+      text-transform: none;
+    }
+
+    .kpi-selected-routes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding: 2px 0;
+    }
+
+    .kpi-selected-routes .route-pill {
+      box-shadow: none;
+      padding: 5px 10px;
+      gap: 5px;
+      font-size: 0.82rem;
+    }
+
+    .kpi-selected-routes .route-pill .route-pill-remove {
+      font-size: 0.8rem;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .kpi-floating-clear {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: rgba(15, 23, 42, 0.04);
+      color: inherit;
+      font-weight: 800;
+      line-height: 1;
+      padding: 0;
+      appearance: none;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
+      justify-self: end;
+    }
+
+    .kpi-floating-clear:hover {
+      background: rgba(15, 23, 42, 0.12);
+      transform: translateY(-1px);
+    }
+
+    body.theme-dark .kpi-floating-clear {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    @media (min-width: 901px) {
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only {
+        top: calc(24px + 45px + 12px);
+        left: 24px;
+        width: 45px;
+        min-width: 45px;
+        max-width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only .kpi-floating-chip {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only #kpi-floating-text,
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only .kpi-floating-clear {
+        display: none;
+      }
+
+      body.sidebar-collapsed .kpi-floating-context.kpi-floating-context--icon-only .kpi-floating-icon {
+        width: auto;
+        height: auto;
+        font-size: 1.2rem;
+        background: transparent;
+        box-shadow: none;
+      }
+    }
+
+    .floating-search {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      z-index: 10050;
+      backdrop-filter: blur(10px);
+    }
+
+    .floating-search.visible {
+      display: flex;
+    }
+
+    .floating-search--map {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 0;
+      transform: none;
+      width: 100%;
+      max-width: none;
+      min-width: 100%;
+      background: var(--sidebar-bg);
+      border: 1px solid var(--sidebar-border);
+      box-shadow: 0 18px 36px rgba(5, 10, 25, 0.2);
+      border-radius: 14px;
+      padding: 12px 15px;
+      height: auto !important;
+      overflow: visible !important;
+    }
+
+    body.sidebar-collapsed .floating-search--map {
+      width: clamp(240px, 20vw, 320px);
+      min-width: clamp(240px, 20vw, 320px);
+      max-width: clamp(240px, 20vw, 320px);
+    }
+
+    .floating-search--sidebar {
+      position: fixed;
+      top: var(--mobile-safe-top);
+      left: var(--mobile-safe-start);
+      right: var(--mobile-safe-end);
+      width: auto;
+      max-width: min(360px, 92vw);
+      margin: 0 auto;
+      background: var(--surface-1);
+      border: 1px solid var(--sidebar-border);
+      box-shadow: var(--shadow-strong);
+      border-radius: 14px;
+      padding: 12px 15px;
+      height: auto !important;
+      overflow: visible !important;
+      pointer-events: auto;
+      transform: none;
+      z-index: 100060;
+    }
+
+    .floating-route-preview {
+      margin-top: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: grid;
+      gap: 6px;
+    }
+
+    .floating-route-preview .preview-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 9px;
+      border-radius: 10px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      cursor: pointer;
+      min-width: 0;
+    }
+
+    .floating-route-preview .preview-item:hover {
+      transform: translateY(-1px);
+    }
+
+    .floating-route-preview .preview-label {
+      font-weight: 700;
+      color: var(--text-primary);
+      font-size: 0.84rem;
+      white-space: normal;
+      word-break: break-word;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .floating-route-preview .preview-item .preview-meta {
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    .floating-route-preview .preview-item.preview-category .preview-meta {
+      color: var(--accent);
+    }
+
+    .floating-route-preview .preview-actions {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+
+    .floating-route-preview .preview-add {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-1);
+      color: var(--text-primary);
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .floating-route-preview .preview-add:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+    }
+
+    .route-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 0.86rem;
+      line-height: 1.15;
+      font-weight: 900;
+      border: 1px solid var(--pill-border, rgba(15, 23, 42, 0.12));
+      color: var(--pill-fg, #0b1220);
+      background: var(--pill-bg, #e2e8f0);
+      white-space: nowrap;
+      box-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
+      flex: 0 0 auto;
+    }
+
+    .route-pill.route-pill--selected {
+      padding: 6px 10px;
+      gap: 8px;
+      box-shadow: none;
+    }
+
+    .route-pill-remove {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .custom-popup .leaflet-popup-content-wrapper {
+      background: transparent;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.28);
+    }
+
+    .custom-popup .leaflet-popup-tip {
+      background: var(--surface-2);
+    }
+
+    .custom-popup .leaflet-popup-content {
+      margin: 0;
+      min-width: 180px;
+      max-width: min(280px, 86vw);
+      width: min(280px, 86vw);
+    }
+
+    .custom-popup .maplibregl-popup-content {
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      min-width: 180px;
+      max-width: min(280px, 86vw);
+      width: min(280px, 86vw);
+      overflow: hidden;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.28);
+    }
+
+    .custom-popup .maplibregl-popup-tip {
+      display: none;
+    }
+
+    .custom-popup .leaflet-popup-close-button,
+    .custom-popup .maplibregl-popup-close-button {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-1);
+      color: var(--text-primary);
+      font-size: 16px;
+      line-height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+      cursor: pointer;
+      z-index: 25;
+      opacity: 0.98;
+      transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
+    }
+
+    .custom-popup .leaflet-popup-close-button:hover,
+    .custom-popup .maplibregl-popup-close-button:hover {
+      transform: translateY(-1px);
+      opacity: 1;
+    }
+
+    .custom-popup .leaflet-popup-close-button span {
+      color: inherit;
+    }
+
+    body.theme-dark .custom-popup .leaflet-popup-close-button,
+    body.theme-dark .custom-popup .maplibregl-popup-close-button {
+      border-color: rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .kpi-floating-icon {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      body.theme-auto .kpi-floating-clear {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+
+      body.theme-auto .custom-popup .leaflet-popup-close-button,
+      body.theme-auto .custom-popup .maplibregl-popup-close-button {
+        border-color: rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+    }
+
+    .transit-popup {
+      background: var(--surface-1);
+      color: var(--text-primary);
+    }
+
+    .transit-popup__header {
+      padding: 8px 10px;
+      background: var(--surface-1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding-right: 34px;
+    }
+
+    .transit-popup__title {
+      min-width: 0;
+      font-size: 0.92rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .transit-popup__body {
+      padding: 7px 10px 9px;
+      background: var(--surface-2);
+      font-size: 0.8rem;
+      line-height: 1.3;
+      color: var(--text-primary);
+      display: grid;
+      gap: 2px;
+    }
+
+    .transit-popup__meta {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
+    .selected-routes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+      min-height: 26px;
+    }
+
+    .route-empty-hint,
+    .sidebar-note {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .status-inline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-loading {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(245, 159, 0, 0.9);
+      box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.45);
+      animation: status-pulse 1.2s ease-in-out infinite;
+      flex: 0 0 auto;
+    }
+
+    @keyframes status-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.45); opacity: 0.95; }
+      70% { box-shadow: 0 0 0 8px rgba(245, 159, 0, 0); opacity: 0.65; }
+      100% { box-shadow: 0 0 0 0 rgba(245, 159, 0, 0); opacity: 0.95; }
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--surface-1);
+      padding: 9px 10px;
+    }
+
+    .toggle-row label {
+      margin: 0;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 0.03em;
+      text-transform: none;
+    }
+
+    .toggle-switch {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 42px;
+      height: 24px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: color-mix(in srgb, var(--text-muted) 28%, transparent);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .toggle-switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--surface-1);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.28);
+      transition: transform 0.2s ease;
+    }
+
+    .toggle-switch:checked {
+      background: rgba(245, 159, 0, 0.55);
+      border-color: rgba(245, 159, 0, 0.75);
+    }
+
+    .toggle-switch:checked::after {
+      transform: translateX(18px);
+    }
+
+    #overlay-panel {
+      display: none !important;
+    }
+
+    .overlay-card {
+      pointer-events: auto;
+      background: var(--surface-1);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      box-shadow: var(--shadow-strong);
+      padding: 10px 12px;
+    }
+
+    .overlay-title {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 800;
+    }
+
+    .overlay-subtitle {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 0.84rem;
+    }
+
+    .transit-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .transit-chip {
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      padding: 5px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: var(--surface-2);
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    @media (max-width: 900px) {
+      #sidebar {
+        width: min(360px, 92vw);
+        min-width: min(360px, 92vw);
+        max-width: min(360px, 92vw);
+        padding-bottom: max(96px, calc(34px + env(safe-area-inset-bottom, 0px)));
+        scroll-padding-bottom: max(96px, calc(34px + env(safe-area-inset-bottom, 0px)));
+      }
+
+      .sidebar-header {
+        justify-content: center;
+        margin-top: 65px;
+        margin-bottom: -24px;
+      }
+
+      .mode-switch {
+        grid-template-columns: repeat(4, minmax(0, 68px));
+        justify-content: center;
+        margin-inline: auto;
+      }
+
+      .mode-card {
+        font-size: 2rem;
+      }
+
+      .sidebar-placeholder {
+        display: none;
+      }
+
+      .sidebar-footer {
+        margin-bottom: 0;
+        padding-bottom: max(16px, calc(8px + env(safe-area-inset-bottom, 0px)));
+      }
+
+      .kpi-floating-context {
+        font-size: 0.9rem;
+        top: var(--mobile-safe-top);
+        left: calc(var(--mobile-safe-start) + var(--mobile-action-diameter) + 10px);
+        right: var(--mobile-safe-end);
+        width: auto;
+        min-width: 0;
+        max-width: calc(100% - (var(--mobile-safe-start) + var(--mobile-safe-end) + var(--mobile-action-diameter) + 10px));
+        padding: 0 14px;
+        display: flex;
+        align-items: center;
+      }
+
+      .kpi-floating-chip {
+        min-height: var(--mobile-action-diameter);
+        padding: 0 clamp(4px, 2vw, 8px);
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) 18px;
+        align-items: center;
+        gap: clamp(6px, 1vw, 10px);
+      }
+
+      .kpi-floating-icon,
+      #kpi-floating-text,
+      .kpi-floating-clear {
+        align-self: center;
+      }
+
+      #kpi-floating-text {
+        text-align: left;
+        line-height: 1.3;
+        max-height: calc(1.3em * 4);
+      }
+
+      #kpi-floating-text.kpi-floating-text--placeholder {
+        line-height: 1.3;
+      }
+
+      .floating-search--map {
+        position: fixed !important;
+        top: clamp(64px, 8vh, 110px) !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: min(90vw, 420px) !important;
+        max-width: 420px !important;
+      }
+
+      #overlay-panel {
+        left: 12px;
+        right: 12px;
+        top: calc(var(--mobile-safe-top) + 54px);
+        width: auto;
+      }
+
+      #sidebar-toggle,
+      #sidebar-close {
+        top: var(--mobile-safe-top);
+        left: var(--mobile-safe-start);
+      }
+    }
+  </style>
+</head>
+<body class="theme-auto">
+  <div id="app-shell">
+    <div id="map" aria-label="Mapa de trânsito"></div>
+    <div class="kpi-floating-context" id="kpi-floating-context">
+      <div id="kpi-floating-chip" class="kpi-floating-chip" role="button" tabindex="0" aria-label="Pesquisar carreira">
+        <span class="kpi-floating-icon" aria-hidden="true">⌕</span>
+        <span id="kpi-floating-text" class="kpi-floating-text--placeholder">pesquise carreira, categoria...</span>
+        <button id="kpi-floating-clear" class="kpi-floating-clear hidden" type="button" aria-label="Limpar seleção" title="Limpar seleção">✕</button>
+      </div>
+    </div>
+
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="mode-switch" role="tablist" aria-label="Escolha o modo do painel">
+          <button class="mode-card" type="button" role="tab" aria-pressed="false" data-mode="realtime">
+            <span aria-hidden="true">📡</span><span class="sr-only">Tempo real</span>
+          </button>
+          <button class="mode-card" type="button" role="tab" aria-pressed="false" data-mode="history">
+            <span aria-hidden="true">📜</span><span class="sr-only">Histórico</span>
+          </button>
+          <button class="mode-card mode-card--active" type="button" role="tab" aria-pressed="true" data-mode="transit">
+            <span aria-hidden="true">🚦</span><span class="sr-only">Trânsito</span>
+          </button>
+          <button class="mode-card" type="button" role="tab" aria-pressed="false" data-mode="fleet">
+            <span aria-hidden="true">🚍</span><span class="sr-only">Frota</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="sidebar-placeholder" aria-hidden="true"></div>
+
+      <div class="sidebar-section">
+        <label class="transit-select" for="window-select">
+          <span>Janela</span>
+          <div class="transit-picker" id="window-picker">
+            <button id="window-picker-btn" class="transit-picker-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+              <span id="window-picker-label">Último dia</span>
+              <span class="transit-picker-caret" aria-hidden="true">▾</span>
+            </button>
+            <div id="window-picker-menu" class="transit-picker-menu hidden" role="listbox" aria-label="Janela"></div>
+          </div>
+          <select id="window-select" class="transit-native-select--sr">
+            <option value="1h">Última hora</option>
+            <option value="24h" selected>Último dia</option>
+            <option value="30d">Último mês</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="sidebar-section" id="hour-filter-group">
+        <label class="transit-select" for="hour-filter-select">
+          <span>Intervalo horário</span>
+          <div class="transit-hour-slider-wrap">
+            <div class="transit-hour-range">
+              <div class="transit-hour-track" aria-hidden="true"></div>
+              <div id="hour-filter-range-fill" class="transit-hour-fill" aria-hidden="true"></div>
+              <input id="hour-filter-start" class="transit-hour-slider" type="range" min="0" max="24" step="1" value="0">
+              <input id="hour-filter-end" class="transit-hour-slider" type="range" min="0" max="24" step="1" value="24">
+            </div>
+            <div class="transit-hour-scale" aria-hidden="true">
+              <span>00</span>
+              <span>03</span>
+              <span>06</span>
+              <span>09</span>
+              <span>12</span>
+              <span>15</span>
+              <span>18</span>
+              <span>21</span>
+              <span>24</span>
+            </div>
+            <div id="hour-filter-slider-label" class="transit-hour-slider-label">00:00 → 24:00</div>
+          </div>
+          <select id="hour-filter-select" class="transit-native-select--sr">
+            <option value="">Todas as horas</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="sidebar-section" id="speed-spectrum-group">
+        <label class="transit-select">
+          <span>Visualização</span>
+          <div class="spectrum-card">
+            <div class="spectrum-range">
+              <div class="spectrum-track" aria-hidden="true"></div>
+              <div class="spectrum-preview" aria-hidden="true"></div>
+              <input id="speed-cut-1" class="spectrum-slider" type="range" min="0" max="100" step="0.05" value="21.56">
+              <input id="speed-cut-2" class="spectrum-slider" type="range" min="0" max="100" step="0.05" value="28.67">
+              <input id="speed-cut-3" class="spectrum-slider" type="range" min="0" max="100" step="0.05" value="46.44">
+              <input id="speed-cut-4" class="spectrum-slider" type="range" min="0" max="100" step="0.05" value="60.67">
+            </div>
+            <div class="spectrum-scale" aria-hidden="true">
+              <span data-speed="0">0</span>
+              <span data-speed="2">2</span>
+              <span data-speed="5">5</span>
+              <span data-speed="10">10</span>
+              <span data-speed="20">20</span>
+              <span data-speed="35">35</span>
+              <span data-speed="50">50</span>
+            </div>
+            <div class="spectrum-interval-cards">
+              <div class="spectrum-interval-card">
+                <span class="interval-swatch" style="--swatch:#000000"></span>
+                <div class="interval-inputs">
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="0" readonly>
+                  <span class="interval-sep">→</span>
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="1">
+                  <span class="interval-unit">km/h</span>
+                </div>
+              </div>
+              <div class="spectrum-interval-card">
+                <span class="interval-swatch" style="--swatch:#8b0000"></span>
+                <div class="interval-inputs">
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="1">
+                  <span class="interval-sep">→</span>
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="2">
+                  <span class="interval-unit">km/h</span>
+                </div>
+              </div>
+              <div class="spectrum-interval-card">
+                <span class="interval-swatch" style="--swatch:#ff8c00"></span>
+                <div class="interval-inputs">
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="2">
+                  <span class="interval-sep">→</span>
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="3">
+                  <span class="interval-unit">km/h</span>
+                </div>
+              </div>
+              <div class="spectrum-interval-card">
+                <span class="interval-swatch" style="--swatch:#ffd500"></span>
+                <div class="interval-inputs">
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="3">
+                  <span class="interval-sep">→</span>
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="4">
+                  <span class="interval-unit">km/h</span>
+                </div>
+              </div>
+              <div class="spectrum-interval-card">
+                <span class="interval-swatch" style="--swatch:#2e8b57"></span>
+                <div class="interval-inputs">
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="4">
+                  <span class="interval-sep">→</span>
+                  <input class="interval-input" type="number" min="0" max="50" step="0.1" data-boundary-index="5" readonly>
+                  <span class="interval-unit">km/h</span>
+                </div>
+              </div>
+            </div>
+            <div class="spectrum-note">Ajusta os intervalos de cor por velocidade (km/h).</div>
+          </div>
+        </label>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="toggle-row">
+          <label for="exclude-non-working-toggle">Excluir dias não úteis</label>
+          <input id="exclude-non-working-toggle" class="toggle-switch" type="checkbox">
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="toggle-row">
+          <label for="show-terminals-toggle">Mostrar terminais</label>
+          <input id="show-terminals-toggle" class="toggle-switch" type="checkbox">
+        </div>
+      </div>
+
+      <button id="load-btn" class="sidebar-button sidebar-button--primary" type="button">Aplicar filtros</button>
+      <div class="status-inline">
+        <span id="status-loading" class="status-loading hidden" aria-hidden="true"></span>
+        <p class="sidebar-note" id="status-note">A carregar carreiras…</p>
+      </div>
+      <div class="sidebar-footer">
+        <div class="sidebar-author-meta">
+          <a
+            class="sidebar-author-link"
+            href="https://discord.com/users/666907356789080066"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="sidebar-author-label">Feito por</span>
+            <span class="sidebar-author-handle">@Abelhato</span>
+          </a>
+          <button
+            id="sidebar-info-btn"
+            class="sidebar-info-button"
+            type="button"
+            aria-label="Informação sobre os dados"
+            aria-controls="sidebar-info-popover"
+            aria-expanded="false"
+          >
+            i
+          </button>
+          <div id="sidebar-info-popover" class="sidebar-info-popover" role="note" hidden>
+            <p>Informação baseada em dados da API pública da Carris. Os valores apresentados são estimativas e não refletem a operação com exatidão. Este é um projeto pessoal que procura ajudar a compreender melhor a operação e contribuir para a melhoria da mobilidade em Lisboa.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <button id="sidebar-close" type="button" aria-label="Fechar filtros">✕</button>
+
+    <section id="overlay-panel">
+      <div class="overlay-card">
+        <h1 class="overlay-title">🚦 Trânsito</h1>
+        <p class="overlay-subtitle">Segmentos pintados por velocidade comercial.</p>
+        <div class="transit-meta">
+          <span class="transit-chip" id="summary-window">Janela: —</span>
+          <span class="transit-chip" id="summary-hour">Hora: —</span>
+          <span class="transit-chip" id="summary-routes">Carreiras: —</span>
+          <span class="transit-chip" id="summary-segments">Segmentos: —</span>
+        </div>
+      </div>
+      <div class="overlay-card">
+        <div class="legend" aria-label="Legenda de velocidades">
+          <span class="legend-item"><span class="legend-swatch" style="background:#3498db;"></span>Terminal (2+2)</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#000000;"></span><span id="legend-speed-1">&lt; 3 km/h</span></span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#8b0000;"></span><span id="legend-speed-2">3-5 km/h</span></span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#ff8c00;"></span><span id="legend-speed-3">5-10 km/h</span></span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#ffd500;"></span><span id="legend-speed-4">10-14 km/h</span></span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#2e8b57;"></span><span id="legend-speed-5">&ge; 14 km/h</span></span>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div id="floating-search" class="floating-search floating-search--map hidden" aria-label="Pesquisar carreira">
+    <input id="floating-route-input" class="floating-route-input" type="search" placeholder="Pesquise carreira, categoria..." autocomplete="off">
+    <div id="floating-route-preview" class="floating-route-preview"></div>
+  </div>
+
+  <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Mostrar filtros">☰</button>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js" crossorigin=""></script>
+  <script>
+    (function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      const MAP_CENTER = [38.736946, -9.142685];
+      const MAP_ZOOM = 13;
+      const body = document.body;
+      const LEAFLET_TILE_URL = "https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key=IPxnys7P2HqrNFH4Lbps";
+      const MAPLIBRE_STYLE_URL = "https://api.maptiler.com/maps/dataviz-v4/style.json?key=IPxnys7P2HqrNFH4Lbps";
+      const sidebarToggle = document.getElementById("sidebar-toggle");
+      const sidebarClose = document.getElementById("sidebar-close");
+      const modeButtons = Array.from(document.querySelectorAll(".mode-card[data-mode]"));
+      const routeSearch = document.getElementById("route-search");
+      const routePreview = document.getElementById("route-preview");
+      const selectedRoutesEl = document.getElementById("selected-routes");
+      const routesClearBtn = document.getElementById("routes-clear-btn");
+      const kpiFloatingContext = document.getElementById("kpi-floating-context");
+      const kpiFloatingChip = document.getElementById("kpi-floating-chip");
+      const kpiFloatingText = document.getElementById("kpi-floating-text");
+      const kpiFloatingClear = document.getElementById("kpi-floating-clear");
+      const floatingSearch = document.getElementById("floating-search");
+      const floatingRouteInput = document.getElementById("floating-route-input");
+      const floatingRoutePreview = document.getElementById("floating-route-preview");
+      const windowSelect = document.getElementById("window-select");
+      const hourFilterGroup = document.getElementById("hour-filter-group");
+      const hourFilterSelect = document.getElementById("hour-filter-select");
+      const excludeNonWorkingToggle = document.getElementById("exclude-non-working-toggle");
+      const showTerminalsToggle = document.getElementById("show-terminals-toggle");
+      const windowPicker = document.getElementById("window-picker");
+      const windowPickerBtn = document.getElementById("window-picker-btn");
+      const windowPickerLabel = document.getElementById("window-picker-label");
+      const windowPickerMenu = document.getElementById("window-picker-menu");
+      const hourFilterStart = document.getElementById("hour-filter-start");
+      const hourFilterEnd = document.getElementById("hour-filter-end");
+      const hourFilterRangeFill = document.getElementById("hour-filter-range-fill");
+      const hourFilterSliderLabel = document.getElementById("hour-filter-slider-label");
+      const speedCut1 = document.getElementById("speed-cut-1");
+      const speedCut2 = document.getElementById("speed-cut-2");
+      const speedCut3 = document.getElementById("speed-cut-3");
+      const speedCut4 = document.getElementById("speed-cut-4");
+      const spectrumIntervalInputs = Array.from(document.querySelectorAll(".interval-input[data-boundary-index]"));
+      const spectrumPreview = document.querySelector(".spectrum-preview");
+      const spectrumScale = document.querySelector(".spectrum-scale");
+      const legendSpeed1 = document.getElementById("legend-speed-1");
+      const legendSpeed2 = document.getElementById("legend-speed-2");
+      const legendSpeed3 = document.getElementById("legend-speed-3");
+      const legendSpeed4 = document.getElementById("legend-speed-4");
+      const legendSpeed5 = document.getElementById("legend-speed-5");
+      const loadBtn = document.getElementById("load-btn");
+      const statusLoading = document.getElementById("status-loading");
+      const statusNote = document.getElementById("status-note");
+      const summaryWindow = document.getElementById("summary-window");
+      const summaryHour = document.getElementById("summary-hour");
+      const summaryRoutes = document.getElementById("summary-routes");
+      const summarySegments = document.getElementById("summary-segments");
+      const sidebarInfoBtn = document.getElementById("sidebar-info-btn");
+      const sidebarInfoPopover = document.getElementById("sidebar-info-popover");
+      const mql = window.matchMedia("(max-width: 900px)");
+
+      const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href).href;
+      const KNOWN_BACKEND_PORTS = [2026];
+      function normalizeBackendUrl(raw) {
+        if (!raw) return null;
+        const value = raw.trim();
+        if (!value) return null;
+        const proto =
+          typeof location !== "undefined" && location.protocol && location.protocol !== "file:"
+            ? location.protocol
+            : "http:";
+        const host = typeof location !== "undefined" && location.hostname ? location.hostname : "127.0.0.1";
+        if (/^\d+$/.test(value)) return `${proto}//${host}:${value}`;
+        if (/^[\w.-]+:\d+$/i.test(value)) return `${proto}//${value}`;
+        if (/^https?:\/\//i.test(value)) return value;
+        return null;
+      }
+      const API_BASES = (() => {
+        const out = [];
+        const override = urlParams.get("backend") || urlParams.get("api_base");
+        const normalizedOverride = normalizeBackendUrl(override);
+        if (normalizedOverride) out.push(normalizedOverride);
+        const originOk =
+          typeof location !== "undefined" &&
+          location.origin &&
+          location.origin !== "null" &&
+          location.protocol !== "file:";
+        const proto = originOk ? (location.protocol || "http:") : "http:";
+        const hostname = originOk ? location.hostname : "";
+        const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+        if (originOk && hostname) out.push(location.origin);
+        if (isLoopback) {
+          ["127.0.0.1", "localhost"].forEach(loopHost => {
+            KNOWN_BACKEND_PORTS.forEach(port => {
+              out.push(`${proto}//${loopHost}:${port}`);
+            });
+          });
+        }
+        return Array.from(new Set(out));
+      })();
+      const allRoutes = [];
+      const routeById = new Map();
+      const selectedRouteSet = new Set();
+      const STANDARD_ROUTE_CATEGORIES = [
+        "Autocarros Diurnos",
+        "Carreiras de Bairro",
+        "Elétricos",
+        "Rede Madrugada"
+      ];
+      const ZONE_COLOR_BY_NAME = {
+        Bairro: "#FFE113",
+        Centro: "#FF7F00",
+        Ocidental: "#FF0078",
+        Madrugada: "#0060A9",
+        Transversal: "#808080",
+        Oriental: "#F70002",
+        Noroeste: "#00A0EF",
+        Norte: "#39BA2E"
+      };
+      const ZONE_ROUTE_BASES = {
+        Centro: new Set([
+          "12E", "24E", "25E", "28E", "51E", "52E", "53E", "54E", "55E",
+          "702", "706", "709", "712", "713", "730", "734", "737", "740",
+          "773", "774", "790", "797"
+        ]),
+        Ocidental: new Set([
+          "15E", "18E", "714", "723", "732", "748", "751", "760", "776",
+          "784", "786"
+        ]),
+        Madrugada: new Set([
+          "201", "202", "203", "204", "205", "206", "207", "208", "209", "210"
+        ]),
+        Transversal: new Set([
+          "701", "703", "720", "727", "728", "728F", "738", "742", "750", "752",
+          "753", "756", "767"
+        ]),
+        Oriental: new Set([
+          "16E", "705", "708", "718", "722", "725", "731", "744", "745", "749",
+          "755", "759", "779", "781", "782", "783", "793", "794"
+        ]),
+        Noroeste: new Set([
+          "711", "716", "724", "726", "729", "746", "754", "758", "763", "764",
+          "765", "768", "770", "771", "780", "799"
+        ]),
+        Norte: new Set([
+          "717", "735", "736", "747", "757", "777", "778", "796", "798"
+        ])
+      };
+      const observedCategories = new Set(STANDARD_ROUTE_CATEGORIES);
+      let selectedCategory = "";
+      let autoApplyReady = false;
+      let autoApplyTimer = null;
+      const transitResponseCache = new Map();
+      const TRANSIT_CACHE_TTL_MS = 20000;
+      let transitFetchController = null;
+      let latestTransitRefreshToken = 0;
+      let lastTransitGroups = [];
+      let lastTransitRouteCount = 0;
+      let pendingSelectionFit = false;
+      let speedThresholds = { t1: 3, t2: 5, t3: 10, t4: 14 };
+      const SPEED_SCALE_MAX = 50;
+      const SPEED_CONTROL_MAX = 100;
+      // Piecewise scale: allocates most slider travel to 2-20 km/h for finer tuning.
+      const SPEED_CONTROL_ANCHORS = [
+        { control: 0, speed: 0 },
+        { control: 18, speed: 2 },
+        { control: 82, speed: 20 },
+        { control: SPEED_CONTROL_MAX, speed: SPEED_SCALE_MAX }
+      ];
+
+      // --- LEAFLET ADAPTER (same architecture used in dashboard.html) ---
+      class LeafletAdapter {
+        constructor() {
+          this.map = L.map("map", { zoomControl: true, preferCanvas: true, inertia: true }).setView(MAP_CENTER, MAP_ZOOM);
+          this.overlayGroup = L.layerGroup().addTo(this.map);
+          this.selectionLayer = L.layerGroup().addTo(this.overlayGroup);
+          this.transitLayer = L.layerGroup().addTo(this.overlayGroup);
+          this.segmentMetaByKey = new Map();
+          this.selectedSegmentKey = "";
+          L.tileLayer(LEAFLET_TILE_URL, {
+            attribution: "&copy; OpenStreetMap contributors &copy; MapTiler",
+            maxZoom: 19,
+            tileSize: 512,
+            zoomOffset: -1,
+            detectRetina: true,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
+            keepBuffer: 4
+          }).addTo(this.map);
+          this.ready = Promise.resolve();
+        }
+
+        featureSegmentKey(feature) {
+          const key = feature?.properties?.segment_key;
+          if (key !== null && key !== undefined && key !== "") return String(key);
+          return String(feature?.properties?.route_base || "");
+        }
+
+        clearSelection() {
+          this.selectedSegmentKey = "";
+          this.selectionLayer?.clearLayers?.();
+        }
+
+        selectSegment(feature) {
+          const segmentKey = this.featureSegmentKey(feature);
+          const meta = this.segmentMetaByKey.get(segmentKey);
+          if (!meta) return;
+          this.selectedSegmentKey = segmentKey;
+          this.selectionLayer?.clearLayers?.();
+          L.polyline(meta.latlngs, {
+            color: "#ffe082",
+            weight: meta.baseWeight + 11,
+            opacity: 0.58,
+            lineCap: "round",
+            lineJoin: "round",
+            interactive: false
+          }).addTo(this.selectionLayer);
+          L.polyline(meta.latlngs, {
+            color: "#fff7d1",
+            weight: meta.baseWeight + 5,
+            opacity: 0.9,
+            lineCap: "round",
+            lineJoin: "round",
+            interactive: false
+          }).addTo(this.selectionLayer);
+        }
+
+        clearOverlay() {
+          this.clearSelection();
+          this.segmentMetaByKey.clear();
+          this.transitLayer?.clearLayers?.();
+          const container = this.map?.getContainer?.();
+          if (container) container.style.cursor = "";
+        }
+
+        setTransitSegments(features, { fit = true, fitPadding = null } = {}) {
+          this.clearOverlay();
+          const layers = [];
+          const orderedFeatures = Array.isArray(features)
+            ? features.slice().sort((a, b) => {
+                const pa = Number(a?.properties?.draw_priority);
+                const pb = Number(b?.properties?.draw_priority);
+                const safePa = Number.isFinite(pa) ? pa : 0;
+                const safePb = Number.isFinite(pb) ? pb : 0;
+                if (safePa !== safePb) return safePa - safePb;
+                const sa = Number(a?.properties?.seq);
+                const sb = Number(b?.properties?.seq);
+                const safeSa = Number.isFinite(sa) ? sa : Number.MAX_SAFE_INTEGER;
+                const safeSb = Number.isFinite(sb) ? sb : Number.MAX_SAFE_INTEGER;
+                return safeSa - safeSb;
+              })
+            : [];
+          for (const feature of orderedFeatures) {
+            const coords = feature?.geometry?.coordinates;
+            if (!Array.isArray(coords) || coords.length < 2) continue;
+            const c0 = coords[0];
+            const c1 = coords[1];
+            if (!Array.isArray(c0) || !Array.isArray(c1)) continue;
+            const latlngs = [[c0[1], c0[0]], [c1[1], c1[0]]];
+            const baseWeight = Number(feature?.properties?.is_terminal) ? 5 : 4;
+            const line = L.polyline(latlngs, {
+              color: feature?.properties?.color || "#999",
+              weight: baseWeight,
+              opacity: 0.95,
+              lineCap: "round",
+              lineJoin: "round"
+            });
+            const hitLine = L.polyline(latlngs, {
+              color: "#ffffff",
+              weight: Math.max(baseWeight + 12, 16),
+              opacity: 0.01,
+              lineCap: "round",
+              lineJoin: "round"
+            });
+            const r = feature?.properties?.route_base || "";
+            const rLabel = feature?.properties?.route_label || r;
+            const rCode = feature?.properties?.route_code || r;
+            const seq = feature?.properties?.seq;
+            const speed = feature?.properties?.speed_label || "sem dados";
+            const term = Number(feature?.properties?.is_terminal) ? "Terminal" : speed;
+            line.bindTooltip(`<b>${r}</b><br>Seq ${seq}<br>${term}`, { sticky: true });
+            line.bindPopup(transitSegmentPopupHtml({
+              routeBase: r,
+              routeLabel: rLabel,
+              routeCode: rCode,
+              seq,
+              speed
+            }), { className: "custom-popup", maxWidth: 280 });
+            const segmentKey = this.featureSegmentKey(feature);
+            this.segmentMetaByKey.set(segmentKey, { latlngs, baseWeight });
+            const onSegmentClick = (event) => {
+              this.selectSegment(feature);
+              line.openPopup(event?.latlng);
+            };
+            const onSegmentHover = () => {
+              const container = this.map?.getContainer?.();
+              if (container) container.style.cursor = "pointer";
+            };
+            const onSegmentOut = () => {
+              const container = this.map?.getContainer?.();
+              if (container) container.style.cursor = "";
+            };
+            line.on("click", onSegmentClick);
+            hitLine.on("click", onSegmentClick);
+            line.on("mouseover", onSegmentHover);
+            hitLine.on("mouseover", onSegmentHover);
+            line.on("mouseout", onSegmentOut);
+            hitLine.on("mouseout", onSegmentOut);
+            hitLine.addTo(this.transitLayer);
+            line.addTo(this.transitLayer);
+            layers.push(line);
+          }
+          if (fit && layers.length) {
+            try {
+              const bounds = L.featureGroup(layers).getBounds();
+              if (bounds?.isValid?.()) {
+                const p = fitPadding || { top: 36, right: 36, bottom: 36, left: 36 };
+                this.map.fitBounds(bounds, {
+                  paddingTopLeft: [Number(p.left) || 36, Number(p.top) || 36],
+                  paddingBottomRight: [Number(p.right) || 36, Number(p.bottom) || 36],
+                  maxZoom: 15
+                });
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      // --- MAPLIBRE ADAPTER (same architecture used in dashboard.html) ---
+      class MapLibreAdapter {
+        constructor() {
+          this.map = null;
+          this.sourceId = "transit-overlay";
+          this.hitLayerId = "transit-segments-hit";
+          this.mainLayerId = "transit-segments";
+          this.selectedGlowLayerId = "transit-segment-selected-glow";
+          this.selectedLayerId = "transit-segment-selected";
+          this.popup = null;
+          this.eventsBound = false;
+          this.selectedSegmentKey = "";
+          this.ready = this.init();
+        }
+
+        async init() {
+          this.map = new maplibregl.Map({
+            container: "map",
+            style: MAPLIBRE_STYLE_URL,
+            center: [MAP_CENTER[1], MAP_CENTER[0]],
+            zoom: MAP_ZOOM,
+            attributionControl: false
+          });
+          await new Promise((resolve) => this.map.once("load", resolve));
+          this.initOverlayLayers();
+        }
+
+        initOverlayLayers() {
+          if (!this.map) return;
+          if (!this.map.getSource(this.sourceId)) {
+            this.map.addSource(this.sourceId, {
+              type: "geojson",
+              data: { type: "FeatureCollection", features: [] }
+            });
+          }
+          if (!this.map.getLayer(this.hitLayerId)) {
+            this.map.addLayer({
+              id: this.hitLayerId,
+              type: "line",
+              source: this.sourceId,
+              layout: {
+                "line-cap": "round",
+                "line-join": "round",
+                "line-sort-key": ["coalesce", ["get", "draw_priority"], 0]
+              },
+              paint: {
+                "line-color": "#ffffff",
+                "line-width": ["case", ["==", ["get", "is_terminal"], 1], 18, 14],
+                "line-opacity": 0.01
+              }
+            });
+          }
+          if (!this.map.getLayer(this.mainLayerId)) {
+            this.map.addLayer({
+              id: this.mainLayerId,
+              type: "line",
+              source: this.sourceId,
+              layout: {
+                "line-cap": "round",
+                "line-join": "round",
+                "line-sort-key": ["coalesce", ["get", "draw_priority"], 0]
+              },
+              paint: {
+                "line-color": ["coalesce", ["get", "color"], "#999999"],
+                "line-width": ["case", ["==", ["get", "is_terminal"], 1], 6, 4],
+                "line-opacity": 0.95
+              }
+            });
+          }
+          if (!this.map.getLayer(this.selectedGlowLayerId)) {
+            this.map.addLayer({
+              id: this.selectedGlowLayerId,
+              type: "line",
+              source: this.sourceId,
+              filter: ["==", ["get", "segment_key"], "__none__"],
+              layout: {
+                "line-cap": "round",
+                "line-join": "round"
+              },
+              paint: {
+                "line-color": "#ffe082",
+                "line-width": ["case", ["==", ["get", "is_terminal"], 1], 16, 14],
+                "line-opacity": 0.5,
+                "line-blur": 1.4
+              }
+            }, this.mainLayerId);
+          }
+          if (!this.map.getLayer(this.selectedLayerId)) {
+            this.map.addLayer({
+              id: this.selectedLayerId,
+              type: "line",
+              source: this.sourceId,
+              filter: ["==", ["get", "segment_key"], "__none__"],
+              layout: {
+                "line-cap": "round",
+                "line-join": "round"
+              },
+              paint: {
+                "line-color": "#fff7d1",
+                "line-width": ["case", ["==", ["get", "is_terminal"], 1], 8, 6],
+                "line-opacity": 0.88
+              }
+            });
+          }
+          if (!this.eventsBound) {
+            this.map.on("mouseenter", this.hitLayerId, () => {
+              this.map.getCanvas().style.cursor = "pointer";
+            });
+            this.map.on("mouseleave", this.hitLayerId, () => {
+              this.map.getCanvas().style.cursor = "";
+            });
+            this.map.on("click", (event) => {
+              const feature = this.pickNearestFeature(event?.point);
+              if (!feature) return;
+              this.selectSegment(feature?.properties?.segment_key);
+              this.openPopup(feature, event?.lngLat);
+            });
+            this.eventsBound = true;
+          }
+        }
+
+        pickNearestFeature(point) {
+          if (!this.map || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+          const radius = 12;
+          const queryBox = [
+            [point.x - radius, point.y - radius],
+            [point.x + radius, point.y + radius]
+          ];
+          const candidates = this.map.queryRenderedFeatures(queryBox, {
+            layers: [this.hitLayerId, this.mainLayerId, this.selectedGlowLayerId, this.selectedLayerId]
+          }) || [];
+          const seen = new Set();
+          for (const feature of candidates) {
+            const key = String(feature?.properties?.segment_key || "");
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            return feature;
+          }
+          return null;
+        }
+
+        selectSegment(segmentKey) {
+          const key = String(segmentKey || "").trim();
+          this.selectedSegmentKey = key;
+          const filter = key
+            ? ["==", ["get", "segment_key"], key]
+            : ["==", ["get", "segment_key"], "__none__"];
+          if (this.map?.getLayer(this.selectedGlowLayerId)) this.map.setFilter(this.selectedGlowLayerId, filter);
+          if (this.map?.getLayer(this.selectedLayerId)) this.map.setFilter(this.selectedLayerId, filter);
+        }
+
+        openPopup(feature, lngLat) {
+          const props = feature?.properties || {};
+          const route = props.route_base || "";
+          const routeLabel = props.route_label || route;
+          const routeCode = props.route_code || route;
+          const seq = props.seq || "—";
+          const speed = props.speed_label || "sem dados";
+          const html = transitSegmentPopupHtml({
+            routeBase: route,
+            routeLabel,
+            routeCode,
+            seq,
+            speed
+          });
+          const coords = feature?.geometry?.coordinates;
+          const midpoint = Array.isArray(coords) && coords.length >= 2
+            ? [((Number(coords[0][0]) || 0) + (Number(coords[1][0]) || 0)) / 2, ((Number(coords[0][1]) || 0) + (Number(coords[1][1]) || 0)) / 2]
+            : [MAP_CENTER[1], MAP_CENTER[0]];
+          if (this.popup) this.popup.remove();
+          this.popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px", className: "custom-popup" })
+            .setLngLat(lngLat || midpoint)
+            .setHTML(html)
+            .addTo(this.map);
+        }
+
+        clearOverlay() {
+          if (!this.map) return;
+          this.selectSegment("");
+          if (this.popup) {
+            this.popup.remove();
+            this.popup = null;
+          }
+          this.map.getCanvas().style.cursor = "";
+          const src = this.map.getSource(this.sourceId);
+          if (src && typeof src.setData === "function") {
+            src.setData({ type: "FeatureCollection", features: [] });
+          }
+        }
+
+        setTransitSegments(features, { fit = true, fitPadding = null } = {}) {
+          if (!this.map) return;
+          const clean = Array.isArray(features) ? features : [];
+          const src = this.map.getSource(this.sourceId);
+          if (src && typeof src.setData === "function") {
+            src.setData({ type: "FeatureCollection", features: clean });
+          }
+          if (fit && clean.length) {
+            try {
+              const bounds = new maplibregl.LngLatBounds();
+              clean.forEach((f) => {
+                const coords = f?.geometry?.coordinates;
+                if (Array.isArray(coords) && coords.length >= 2) {
+                  bounds.extend(coords[0]);
+                  bounds.extend(coords[1]);
+                }
+              });
+              if (!bounds.isEmpty()) {
+                const p = fitPadding || { top: 36, right: 36, bottom: 36, left: 36 };
+                this.map.fitBounds(bounds, {
+                  padding: {
+                    top: Number(p.top) || 36,
+                    right: Number(p.right) || 36,
+                    bottom: Number(p.bottom) || 36,
+                    left: Number(p.left) || 36
+                  },
+                  maxZoom: 15
+                });
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      // --- Inicialização (same adapter architecture as dashboard.html) ---
+      function createAdapter() {
+        const rendererPref = (urlParams.get("renderer") || "").toLowerCase();
+        const hasMapLibre = typeof maplibregl !== "undefined";
+        const hasLeaflet = typeof L !== "undefined";
+
+        if (rendererPref === "leaflet" && hasLeaflet) return new LeafletAdapter();
+        if (rendererPref === "maplibre" && hasMapLibre) return new MapLibreAdapter();
+        if (hasMapLibre) {
+          try { return new MapLibreAdapter(); } catch (err) { console.warn("MapLibre falhou, alternando para Leaflet:", err); }
+        }
+        if (hasLeaflet) return new LeafletAdapter();
+        throw new Error("Nenhum renderer de mapa disponível (MapLibre ou Leaflet).");
+      }
+
+      let adapter;
+      try {
+        adapter = createAdapter();
+      } catch (err) {
+        console.error("Falha ao inicializar mapa:", err);
+        adapter = {
+          ready: Promise.resolve(),
+          map: null,
+          clearOverlay: () => {},
+          setTransitSegments: () => {}
+        };
+      }
+      const adapterReady = Promise.resolve(adapter.ready);
+
+      function setSidebarCollapsed(collapsed) {
+        body.classList.toggle("sidebar-collapsed", collapsed);
+        sidebarToggle?.setAttribute("aria-expanded", String(!collapsed));
+        syncFloatingContextIconState();
+        syncFloatingSearchPlacement();
+        setTimeout(() => {
+          try {
+            if (adapter instanceof MapLibreAdapter) adapter.map?.resize?.();
+            else if (adapter instanceof LeafletAdapter) adapter.map?.invalidateSize?.();
+          } catch (e) {}
+        }, 220);
+      }
+
+      function syncCollapsed() {
+        setSidebarCollapsed(body.classList.contains("sidebar-collapsed"));
+      }
+
+      if (mql.addEventListener) mql.addEventListener("change", syncCollapsed);
+      else if (mql.addListener) mql.addListener(syncCollapsed);
+      if (mql.matches) {
+        body.classList.add("sidebar-collapsed");
+      }
+      syncCollapsed();
+      sidebarToggle?.addEventListener("click", () => setSidebarCollapsed(false));
+      sidebarClose?.addEventListener("click", () => setSidebarCollapsed(true));
+
+      const realtimePageUrl = new URL("dashboard.html", location.href).href;
+      const historyPageUrl = new URL("history.html", location.href).href;
+      const fleetPageUrl = new URL("fleet.html", location.href).href;
+      const transitPageUrl = new URL("transito.html", location.href).href;
+
+      function setActiveMode(modeName) {
+        modeButtons.forEach((btn) => {
+          const isActive = btn.dataset.mode === modeName;
+          btn.classList.toggle("mode-card--active", isActive);
+          btn.setAttribute("aria-pressed", String(isActive));
+        });
+      }
+      setActiveMode("transit");
+
+      modeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const nextMode = button.dataset.mode;
+          if (nextMode === "realtime") return void (location.href = realtimePageUrl);
+          if (nextMode === "history") return void (location.href = historyPageUrl);
+          if (nextMode === "fleet") return void (location.href = fleetPageUrl);
+          if (nextMode === "transit") return void (location.href = transitPageUrl);
+        });
+      });
+
+      for (let h = 0; h < 24; h += 1) {
+        const hh = String(h).padStart(2, "0");
+        const opt = document.createElement("option");
+        opt.value = String(h);
+        opt.textContent = `${hh}:00 - ${hh}:59`;
+        hourFilterSelect.appendChild(opt);
+      }
+
+      function toggleHourFilter() {
+        hourFilterGroup.style.display = windowSelect.value === "1h" ? "none" : "flex";
+      }
+      windowSelect.addEventListener("change", toggleHourFilter);
+      toggleHourFilter();
+
+      function syncPickerLabel(selectEl, labelEl) {
+        if (!selectEl || !labelEl) return;
+        labelEl.textContent = selectEl.options?.[selectEl.selectedIndex]?.textContent || "";
+      }
+
+      function closePicker(pickerEl, btnEl, menuEl) {
+        if (!pickerEl || !btnEl || !menuEl) return;
+        pickerEl.classList.remove("is-open");
+        btnEl.setAttribute("aria-expanded", "false");
+        menuEl.classList.add("hidden");
+      }
+
+      function openPicker(pickerEl, btnEl, menuEl) {
+        if (!pickerEl || !btnEl || !menuEl) return;
+        pickerEl.classList.add("is-open");
+        btnEl.setAttribute("aria-expanded", "true");
+        menuEl.classList.remove("hidden");
+      }
+
+      function closeAllPickers() {
+        closePicker(windowPicker, windowPickerBtn, windowPickerMenu);
+      }
+
+      function closeSidebarInfoPopover() {
+        if (!sidebarInfoBtn || !sidebarInfoPopover) return;
+        sidebarInfoPopover.hidden = true;
+        sidebarInfoPopover.classList.remove("visible");
+        sidebarInfoBtn.setAttribute("aria-expanded", "false");
+      }
+
+      function openSidebarInfoPopover() {
+        if (!sidebarInfoBtn || !sidebarInfoPopover) return;
+        sidebarInfoPopover.hidden = false;
+        sidebarInfoBtn.setAttribute("aria-expanded", "true");
+        requestAnimationFrame(() => {
+          sidebarInfoPopover.classList.add("visible");
+        });
+      }
+
+      function togglePicker(pickerEl, btnEl, menuEl) {
+        if (!pickerEl || !btnEl || !menuEl) return;
+        const isOpen = pickerEl.classList.contains("is-open");
+        closeAllPickers();
+        if (!isOpen) openPicker(pickerEl, btnEl, menuEl);
+      }
+
+      function buildPickerOptions(selectEl, menuEl) {
+        if (!selectEl || !menuEl) return;
+        const current = String(selectEl.value ?? "");
+        menuEl.innerHTML = "";
+        Array.from(selectEl.options || []).forEach((opt) => {
+          const value = String(opt.value ?? "");
+          const optionBtn = document.createElement("button");
+          optionBtn.type = "button";
+          optionBtn.className = `transit-picker-option${value === current ? " is-active" : ""}`;
+          optionBtn.setAttribute("data-value", value);
+          optionBtn.textContent = String(opt.textContent || "");
+          optionBtn.addEventListener("click", () => {
+            if (String(selectEl.value ?? "") !== value) {
+              selectEl.value = value;
+              selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            closeAllPickers();
+          });
+          menuEl.appendChild(optionBtn);
+        });
+      }
+
+      windowPickerBtn?.addEventListener("click", () => {
+        buildPickerOptions(windowSelect, windowPickerMenu);
+        togglePicker(windowPicker, windowPickerBtn, windowPickerMenu);
+      });
+      syncPickerLabel(windowSelect, windowPickerLabel);
+      buildPickerOptions(windowSelect, windowPickerMenu);
+
+      function hourTextFromValue(value) {
+        const num = Number(value);
+        const hh = String(Number.isFinite(num) ? num : 0).padStart(2, "0");
+        if (hh === "24") return "24:00";
+        return `${hh}:00`;
+      }
+
+      function currentLocalServiceDate() {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function syncHourSliderLabel() {
+        if (!hourFilterSliderLabel || !hourFilterStart || !hourFilterEnd) return;
+        hourFilterSliderLabel.textContent = `${hourTextFromValue(hourFilterStart.value)} → ${hourTextFromValue(hourFilterEnd.value)}`;
+        updateHourRangeFill();
+      }
+
+      function updateHourRangeFill() {
+        if (!hourFilterRangeFill || !hourFilterStart || !hourFilterEnd) return;
+        const min = Number(hourFilterStart.min || 0);
+        const max = Number(hourFilterStart.max || 23);
+        const span = Math.max(1, max - min);
+        const start = Number(hourFilterStart.value);
+        const end = Number(hourFilterEnd.value);
+        const startPct = ((start - min) / span) * 100;
+        const endPct = ((end - min) / span) * 100;
+        hourFilterRangeFill.style.left = `${Math.min(startPct, endPct)}%`;
+        hourFilterRangeFill.style.width = `${Math.max(0, Math.abs(endPct - startPct))}%`;
+      }
+
+      function normalizeHourRange(changed = "start") {
+        if (!hourFilterStart || !hourFilterEnd) return;
+        let start = Number(hourFilterStart.value);
+        let end = Number(hourFilterEnd.value);
+        if (!Number.isFinite(start)) start = 0;
+        if (!Number.isFinite(end)) end = 0;
+        if (start > end) {
+          if (changed === "start") end = start;
+          else start = end;
+        }
+        hourFilterStart.value = String(start);
+        hourFilterEnd.value = String(end);
+      }
+
+      function applySpecificHourRangeFromSliders() {
+        if (!hourFilterStart || !hourFilterEnd) return;
+        normalizeHourRange();
+        const start = String(hourFilterStart.value ?? "");
+        if (hourFilterSelect.value !== start) {
+          hourFilterSelect.value = start;
+        }
+        hourFilterSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      hourFilterStart?.addEventListener("input", () => {
+        normalizeHourRange("start");
+        syncHourSliderLabel();
+        applySpecificHourRangeFromSliders();
+      });
+      hourFilterEnd?.addEventListener("input", () => {
+        normalizeHourRange("end");
+        syncHourSliderLabel();
+        applySpecificHourRangeFromSliders();
+      });
+      syncHourSliderLabel();
+      if (hourFilterSelect && hourFilterSelect.value === "") hourFilterSelect.value = "0";
+
+      function parseCsvLine(line) {
+        const out = [];
+        let cur = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              cur += '"';
+              i += 1;
+            } else inQuotes = !inQuotes;
+          } else if (ch === "," && !inQuotes) {
+            out.push(cur);
+            cur = "";
+          } else cur += ch;
+        }
+        out.push(cur);
+        return out;
+      }
+
+      function escapeHtml(value = "") {
+        return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      function transitSegmentPopupHtml({ routeBase = "", routeLabel = "", routeCode = "", seq = "—", speed = "sem dados" } = {}) {
+        const labelText = String(routeLabel || routeBase || "—").trim();
+        const codeText = String(routeCode || routeBase || "—").trim();
+        const style = pillStyleForRoute(labelText || codeText);
+        const pill = `<span class="route-pill" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(codeText)}</span>`;
+        return `
+          <div class="transit-popup">
+            <div class="transit-popup__header">
+              ${pill}
+            </div>
+            <div class="transit-popup__body">
+              <div>Velocidade: <strong>${escapeHtml(speed)}</strong></div>
+            </div>
+          </div>
+        `;
+      }
+
+      function parseRouteCodeParts(label) {
+        const raw = String(label || "").trim();
+        if (!raw) return { code: "", rest: "" };
+        const match = raw.match(/^([^\s]+)/);
+        const code = match ? match[1] : raw;
+        const rest = raw.slice(code.length).trim();
+        return { code, rest };
+      }
+
+      function defineRouteCategory(label) {
+        const code = parseRouteCodeParts(label).code.toUpperCase();
+        if (/^2\d{2}$/.test(code)) return "Rede Madrugada";
+        if (code.endsWith("E")) return "Elétricos";
+        if (code.endsWith("B")) return "Carreiras de Bairro";
+        return "Autocarros Diurnos";
+      }
+
+      function pillBgForCategory(category) {
+        if (category === "Autocarros Diurnos") return "#2ecc71";
+        if (category === "Carreiras de Bairro") return "#c084fc";
+        if (category === "Elétricos") return "#f39c12";
+        if (category === "Rede Madrugada") return "#3498db";
+        return "#e2e8f0";
+      }
+
+      function defineRouteZone(label) {
+        const { code, rest } = parseRouteCodeParts(label);
+        const upper = String(code || "").toUpperCase();
+        const numeric = upper.match(/\d{1,3}/)?.[0] || upper;
+        if (upper.endsWith("B")) return "Bairro";
+        if (ZONE_ROUTE_BASES.Madrugada.has(numeric)) return "Madrugada";
+        for (const [zone, routes] of Object.entries(ZONE_ROUTE_BASES)) {
+          if (routes.has(upper) || routes.has(numeric)) return zone;
+        }
+        return null;
+      }
+
+      function pillStyleForRoute(label) {
+        const zone = defineRouteZone(label);
+        const zoneColor = zone ? ZONE_COLOR_BY_NAME[zone] : null;
+        if (zoneColor) return { bg: zoneColor, fg: "#ffffff", border: zoneColor, zone };
+        const code = parseRouteCodeParts(label).code.toUpperCase();
+        if (code.endsWith("E")) return { bg: "#ffe6a8", fg: "#6b4600", border: "#e6c779", zone: null };
+        if (/^20\d$/.test(code)) return { bg: "#dbeafe", fg: "#0b3a75", border: "#9fc5ff", zone: null };
+        return { bg: "#e2e8f0", fg: "#0b1220", border: "#c7d2e2", zone: null };
+      }
+
+      function sortRouteLabels(a, b) {
+        return a.label.localeCompare(b.label, "pt", { numeric: true, sensitivity: "base" });
+      }
+
+      async function loadRoutes() {
+        const resp = await fetch(ROUTES_DATA_URL, { cache: "force-cache" });
+        if (!resp.ok) throw new Error(`Falha ao carregar rotas (${resp.status})`);
+        const text = await resp.text();
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        const headers = parseCsvLine(lines[0] || "");
+        const ridIdx = headers.indexOf("route_id");
+        const shortIdx = headers.indexOf("route_short_name");
+        const longIdx = headers.indexOf("route_long_name");
+        if (ridIdx < 0) return [];
+
+        const byBase = new Map();
+        for (let i = 1; i < lines.length; i += 1) {
+          const cols = parseCsvLine(lines[i]);
+          const routeId = String(cols[ridIdx] || "").trim();
+          if (!routeId) continue;
+          const routeIdParts = routeId.split("_");
+          const base = routeIdParts[0];
+          if (!base) continue;
+          const variantRaw = routeIdParts.length > 1 ? routeIdParts[routeIdParts.length - 1] : "";
+          const variant = Number.parseInt(variantRaw, 10);
+          const variantRank = Number.isFinite(variant) ? (variant === 0 ? 0 : 1) : 2;
+          const shortName = String(cols[shortIdx] || base).trim() || base;
+          const longName = String(cols[longIdx] || "").trim();
+          const label = longName ? `${shortName} ${longName}` : shortName;
+          const existing = byBase.get(base);
+          if (!existing || variantRank < existing.variantRank) {
+            byBase.set(base, { value: base, label, variantRank });
+          }
+        }
+        return Array.from(byBase.values())
+          .map((route) => ({ value: route.value, label: route.label }))
+          .sort(sortRouteLabels);
+      }
+
+      function selectedRouteIds() {
+        return Array.from(selectedRouteSet);
+      }
+
+      function effectiveRouteIds() {
+        const selected = selectedRouteIds();
+        if (selected.length) return selected;
+        return allRoutes.map((route) => String(route.value || "").trim()).filter(Boolean);
+      }
+
+      function currentSidebarQuery() {
+        return routeSearch?.value || "";
+      }
+
+      function routePreviewItemMarkup(route) {
+        const displayLabel = route?.label || route?.value || "";
+        const { code, rest } = parseRouteCodeParts(displayLabel);
+        const style = pillStyleForRoute(displayLabel);
+        const pill = `<span class="route-pill" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(code || route.value)}</span>`;
+        return `<div class="preview-item" role="option" data-route-id="${escapeHtml(route.value)}"><span class="preview-label">${pill} ${escapeHtml(rest || displayLabel)}</span><span class="preview-actions"><button class="preview-add" type="button" data-route-add="${escapeHtml(route.value)}" aria-label="Adicionar ${escapeHtml(displayLabel)}">+</button></span></div>`;
+      }
+
+      function categoryPreviewItemMarkup(entry) {
+        const safeLabel = escapeHtml(entry.label || entry.value || "");
+        const safeValue = escapeHtml(entry.value || entry.label || "");
+        return `<div class="preview-item preview-category" role="option" data-category="${safeValue}"><span class="preview-label">${safeLabel}</span></div>`;
+      }
+
+      function previewEntries(query, { allowEmpty = false } = {}) {
+        const q = String(query || "").trim().toLowerCase();
+        if (!allowEmpty && !q) return [];
+        return allRoutes
+          .filter((route) => {
+            const hay = `${route.value} ${route.label}`.toLowerCase();
+            if (!q) return true;
+            return hay.includes(q);
+          });
+      }
+
+      function previewCategoryEntries(query = "") {
+        const q = String(query || "").trim().toLowerCase();
+        return Array.from(observedCategories)
+          .filter(Boolean)
+          .filter((cat) => !q || cat.toLowerCase().includes(q))
+          .sort((a, b) => a.localeCompare(b, "pt", { numeric: true, sensitivity: "base" }))
+          .slice(0, 7)
+          .map((cat) => ({ label: cat, value: cat }));
+      }
+
+      function buildSearchPreviewHtml(routeEntries, categoryEntries, { excludeSelected = false } = {}) {
+        const routes = (routeEntries || []).filter((route) => !excludeSelected || !selectedRouteSet.has(route.value));
+        const routeHtml = routes.map(routePreviewItemMarkup).join("");
+        const categoryHtml = (categoryEntries || []).map(categoryPreviewItemMarkup).join("");
+        return `${routeHtml}${categoryHtml}`;
+      }
+
+      function renderSelectedRoutes() {
+        const ids = selectedRouteIds();
+        if (!ids.length) {
+          if (selectedRoutesEl) selectedRoutesEl.innerHTML = '<span class="route-empty-hint">Sem carreiras selecionadas.</span>';
+          updateFloatingContext();
+          return;
+        }
+        if (selectedRoutesEl) selectedRoutesEl.innerHTML = ids.map((id) => {
+          const route = routeById.get(id) || { value: id, label: id };
+          const displayLabel = route.label || route.value;
+          const { code } = parseRouteCodeParts(displayLabel);
+          const style = pillStyleForRoute(displayLabel);
+          return `<span class="route-pill route-pill--selected" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(code || id)}<button class="route-pill-remove" type="button" data-remove-route="${escapeHtml(id)}" aria-label="Remover ${escapeHtml(displayLabel)}">×</button></span>`;
+        }).join("");
+        updateFloatingContext();
+      }
+
+      function renderRoutePreview(query = "") {
+        if (!routePreview) return;
+        const routeEntries = previewEntries(query, { allowEmpty: true });
+        const categoryEntries = previewCategoryEntries(query);
+        const html = buildSearchPreviewHtml(routeEntries, categoryEntries, { excludeSelected: true });
+        if (!html) {
+          routePreview.innerHTML = '<div class="preview-item" aria-hidden="true"><span class="preview-label">Sem resultados</span></div>';
+          return;
+        }
+        routePreview.innerHTML = html;
+      }
+
+      function addRouteSelection(routeId) {
+        const id = String(routeId || "").trim();
+        if (!id || selectedRouteSet.has(id)) return;
+        selectedRouteSet.add(id);
+        selectedCategory = "";
+        renderSelectedRoutes();
+        renderRoutePreview(currentSidebarQuery());
+        renderFloatingRoutePreview(floatingRouteInput?.value || "");
+        scheduleSelectionRefresh();
+      }
+
+      function replaceWithSingleRoute(routeId) {
+        const id = String(routeId || "").trim();
+        if (!id) return;
+        const unchanged = selectedCategory === "" && selectedRouteSet.size === 1 && selectedRouteSet.has(id);
+        if (unchanged) return;
+        selectedRouteSet.clear();
+        selectedRouteSet.add(id);
+        selectedCategory = "";
+        renderSelectedRoutes();
+        renderRoutePreview(currentSidebarQuery());
+        renderFloatingRoutePreview(floatingRouteInput?.value || "");
+        scheduleSelectionRefresh();
+      }
+
+      function applyCategorySelection(categoryValue) {
+        const category = String(categoryValue || "").trim();
+        if (!category) return;
+        if (selectedCategory === category) return;
+        selectedCategory = category;
+        selectedRouteSet.clear();
+        let added = 0;
+        allRoutes.forEach((route) => {
+          const cat = defineRouteCategory(route.label || route.value);
+          if (cat !== category) return;
+          selectedRouteSet.add(route.value);
+          added += 1;
+        });
+        renderSelectedRoutes();
+        renderRoutePreview(currentSidebarQuery());
+        renderFloatingRoutePreview(floatingRouteInput?.value || "");
+        updateFloatingContext();
+        if (added > 0) statusNote.textContent = `${added} carreiras carregadas da categoria ${category}.`;
+        scheduleSelectionRefresh();
+      }
+
+      function buildFloatingContext() {
+        const selectedIds = selectedRouteIds();
+        if (selectedIds.length === 1) {
+          const route = routeById.get(selectedIds[0]);
+          const displayLabel = route?.label || route?.value || selectedIds[0];
+          const { code, rest } = parseRouteCodeParts(displayLabel);
+          const style = pillStyleForRoute(displayLabel);
+          const pill = `<span class="route-pill" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(code || selectedIds[0])}</span>`;
+          return { text: rest ? `${code} ${rest}` : String(code || selectedIds[0]), html: rest ? `${pill} <span>${escapeHtml(rest)}</span>` : pill, isPlaceholder: false };
+        }
+        if (selectedIds.length > 1 && selectedCategory) {
+          const bg = pillBgForCategory(selectedCategory);
+          const html = `<span class="route-pill" style="--pill-bg:${bg};--pill-fg:#0b1220;--pill-border:${bg}">${escapeHtml(selectedCategory)}</span>`;
+          return { text: `${selectedCategory} (${selectedIds.length})`, html, isPlaceholder: false };
+        }
+        if (selectedIds.length > 1) {
+          const pills = selectedIds.map((id) => {
+            const route = routeById.get(id) || { value: id, label: id };
+            const displayLabel = route.label || route.value;
+            const { code } = parseRouteCodeParts(displayLabel);
+            const style = pillStyleForRoute(displayLabel);
+            return `<span class="route-pill" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(code || id)}<button class="route-pill-remove" type="button" data-remove-route-floating="${escapeHtml(id)}" aria-label="Remover ${escapeHtml(displayLabel)}">×</button></span>`;
+          }).join("");
+          return { text: `${selectedIds.length} carreiras selecionadas`, html: `<span class="kpi-selected-routes">${pills}</span>`, isPlaceholder: false };
+        }
+        return { text: "pesquise carreira, categoria...", html: null, isPlaceholder: true };
+      }
+
+      function syncFloatingContextIconState() {
+        if (!kpiFloatingContext || !kpiFloatingText) return;
+        const isCollapsed = body.classList.contains("sidebar-collapsed");
+        const isPlaceholder = kpiFloatingText.classList.contains("kpi-floating-text--placeholder");
+        kpiFloatingContext.classList.toggle("kpi-floating-context--icon-only", isCollapsed && isPlaceholder);
+      }
+
+      function updateFloatingContext() {
+        if (!kpiFloatingText) return;
+        const ctx = buildFloatingContext();
+        if (ctx.html) kpiFloatingText.innerHTML = ctx.html;
+        else kpiFloatingText.textContent = ctx.text;
+        kpiFloatingText.classList.toggle("kpi-floating-text--placeholder", Boolean(ctx.isPlaceholder));
+        const isGlobal = selectedRouteSet.size === 0;
+        if (kpiFloatingClear) {
+          kpiFloatingClear.classList.toggle("hidden", isGlobal);
+          kpiFloatingClear.setAttribute("aria-hidden", isGlobal ? "true" : "false");
+        }
+        if (kpiFloatingChip) {
+          kpiFloatingChip.setAttribute("aria-label", isGlobal ? "Pesquisar carreira" : `${ctx.text} (clique para pesquisar)`);
+        }
+        syncFloatingContextIconState();
+      }
+
+      function syncFloatingSearchPlacement() {
+        if (!floatingSearch) return;
+        const isMobileSidebar = window.matchMedia("(max-width: 900px)").matches;
+        const target = isMobileSidebar ? body : (kpiFloatingContext || document.getElementById("app-shell") || body);
+        if (floatingSearch.parentElement !== target) target.appendChild(floatingSearch);
+        floatingSearch.classList.toggle("floating-search--map", !isMobileSidebar);
+        floatingSearch.classList.toggle("floating-search--sidebar", isMobileSidebar);
+      }
+
+      function renderFloatingRoutePreview(query = "") {
+        if (!floatingRoutePreview) return;
+        const routeEntries = previewEntries(query, { allowEmpty: true });
+        const categoryEntries = previewCategoryEntries(query);
+        const html = buildSearchPreviewHtml(routeEntries, categoryEntries, { excludeSelected: false });
+        if (!html) {
+          floatingRoutePreview.innerHTML = '<div class="preview-item" aria-hidden="true"><span class="preview-label">Sem resultados</span></div>';
+          return;
+        }
+        floatingRoutePreview.innerHTML = html;
+      }
+
+      function openFloatingSearch() {
+        if (!floatingSearch || !floatingRouteInput) return;
+        syncFloatingSearchPlacement();
+        floatingSearch.classList.remove("hidden");
+        floatingSearch.classList.add("visible");
+        body.classList.add("floating-search-open");
+        floatingRouteInput.value = "";
+        renderFloatingRoutePreview("");
+        try {
+          floatingRouteInput.focus({ preventScroll: true });
+          floatingRouteInput.select();
+        } catch (e) {
+          floatingRouteInput.focus();
+        }
+      }
+
+      function closeFloatingSearch() {
+        if (!floatingSearch) return;
+        floatingSearch.classList.remove("visible");
+        floatingSearch.classList.add("hidden");
+        body.classList.remove("floating-search-open");
+        updateFloatingContext();
+      }
+
+      function scheduleAutoRefresh(delayMs = 180) {
+        if (!autoApplyReady) return;
+        if (autoApplyTimer) clearTimeout(autoApplyTimer);
+        autoApplyTimer = setTimeout(() => {
+          autoApplyTimer = null;
+          refreshTransit();
+        }, delayMs);
+      }
+
+      function scheduleSelectionRefresh(delayMs = 180) {
+        pendingSelectionFit = true;
+        scheduleAutoRefresh(delayMs);
+      }
+
+      function setStatusLoading(isLoading) {
+        body.classList.toggle("transit-loading", Boolean(isLoading));
+        if (!statusLoading) return;
+        statusLoading.classList.toggle("hidden", !isLoading);
+      }
+
+      function formatSpeedCut(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "0";
+        return Number.isInteger(n) ? String(n) : n.toFixed(1);
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function interpolate(value, inMin, inMax, outMin, outMax) {
+        if (inMax === inMin) return outMax;
+        const ratio = (value - inMin) / (inMax - inMin);
+        return outMin + ratio * (outMax - outMin);
+      }
+
+      function speedFromControl(rawValue) {
+        const ctrl = clamp(Number(rawValue) || 0, 0, SPEED_CONTROL_MAX);
+        let speed = SPEED_SCALE_MAX;
+        for (let i = 0; i < SPEED_CONTROL_ANCHORS.length - 1; i += 1) {
+          const a = SPEED_CONTROL_ANCHORS[i];
+          const b = SPEED_CONTROL_ANCHORS[i + 1];
+          if (ctrl <= b.control) {
+            speed = interpolate(ctrl, a.control, b.control, a.speed, b.speed);
+            break;
+          }
+        }
+        return Math.round(speed * 10) / 10;
+      }
+
+      function controlFromSpeed(rawSpeed) {
+        const speed = clamp(Number(rawSpeed) || 0, 0, SPEED_SCALE_MAX);
+        let control = SPEED_CONTROL_MAX;
+        for (let i = 0; i < SPEED_CONTROL_ANCHORS.length - 1; i += 1) {
+          const a = SPEED_CONTROL_ANCHORS[i];
+          const b = SPEED_CONTROL_ANCHORS[i + 1];
+          if (speed <= b.speed) {
+            control = interpolate(speed, a.speed, b.speed, a.control, b.control);
+            break;
+          }
+        }
+        return control;
+      }
+
+      function syncSpectrumScalePositions() {
+        if (!spectrumScale) return;
+        const ticks = Array.from(spectrumScale.querySelectorAll("span[data-speed]"));
+        ticks.forEach((tick) => {
+          const speed = Number(tick.getAttribute("data-speed"));
+          const pct = clamp(controlFromSpeed(speed), 0, 100);
+          tick.style.left = `${pct}%`;
+          if (pct <= 3) tick.style.transform = "translateX(0)";
+          else if (pct >= 97) tick.style.transform = "translateX(-100%)";
+          else tick.style.transform = "translateX(-50%)";
+        });
+      }
+
+      function currentBoundaries() {
+        const { t1, t2, t3, t4 } = speedThresholds;
+        return [0, t1, t2, t3, t4, SPEED_SCALE_MAX];
+      }
+
+      function normalizeBoundaries(values, changedIndex = 1) {
+        const out = Array.isArray(values) ? values.slice(0, 6) : [0, 3, 5, 10, 14, SPEED_SCALE_MAX];
+        while (out.length < 6) out.push(SPEED_SCALE_MAX);
+        out[0] = 0;
+        out[5] = SPEED_SCALE_MAX;
+        const idx = clamp(Number(changedIndex) || 1, 1, 4);
+        for (let i = idx - 1; i >= 0; i -= 1) {
+          if (out[i] > out[i + 1]) out[i] = out[i + 1];
+        }
+        for (let i = idx + 1; i < out.length; i += 1) {
+          if (out[i] < out[i - 1]) out[i] = out[i - 1];
+        }
+        for (let i = 1; i <= 4; i += 1) {
+          out[i] = clamp(Math.round(out[i] * 10) / 10, 0, SPEED_SCALE_MAX);
+        }
+        return out;
+      }
+
+      function applyBoundaries(values, changedIndex = 1) {
+        const b = normalizeBoundaries(values, changedIndex);
+        speedThresholds = { t1: b[1], t2: b[2], t3: b[3], t4: b[4] };
+        if (speedCut1) speedCut1.value = String(controlFromSpeed(b[1]));
+        if (speedCut2) speedCut2.value = String(controlFromSpeed(b[2]));
+        if (speedCut3) speedCut3.value = String(controlFromSpeed(b[3]));
+        if (speedCut4) speedCut4.value = String(controlFromSpeed(b[4]));
+        syncSpeedLegend();
+      }
+
+      function syncIntervalInputs() {
+        const b = currentBoundaries();
+        spectrumIntervalInputs.forEach((input) => {
+          const idx = clamp(Number(input.dataset.boundaryIndex), 0, 5);
+          const value = b[idx];
+          input.value = formatSpeedCut(value);
+        });
+      }
+
+      function syncSpectrumPreviewGradient() {
+        if (!spectrumPreview) return;
+        const { t1, t2, t3, t4 } = speedThresholds;
+        const p1 = clamp(controlFromSpeed(t1), 0, 100);
+        const p2 = clamp(controlFromSpeed(t2), 0, 100);
+        const p3 = clamp(controlFromSpeed(t3), 0, 100);
+        const p4 = clamp(controlFromSpeed(t4), 0, 100);
+        spectrumPreview.style.background = `linear-gradient(90deg,
+          #000000 0%, #000000 ${p1}%,
+          #8b0000 ${p1}%, #8b0000 ${p2}%,
+          #ff8c00 ${p2}%, #ff8c00 ${p3}%,
+          #ffd500 ${p3}%, #ffd500 ${p4}%,
+          #2e8b57 ${p4}%, #2e8b57 100%)`;
+      }
+
+      function syncSpeedLegend() {
+        const { t1, t2, t3, t4 } = speedThresholds;
+        if (legendSpeed1) legendSpeed1.textContent = `< ${formatSpeedCut(t1)} km/h`;
+        if (legendSpeed2) legendSpeed2.textContent = `${formatSpeedCut(t1)}-${formatSpeedCut(t2)} km/h`;
+        if (legendSpeed3) legendSpeed3.textContent = `${formatSpeedCut(t2)}-${formatSpeedCut(t3)} km/h`;
+        if (legendSpeed4) legendSpeed4.textContent = `${formatSpeedCut(t3)}-${formatSpeedCut(t4)} km/h`;
+        if (legendSpeed5) legendSpeed5.textContent = `>= ${formatSpeedCut(t4)} km/h`;
+        syncSpectrumPreviewGradient();
+        syncIntervalInputs();
+      }
+
+      function normalizeSpeedThresholds(changedIndex = 0) {
+        const cuts = [speedCut1, speedCut2, speedCut3, speedCut4];
+        const vals = cuts.map((el, i) => {
+          const fallback = [3, 5, 10, 14][i];
+          const n = speedFromControl(el?.value);
+          return Number.isFinite(n) ? n : fallback;
+        });
+        const b = [0, vals[0], vals[1], vals[2], vals[3], SPEED_SCALE_MAX];
+        applyBoundaries(b, Number(changedIndex) + 1);
+      }
+
+      [speedCut1, speedCut2, speedCut3, speedCut4].forEach((el, idx) => {
+        el?.addEventListener("input", () => {
+          normalizeSpeedThresholds(idx);
+          if (lastTransitGroups.length) drawSegments(lastTransitGroups);
+        });
+      });
+      spectrumIntervalInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          const idx = clamp(Number(input.dataset.boundaryIndex), 0, 5);
+          if (idx <= 0 || idx >= 5) {
+            syncIntervalInputs();
+            return;
+          }
+          const parsed = Number(input.value);
+          if (!Number.isFinite(parsed)) {
+            syncIntervalInputs();
+            return;
+          }
+          const b = currentBoundaries();
+          b[idx] = clamp(parsed, 0, SPEED_SCALE_MAX);
+          applyBoundaries(b, idx);
+          if (lastTransitGroups.length) drawSegments(lastTransitGroups);
+        });
+      });
+      syncSpectrumScalePositions();
+      window.addEventListener("resize", syncSpectrumScalePositions);
+      normalizeSpeedThresholds(0);
+
+      function colorForSpeed(vKmh) {
+        if (vKmh == null || Number.isNaN(vKmh)) return "#cccccc";
+        const { t1, t2, t3, t4 } = speedThresholds;
+        if (vKmh < t1) return "#000000";
+        if (vKmh < t2) return "#8b0000";
+        if (vKmh < t3) return "#ff8c00";
+        if (vKmh < t4) return "#ffd500";
+        return "#2e8b57";
+      }
+
+      function segmentDrawPriority(seg) {
+        if (seg?.isTerminal) return -20;
+        const speed = Number(seg?.vKmh);
+        if (!Number.isFinite(speed)) return -10;
+        return 1000 - speed;
+      }
+
+      async function fetchFromBackends(path, params, { signal } = {}) {
+        const query = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+          if (value === null || value === undefined || value === "") return;
+          query.set(key, String(value));
+        });
+        const suffix = query.toString() ? `${path}?${query.toString()}` : path;
+        let lastError = null;
+        for (const base of API_BASES) {
+          try {
+            const resp = await fetch(`${base}${suffix}`, { cache: "no-store", signal });
+            if (!resp.ok) {
+              let detail = "";
+              try {
+                const payload = await resp.json();
+                detail = payload?.detail ? ` - ${payload.detail}` : "";
+              } catch (e) {
+                try { detail = ` - ${await resp.text()}`; } catch (e2) {}
+              }
+              throw new Error(`${resp.status} ${resp.statusText}${detail}`);
+            }
+            return await resp.json();
+          } catch (error) {
+            if (error?.name === "AbortError") throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("Falha a contactar o backend.");
+      }
+
+      function aggregateSegments(rows) {
+        const routeMap = new Map();
+        for (const row of rows || []) {
+          const segmentId = String(row?.segment_id ?? "").trim();
+          const routeId = String(row?.route_id ?? "").trim();
+          const base = routeId.split("_")[0];
+          const seq = Number(row?.seq);
+          const lat1 = Number(row?.lat1);
+          const lon1 = Number(row?.lon1);
+          const lat2 = Number(row?.lat2);
+          const lon2 = Number(row?.lon2);
+          if (!base || !segmentId || !Number.isFinite(seq)) continue;
+          if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) continue;
+          if (!routeMap.has(base)) routeMap.set(base, new Map());
+          const segmentMap = routeMap.get(base);
+          if (!segmentMap.has(segmentId)) {
+            segmentMap.set(segmentId, {
+              segmentId,
+              routeBase: base,
+              seq,
+              meters: Number(row?.meters),
+              seconds: Number(row?.seconds),
+              vKmh: Number.isFinite(Number(row?.v_kmh)) ? Number(row?.v_kmh) : null,
+              lat1,
+              lon1,
+              lat2,
+              lon2,
+              isTerminal: Boolean(row?.is_terminal)
+            });
+          } else {
+            // Keep best available speed/coords if duplicates appear.
+            const current = segmentMap.get(segmentId);
+            if (!Number.isFinite(current.vKmh) && Number.isFinite(Number(row?.v_kmh))) {
+              current.vKmh = Number(row?.v_kmh);
+            }
+            if (!Number.isFinite(current.seq) && Number.isFinite(seq)) current.seq = seq;
+          }
+        }
+
+        const out = [];
+        routeMap.forEach((segmentMap, routeBase) => {
+          const segments = Array.from(segmentMap.values()).sort((a, b) => {
+            const sa = Number.isFinite(a.seq) ? a.seq : Number.MAX_SAFE_INTEGER;
+            const sb = Number.isFinite(b.seq) ? b.seq : Number.MAX_SAFE_INTEGER;
+            if (sa !== sb) return sa - sb;
+            return String(a.segmentId).localeCompare(String(b.segmentId), "pt", { numeric: true });
+          }).map((seg, idx, arr) => {
+            const terminalFallback = idx < 2 || idx >= (arr.length - 2);
+            return { ...seg, isTerminal: Boolean(seg.isTerminal || terminalFallback) };
+          });
+          out.push({ routeBase, segments });
+        });
+        return out;
+      }
+
+      function drawSegments(groups, { fit = false } = {}) {
+        const features = [];
+        let total = 0;
+        const showTerminals = !showTerminalsToggle || Boolean(showTerminalsToggle.checked);
+
+        groups.forEach((group) => {
+          const routeMeta = routeById.get(group.routeBase) || { value: group.routeBase, label: group.routeBase };
+          const routeDisplay = routeMeta.label || routeMeta.value || group.routeBase;
+          const routeCode = parseRouteCodeParts(routeDisplay).code || group.routeBase;
+          group.segments.forEach((seg) => {
+            if (seg.isTerminal && !showTerminals) return;
+            const color = seg.isTerminal ? "#3498db" : colorForSpeed(seg.vKmh);
+            const speedText = Number.isFinite(seg.vKmh) ? `${seg.vKmh.toFixed(1)} km/h` : "sem dados";
+            const drawPriority = segmentDrawPriority(seg);
+            const segmentKey = `${group.routeBase}__${String(seg.segmentId ?? "")}__${String(seg.seq ?? "")}`;
+            features.push({
+              type: "Feature",
+              properties: {
+                segment_key: segmentKey,
+                route_base: group.routeBase,
+                route_label: routeDisplay,
+                route_code: routeCode,
+                seq: seg.seq,
+                color,
+                is_terminal: seg.isTerminal ? 1 : 0,
+                draw_priority: drawPriority,
+                speed_label: speedText
+              },
+              geometry: {
+                type: "LineString",
+                coordinates: [
+                  [seg.lon1, seg.lat1],
+                  [seg.lon2, seg.lat2]
+                ]
+              }
+            });
+            total += 1;
+          });
+        });
+
+        const sidebarVisible = !body.classList.contains("sidebar-collapsed") && !window.matchMedia("(max-width: 900px)").matches;
+        const fitPadding = sidebarVisible
+          ? { top: 32, right: 36, bottom: 32, left: 316 }
+          : { top: 32, right: 32, bottom: 32, left: 32 };
+        adapter.setTransitSegments(features, { fit: Boolean(fit), fitPadding });
+        summarySegments.textContent = `Segmentos: ${total}`;
+      }
+
+      function routesQueryParam(routeIds) {
+        if (!selectedRouteSet.size) return "global";
+        return routeIds.join(",");
+      }
+
+      async function refreshTransit() {
+        const refreshToken = ++latestTransitRefreshToken;
+        if (transitFetchController) transitFetchController.abort();
+        transitFetchController = new AbortController();
+        const routeIds = effectiveRouteIds();
+        if (!routeIds.length) {
+          statusNote.textContent = "Sem carreiras disponíveis para carregar.";
+          adapter.clearOverlay();
+          summarySegments.textContent = "Segmentos: 0";
+          return;
+        }
+
+        const windowValue = windowSelect.value;
+        const hourValue = hourFilterSelect.value;
+        const hourStartValue = hourFilterStart ? String(hourFilterStart.value ?? "") : "";
+        const hourEndValue = hourFilterEnd ? String(hourFilterEnd.value ?? "") : "";
+        const hourRangeActive = windowValue !== "1h";
+        summaryWindow.textContent = `Janela: ${windowSelect.options[windowSelect.selectedIndex]?.textContent || "—"}`;
+        summaryHour.textContent = windowValue === "1h"
+          ? "Hora: janela corrente"
+          : `Hora: ${hourTextFromValue(hourStartValue)} → ${hourTextFromValue(hourEndValue)}`;
+        summaryRoutes.textContent = selectedRouteSet.size
+          ? `Carreiras: ${routeIds.length}`
+          : "Carreiras: todas";
+
+        if (loadBtn) loadBtn.disabled = true;
+        setStatusLoading(true);
+        statusNote.textContent = "A carregar segmentos no mapa…";
+
+        try {
+          let groups = [];
+          const routesParam = routesQueryParam(routeIds);
+          const serviceDate = currentLocalServiceDate();
+          const excludeNonWorkingDays = excludeNonWorkingToggle?.checked ? "1" : undefined;
+          const queryParams = windowValue === "1h"
+            ? {
+                window: "1h",
+                routes: routesParam,
+                service_date: serviceDate,
+                exclude_non_working_days: excludeNonWorkingDays,
+                limit: 0,
+              }
+            : {
+                window: windowValue,
+                routes: routesParam,
+                service_date: serviceDate,
+                exclude_non_working_days: excludeNonWorkingDays,
+                hour_of_day: hourRangeActive && hourStartValue === hourEndValue && hourStartValue !== "24" ? hourStartValue : undefined,
+                hour_start: hourRangeActive ? hourStartValue : undefined,
+                hour_end: hourRangeActive ? hourEndValue : undefined,
+                limit: 0,
+              };
+          const cacheKey = JSON.stringify(queryParams);
+          const cached = transitResponseCache.get(cacheKey);
+          if (cached && (Date.now() - cached.ts) <= TRANSIT_CACHE_TTL_MS && Array.isArray(cached.groups)) {
+            groups = cached.groups;
+          } else {
+            const rows = await fetchFromBackends("/api/transit-stats", queryParams, { signal: transitFetchController.signal });
+            groups = aggregateSegments(Array.isArray(rows) ? rows : []);
+            transitResponseCache.set(cacheKey, { ts: Date.now(), groups });
+            if (transitResponseCache.size > 24) {
+              const oldestKey = transitResponseCache.keys().next().value;
+              if (oldestKey) transitResponseCache.delete(oldestKey);
+            }
+          }
+          if (refreshToken !== latestTransitRefreshToken) return;
+          lastTransitGroups = groups;
+          drawSegments(groups, { fit: pendingSelectionFit });
+          pendingSelectionFit = false;
+          const routeCount = groups.filter((g) => (g.segments || []).length > 0).length;
+          lastTransitRouteCount = routeCount;
+          statusNote.textContent = `${routeCount} carreiras desenhadas no mapa.`;
+        } catch (error) {
+          if (error?.name === "AbortError") return;
+          adapter.clearOverlay();
+          summarySegments.textContent = "Segmentos: 0";
+          statusNote.textContent = `Erro: ${error?.message || error}`;
+        } finally {
+          if (refreshToken !== latestTransitRefreshToken) return;
+          if (loadBtn) loadBtn.disabled = false;
+          setStatusLoading(false);
+        }
+      }
+
+      if (routeSearch && routePreview) {
+        routeSearch.addEventListener("input", () => renderRoutePreview(routeSearch.value || ""));
+        routeSearch.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          const first = routePreview.querySelector(".preview-item[data-route-id], .preview-item[data-category]");
+          if (!first) return;
+          event.preventDefault();
+          if (first.dataset.category) applyCategorySelection(first.dataset.category);
+          else replaceWithSingleRoute(first.getAttribute("data-route-id"));
+          routeSearch.value = "";
+        });
+
+        routePreview.addEventListener("mousedown", (event) => {
+          const addBtn = event.target.closest("[data-route-add]");
+          if (addBtn) {
+            event.preventDefault();
+            addRouteSelection(addBtn.getAttribute("data-route-add"));
+            routeSearch.value = "";
+            renderRoutePreview("");
+            return;
+          }
+          const item = event.target.closest(".preview-item[data-route-id], .preview-item[data-category]");
+          if (!item) return;
+          event.preventDefault();
+          if (item.dataset.category) applyCategorySelection(item.dataset.category);
+          else replaceWithSingleRoute(item.getAttribute("data-route-id"));
+          routeSearch.value = "";
+          renderRoutePreview("");
+        });
+      }
+
+      floatingRouteInput?.addEventListener("input", () => renderFloatingRoutePreview(floatingRouteInput.value || ""));
+      floatingRouteInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeFloatingSearch();
+          return;
+        }
+        if (event.key !== "Enter") return;
+        const first = floatingRoutePreview?.querySelector(".preview-item[data-route-id], .preview-item[data-category]");
+        if (!first) return;
+        event.preventDefault();
+        if (first.dataset.category) applyCategorySelection(first.dataset.category);
+        else replaceWithSingleRoute(first.getAttribute("data-route-id"));
+        closeFloatingSearch();
+      });
+
+      floatingRoutePreview?.addEventListener("mousedown", (event) => {
+        const addBtn = event.target.closest("[data-route-add]");
+        if (addBtn) {
+          event.preventDefault();
+          addRouteSelection(addBtn.getAttribute("data-route-add"));
+          return;
+        }
+        const item = event.target.closest(".preview-item[data-route-id], .preview-item[data-category]");
+        if (!item) return;
+        event.preventDefault();
+        if (item.dataset.category) applyCategorySelection(item.dataset.category);
+        else replaceWithSingleRoute(item.getAttribute("data-route-id"));
+        closeFloatingSearch();
+      });
+
+      if (selectedRoutesEl) {
+        selectedRoutesEl.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-remove-route]");
+          if (!btn) return;
+          const routeId = btn.getAttribute("data-remove-route");
+          const changed = selectedRouteSet.delete(routeId);
+          if (!changed) return;
+          if (!selectedRouteSet.size) selectedCategory = "";
+          renderSelectedRoutes();
+          renderRoutePreview(currentSidebarQuery());
+          renderFloatingRoutePreview(floatingRouteInput?.value || "");
+          scheduleSelectionRefresh();
+        });
+      }
+
+      if (routesClearBtn) {
+        routesClearBtn.addEventListener("click", () => {
+          if (!selectedRouteSet.size && !selectedCategory) return;
+          selectedRouteSet.clear();
+          selectedCategory = "";
+          renderSelectedRoutes();
+          renderRoutePreview(currentSidebarQuery());
+          renderFloatingRoutePreview(floatingRouteInput?.value || "");
+          updateFloatingContext();
+          scheduleSelectionRefresh();
+        });
+      }
+
+      kpiFloatingChip?.addEventListener("click", (event) => {
+        const removeBtn = event.target.closest("[data-remove-route-floating]");
+        if (removeBtn) {
+          event.preventDefault();
+          event.stopPropagation();
+          const routeId = removeBtn.getAttribute("data-remove-route-floating");
+          if (routeId) {
+            const changed = selectedRouteSet.delete(routeId);
+            if (!changed) return;
+            if (!selectedRouteSet.size) selectedCategory = "";
+            renderSelectedRoutes();
+            renderRoutePreview(currentSidebarQuery());
+            renderFloatingRoutePreview(floatingRouteInput?.value || "");
+            scheduleSelectionRefresh();
+          }
+          return;
+        }
+        if (event.target.closest("#kpi-floating-clear")) return;
+        event.preventDefault();
+        if (floatingSearch?.classList.contains("visible")) closeFloatingSearch();
+        else openFloatingSearch();
+      });
+
+      kpiFloatingChip?.addEventListener("keydown", (event) => {
+        if (event.target.closest("[data-remove-route-floating]")) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        if (floatingSearch?.classList.contains("visible")) closeFloatingSearch();
+        else openFloatingSearch();
+      });
+
+      kpiFloatingClear?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!selectedRouteSet.size && !selectedCategory) return;
+        selectedRouteSet.clear();
+        selectedCategory = "";
+        renderSelectedRoutes();
+        renderRoutePreview(currentSidebarQuery());
+        renderFloatingRoutePreview(floatingRouteInput?.value || "");
+        updateFloatingContext();
+        closeFloatingSearch();
+        scheduleSelectionRefresh();
+      });
+
+      document.addEventListener("mousedown", (event) => {
+        if (!floatingSearch || !floatingSearch.classList.contains("visible")) return;
+        const target = event.target;
+        if (floatingSearch.contains(target) || kpiFloatingContext?.contains(target)) return;
+        closeFloatingSearch();
+      });
+      document.addEventListener("mousedown", (event) => {
+        const target = event.target;
+        if (windowPicker?.contains(target)) return;
+        closeAllPickers();
+      });
+      document.addEventListener("mousedown", (event) => {
+        if (!sidebarInfoPopover || sidebarInfoPopover.hidden) return;
+        const target = event.target;
+        if (sidebarInfoPopover.contains(target) || sidebarInfoBtn?.contains(target)) return;
+        closeSidebarInfoPopover();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeAllPickers();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        closeSidebarInfoPopover();
+      });
+
+      sidebarInfoBtn?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (sidebarInfoPopover?.hidden) {
+          openSidebarInfoPopover();
+          return;
+        }
+        closeSidebarInfoPopover();
+      });
+
+      windowSelect.addEventListener("change", () => {
+        syncPickerLabel(windowSelect, windowPickerLabel);
+        buildPickerOptions(windowSelect, windowPickerMenu);
+        scheduleAutoRefresh();
+      });
+      hourFilterSelect.addEventListener("change", () => {
+        if (hourFilterStart) hourFilterStart.value = String(hourFilterSelect.value || "0");
+        if (hourFilterEnd && Number(hourFilterEnd.value) < Number(hourFilterStart?.value || 0)) {
+          hourFilterEnd.value = String(hourFilterStart?.value || "0");
+        }
+        normalizeHourRange();
+        syncHourSliderLabel();
+        scheduleAutoRefresh();
+      });
+      showTerminalsToggle?.addEventListener("change", () => {
+        if (lastTransitGroups.length) {
+          drawSegments(lastTransitGroups);
+          statusNote.textContent = `${lastTransitRouteCount} carreiras desenhadas no mapa.`;
+          return;
+        }
+        scheduleAutoRefresh(40);
+      });
+      excludeNonWorkingToggle?.addEventListener("change", () => {
+        scheduleAutoRefresh();
+      });
+      window.addEventListener("resize", syncFloatingSearchPlacement, { passive: true });
+
+      (async function init() {
+        try {
+          const routes = await loadRoutes();
+          allRoutes.splice(0, allRoutes.length, ...routes);
+          routeById.clear();
+          routes.forEach((route) => {
+            routeById.set(route.value, route);
+            observedCategories.add(defineRouteCategory(route.label || route.value));
+          });
+          renderSelectedRoutes();
+          renderRoutePreview("");
+          renderFloatingRoutePreview("");
+          updateFloatingContext();
+          syncFloatingSearchPlacement();
+          if (loadBtn) loadBtn.style.display = "none";
+          statusNote.textContent = "Filtros prontos. Atualização automática ativa.";
+          await adapterReady;
+          await refreshTransit();
+          autoApplyReady = true;
+        } catch (error) {
+          statusNote.textContent = `Erro ao carregar catálogo de carreiras: ${error?.message || error}`;
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>
