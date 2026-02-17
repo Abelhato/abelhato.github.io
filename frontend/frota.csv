@@ -1,0 +1,17 @@
+ID_Inicio,ID_Fim,Modelo,Tipo,Categoria,Energia
+501,510,Elétricos Articulados SIEMENS,Elétrico,Articulado,Elétrico
+601,615,Elétricos Articulados CAF,Elétrico,Articulado,Elétrico
+541,585,Elétricos Remodelados,Elétrico,Remodelado,Elétrico
+201,240,Mini Mercedes Sprinter,Autocarro,Mini,Gasóleo
+251,284,Mini MAN,Autocarro,Mini,Gasóleo
+401,414,Mini Karsan,Autocarro,Mini,Elétrico
+1700,1799,Standard Volvo,Autocarro,Standard,Gasóleo
+2201,2500,Standard MAN,Autocarro,Standard,Gasóleo
+2601,2820,Standard MAN GNC,Autocarro,Standard,Gás
+2821,2844,Articulado MAN,Autocarro,Articulado,Gás
+2941,2997,Médio MAN,Autocarro,Médio,Gasóleo
+4600,4699,Articulado Mercedes,Autocarro,Articulado,Gasóleo
+4800,4899,Articulado Mercedes GNC,Autocarro,Articulado,Gás
+5000,5999,Standard Scania,Autocarro,Standard,Gás
+6000,6999,Standard Caetano,Autocarro,Standard,Elétrico
+301,310,Standard MAN ex-CarrisTur,Autocarro,Standard,Gasóleo
