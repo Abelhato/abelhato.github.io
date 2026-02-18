@@ -6414,11 +6414,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       CHART_PATHS.map(path => `${base}${path}`)
     );
     const LOCAL_BACKENDS = BACKEND_BASES;
-    // Vehicle positions: prefer local API first to retain trip/sequence metadata used by stop ETA.
+    // Vehicle positions: prefer worker feed first; local API remains fallback.
     const VEHICLE_ENDPOINTS = dedupeList([
-      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/vehicle-positions`),
       "https://rt.jdcp.workers.dev/",
-      "https://rt.jdcp.workers.dev/api/vehicle-positions"
+      "https://rt.jdcp.workers.dev/api/vehicle-positions",
+      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/vehicle-positions`)
     ]);
     const CHARTS_CACHE_TTL_MS = 60_000;
     const CHARTS_MIN_INTERVAL_MS = 35_000;
