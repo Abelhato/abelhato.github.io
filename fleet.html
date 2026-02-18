@@ -2375,6 +2375,12 @@
       const transitPageUrl = new URL('transito.html', location.href).href;
       const mql = window.matchMedia('(max-width: 900px)');
 
+      function withCurrentHash(url) {
+        const hash = window.location.hash || '';
+        const base = String(url || '').replace(/#.*$/, '');
+        return hash ? `${base}${hash}` : base;
+      }
+
       function setSidebarCollapsed(collapsed) {
         body.classList.toggle('sidebar-collapsed', collapsed);
         if (sidebarToggle) {
@@ -2421,15 +2427,15 @@
         button.addEventListener('click', () => {
           const nextMode = button.dataset.mode;
           if (nextMode === 'realtime') {
-            location.href = realtimePageUrl;
+            location.href = withCurrentHash(realtimePageUrl);
             return;
           }
           if (nextMode === 'history') {
-            location.href = historyPageUrl;
+            location.href = withCurrentHash(historyPageUrl);
             return;
           }
           if (nextMode === 'transit') {
-            location.href = transitPageUrl;
+            location.href = withCurrentHash(transitPageUrl);
             return;
           }
           setActiveMode(nextMode);
@@ -2503,7 +2509,29 @@
       const KNOWN_BACKEND_PORTS = [2026];
       const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
       const FLEET_MODEL_CSV_URL = new URL("frota.csv", location.href);
-      const urlParams = new URLSearchParams(window.location.search);
+      function extractHashQuery(rawHash) {
+        const raw = String(rawHash || "").replace(/^#/, "").replace(/^\?/, "").trim();
+        if (!raw) return "";
+        const firstSeparatorIndex = raw.search(/[&?]/);
+        if (firstSeparatorIndex === -1) {
+          if (!raw.includes("=") && /^[a-z0-9_-]+$/i.test(raw)) return "";
+          return raw;
+        }
+        const head = raw.slice(0, firstSeparatorIndex);
+        if (!head.includes("=") && /^[a-z0-9_-]+$/i.test(head)) {
+          return raw.slice(firstSeparatorIndex + 1);
+        }
+        return raw;
+      }
+      function buildUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const hashQuery = extractHashQuery(window.location.hash);
+        if (!hashQuery) return params;
+        const hashParams = new URLSearchParams(hashQuery);
+        hashParams.forEach((value, key) => params.set(key, value));
+        return params;
+      }
+      const urlParams = buildUrlParams();
       function normalizeBackendUrl(raw) {
         if (!raw) return null;
         const value = String(raw).trim();
@@ -2542,6 +2570,7 @@
         const hostname = originOk ? location.hostname : "";
         const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
         const isGithubPages = /\.github\.io$/i.test(hostname);
+        const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
         if (originOk && hostname) bases.push(location.origin);
         if (isLoopback) {
           ["127.0.0.1", "localhost"].forEach(loopHost => {
@@ -2550,7 +2579,7 @@
             });
           });
         }
-        if (isGithubPages) {
+        if (isGithubPages || isMoverLisboa) {
           const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
           if (normalizedFallback) bases.push(normalizedFallback);
         }

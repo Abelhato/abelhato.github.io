@@ -3293,6 +3293,11 @@
       const realtimePageUrl = new URL('dashboard.html', location.href).href;
       const fleetPageUrl = new URL('fleet.html', location.href).href;
       const transitPageUrl = new URL('transito.html', location.href).href;
+      function withCurrentHash(url) {
+        const hash = window.location.hash || '';
+        const base = String(url || '').replace(/#.*$/, '');
+        return hash ? `${base}${hash}` : base;
+      }
       function setActiveMode(modeName) {
         modeButtons.forEach(btn => {
           const isActive = btn.dataset.mode === modeName;
@@ -3324,21 +3329,21 @@
       const realtimeButton = modeButtons.find(btn => btn.dataset.mode === 'realtime');
       realtimeButton?.addEventListener('click', () => {
         if (location.pathname.split('/').pop()?.toLowerCase() === 'history.html') {
-          location.href = realtimePageUrl;
+          location.href = withCurrentHash(realtimePageUrl);
         }
       });
 
       const fleetButton = modeButtons.find(btn => btn.dataset.mode === 'fleet');
       fleetButton?.addEventListener('click', () => {
         if (location.pathname.split('/').pop()?.toLowerCase() !== 'fleet.html') {
-          location.href = fleetPageUrl;
+          location.href = withCurrentHash(fleetPageUrl);
         }
       });
 
       const transitButton = modeButtons.find(btn => btn.dataset.mode === 'transit');
       transitButton?.addEventListener('click', () => {
         if (location.pathname.split('/').pop()?.toLowerCase() !== 'transito.html') {
-          location.href = transitPageUrl;
+          location.href = withCurrentHash(transitPageUrl);
         }
       });
     })();
@@ -3470,7 +3475,29 @@
       const calendarNextButton = document.getElementById("calendar-next");
       const calendarTrigger = document.querySelector(".calendar-trigger");
       const frequencyCard = document.querySelector('[data-kpi="frequency"]');
-      const urlSearchParams = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
+      function extractHashQuery(rawHash) {
+        const raw = String(rawHash || "").replace(/^#/, "").replace(/^\?/, "").trim();
+        if (!raw) return "";
+        const firstSeparatorIndex = raw.search(/[&?]/);
+        if (firstSeparatorIndex === -1) {
+          if (!raw.includes("=") && /^[a-z0-9_-]+$/i.test(raw)) return "";
+          return raw;
+        }
+        const head = raw.slice(0, firstSeparatorIndex);
+        if (!head.includes("=") && /^[a-z0-9_-]+$/i.test(head)) {
+          return raw.slice(firstSeparatorIndex + 1);
+        }
+        return raw;
+      }
+      function buildUrlSearchParams() {
+        const params = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
+        const hashQuery = extractHashQuery(typeof location !== "undefined" ? location.hash : "");
+        if (!hashQuery) return params;
+        const hashParams = new URLSearchParams(hashQuery);
+        hashParams.forEach((value, key) => params.set(key, value));
+        return params;
+      }
+      const urlSearchParams = buildUrlSearchParams();
       const ACTIVE_WINDOW_MIN = (() => {
         const raw = (urlSearchParams.get("active_window_min") || urlSearchParams.get("activeWindowMin") || "").trim();
         if (!raw) return 10;
@@ -3577,6 +3604,7 @@
           const proto = location.protocol || "http:";
           const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
           const isGithubPages = /\.github\.io$/i.test(hostname);
+          const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
           if (isLoopback) {
             ["127.0.0.1", "localhost"].forEach(loopHost => {
               KNOWN_BACKEND_PORTS.forEach(port => {
@@ -3584,7 +3612,7 @@
               });
             });
           }
-          if (isGithubPages) {
+          if (isGithubPages || isMoverLisboa) {
             const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
             if (normalizedFallback) bases.push(normalizedFallback);
           }

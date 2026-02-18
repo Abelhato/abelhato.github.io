@@ -2400,70 +2400,24 @@
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
-    .compass-widget {
-      position: absolute;
-      bottom: 72px;
-      right: 16px;
-      width: 46px;
-      height: 46px;
-      border-radius: 50%;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      background: var(--surface-1);
-      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(6px) scale(0.98);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-      z-index: 4500;
+    .user-location-icon {
+      background: transparent !important;
+      border: 0 !important;
     }
-    .compass-widget.is-active {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-    .compass-face {
+    .user-location-marker {
       position: relative;
-      width: 28px;
-      height: 28px;
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      transform: translateZ(0);
+    }
+    .user-location-dot {
+      position: absolute;
+      inset: 5px;
       border-radius: 50%;
-      border: 1px solid rgba(15, 23, 42, 0.16);
-      background: rgba(255, 255, 255, 0.7);
-    }
-    .compass-needle {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 2px;
-      height: 12px;
-      border-radius: 2px;
-      background: var(--accent);
-      transform: translate(-50%, -100%) rotate(var(--compass-heading, 0deg));
-      transform-origin: 50% 100%;
-      box-shadow: 0 0 6px rgba(30, 64, 175, 0.45);
-    }
-    .compass-needle::after {
-      content: "";
-      position: absolute;
-      bottom: -2px;
-      left: 50%;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--surface-1);
-      border: 1px solid rgba(15, 23, 42, 0.2);
-      transform: translateX(-50%);
-    }
-    .compass-north {
-      position: absolute;
-      top: -12px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 0.6rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      letter-spacing: 0.06em;
+      background: #1d4ed8;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 1px rgba(30, 64, 175, 0.35), 0 3px 8px rgba(30, 64, 175, 0.35);
     }
 
     .app-alert {
@@ -3844,12 +3798,6 @@
       <button id="user-location-btn" class="user-location-btn" type="button" aria-label="Mostrar a minha localização">
         <i class="fa fa-location-arrow" aria-hidden="true"></i>
       </button>
-      <div id="compass-widget" class="compass-widget" role="img" aria-hidden="true" aria-label="Bússola">
-        <div class="compass-face">
-          <span class="compass-needle" id="compass-needle"></span>
-          <span class="compass-north">N</span>
-        </div>
-      </div>
     </div>
     <div id="floating-search" class="floating-search floating-search--map hidden" aria-label="Pesquisar carreira (mobile)">
       <input id="floating-route-input" class="floating-route-input" type="text" placeholder="Pesquise carreira, paragem..." autocomplete="off">
@@ -3882,7 +3830,37 @@
       }
       return new URL("/transito.html", location.origin).href;
     })();
-    const urlParams = new URLSearchParams(window.location.search);
+    function extractHashQuery(rawHash) {
+      const raw = String(rawHash || "").replace(/^#/, "").replace(/^\?/, "").trim();
+      if (!raw) return "";
+      const firstSeparatorIndex = raw.search(/[&?]/);
+      if (firstSeparatorIndex === -1) {
+        if (!raw.includes("=") && /^[a-z0-9_-]+$/i.test(raw)) return "";
+        return raw;
+      }
+      const head = raw.slice(0, firstSeparatorIndex);
+      if (!head.includes("=") && /^[a-z0-9_-]+$/i.test(head)) {
+        return raw.slice(firstSeparatorIndex + 1);
+      }
+      return raw;
+    }
+
+    function buildUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      const hashQuery = extractHashQuery(window.location.hash);
+      if (!hashQuery) return params;
+      const hashParams = new URLSearchParams(hashQuery);
+      hashParams.forEach((value, key) => params.set(key, value));
+      return params;
+    }
+
+    function withCurrentHash(url) {
+      const hash = window.location.hash || "";
+      const base = String(url || "").replace(/#.*$/, "");
+      return hash ? `${base}${hash}` : base;
+    }
+
+    const urlParams = buildUrlParams();
     const ACTIVE_WINDOW_MIN = (() => {
       const raw = (urlParams.get("active_window_min") || urlParams.get("activeWindowMin") || "").trim();
       if (!raw) return 10;
@@ -6378,6 +6356,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
       const isGithubPages = /\.github\.io$/i.test(hostname);
+      const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
 
       // Prefer same-origin first so that dashboards served by the API itself stay on the same port.
       if (originOk && hostname) {
@@ -6392,7 +6371,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           });
         });
       }
-      if (isGithubPages) {
+      if (isGithubPages || isMoverLisboa) {
         const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
         if (normalizedFallback) bases.push(normalizedFallback);
       }
@@ -6593,8 +6572,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const sidebar = document.getElementById("sidebar");
     const KPI_TRIGGER_DRAG_THRESHOLD = 12;
     const routeChartHint = document.getElementById("route-chart-hint");
-    const compassWidget = document.getElementById("compass-widget");
-    const compassNeedle = document.getElementById("compass-needle");
 
     function syncFloatingSearchPlacement() {
       if (!floatingSearch) return;
@@ -6622,9 +6599,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let userLocationInFlight = false;
     let userLocationWatchId = null;
     let userLocationTracking = false;
-    let lastHeadingSource = null;
-    let lastHeadingTs = 0;
-    let deviceOrientationActive = false;
     let mobileLocationPrompted = false;
     let lastUserLocationCoords = null;
     let routeKpisCache = { timestamp: 0, key: "", row: null };
@@ -7794,77 +7768,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return window.matchMedia && window.matchMedia("(max-width: 900px)").matches;
     }
 
-    function normalizeHeading(value) {
-      const num = Number(value);
-      if (!Number.isFinite(num)) return null;
-      const normalized = ((num % 360) + 360) % 360;
-      return normalized;
-    }
-
-    function updateCompassUI(heading) {
-      if (!compassWidget || !compassNeedle) return;
-      const normalized = normalizeHeading(heading);
-      if (normalized == null || !userLocationTracking) {
-        compassWidget.classList.remove("is-active");
-        compassWidget.setAttribute("aria-hidden", "true");
-        return;
-      }
-      compassNeedle.style.setProperty("--compass-heading", `${normalized}deg`);
-      compassWidget.classList.add("is-active");
-      compassWidget.setAttribute("aria-hidden", "false");
-      compassWidget.setAttribute("aria-label", `Bússola ${Math.round(normalized)} graus`);
-    }
-
-    function setCompassHeading(heading, source) {
-      const normalized = normalizeHeading(heading);
-      if (normalized == null) return;
-      lastHeadingSource = source || "unknown";
-      lastHeadingTs = Date.now();
-      updateCompassUI(normalized);
-    }
-
-    function maybeUseDeviceHeading(heading) {
-      const normalized = normalizeHeading(heading);
-      if (normalized == null) return;
-      const isGpsFresh = lastHeadingSource === "gps" && (Date.now() - lastHeadingTs) < 5000;
-      if (isGpsFresh) return;
-      setCompassHeading(normalized, "device");
-    }
-
-    function handleDeviceOrientation(event) {
-      if (!event) return;
-      let heading = null;
-      if (typeof event.webkitCompassHeading === "number") {
-        heading = event.webkitCompassHeading;
-      } else if (typeof event.alpha === "number") {
-        heading = 360 - event.alpha;
-      }
-      if (heading != null) {
-        maybeUseDeviceHeading(heading);
-      }
-    }
-
-    function ensureDeviceOrientationListener() {
-      if (deviceOrientationActive) return;
-      if (typeof window === "undefined" || typeof DeviceOrientationEvent === "undefined") return;
-      const attachListener = () => {
-        if (deviceOrientationActive) return;
-        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
-        deviceOrientationActive = true;
-      };
-      if (typeof DeviceOrientationEvent.requestPermission === "function") {
-        DeviceOrientationEvent.requestPermission()
-          .then(permission => {
-            if (permission === "granted") attachListener();
-          })
-          .catch(err => {
-            console.warn("Falha ao ativar bússola:", err);
-          });
-      } else {
-        attachListener();
-      }
-    }
-
     function updateUserLocationButtonState({ loading = false, message = "", tracking = false } = {}) {
       if (!userLocationButton) return;
       userLocationButton.classList.toggle("is-loading", loading);
@@ -7884,16 +7787,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const lat = Number(coords.latitude ?? coords.lat);
       const lon = Number(coords.longitude ?? coords.lon);
       const accuracy = Number.isFinite(coords.accuracy) ? Number(coords.accuracy) : null;
-      const heading = normalizeHeading(coords.heading ?? coords.bearing ?? coords.course);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-      lastUserLocationCoords = { lat, lon, accuracy, heading };
+      lastUserLocationCoords = { lat, lon, accuracy };
       if (adapter?.setUserLocation) {
-        adapter.setUserLocation([lat, lon], { center, accuracy, heading });
-      }
-      if (heading != null) {
-        setCompassHeading(heading, "gps");
-      } else if (lastHeadingSource === "gps") {
-        updateCompassUI(null);
+        adapter.setUserLocation([lat, lon], { center, accuracy });
       }
     }
 
@@ -7951,7 +7848,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           maximumAge: auto ? 0 : 300000
         }
       );
-      ensureDeviceOrientationListener();
     }
 
     function stopUserLocationTracking({ clear = false } = {}) {
@@ -7964,7 +7860,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (clear) {
         lastUserLocationCoords = null;
         adapter?.clearUserLocation?.();
-        updateCompassUI(null);
       }
     }
 
@@ -10990,13 +10885,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (this.userLocationMarker) {
           this.userLocationMarker.setLatLng([lat, lon]);
         } else {
-          this.userLocationMarker = L.circleMarker([lat, lon], {
-            radius: 7,
-            color: "#3b82f6",
-            weight: 2,
-            fillColor: "#1d4ed8",
-            fillOpacity: 0.95
-          }).addTo(this.map);
+          const icon = L.divIcon({
+            className: "user-location-icon",
+            html: '<div class="user-location-marker"><span class="user-location-dot"></span></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          this.userLocationMarker = L.marker([lat, lon], { icon, interactive: false, keyboard: false }).addTo(this.map);
         }
         if (center) {
           try {
@@ -11210,8 +11105,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         this.routeOverlayFeatures = [];
         this.globalStopFeatures = [];
         this.userLocationSourceId = "user-location-source";
-        this.userLocationLayerId = "user-location-layer";
         this.userLocationAccuracyLayerId = "user-location-accuracy-layer";
+        this.userLocationMarker = null;
         this._lastRouteStopsCount = 0;
         this._lastGlobalStopsCount = 0;
         this.activePopups = [];
@@ -11786,19 +11681,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             }
           });
         }
-        if (!this.map.getLayer(this.userLocationLayerId)) {
-          this.map.addLayer({
-            id: this.userLocationLayerId,
-            type: "circle",
-            source: this.userLocationSourceId,
-            paint: {
-              "circle-radius": 8,
-              "circle-color": "#3b82f6",
-              "circle-stroke-color": "#ffffff",
-              "circle-stroke-width": 2
-            }
-          });
-        }
       }
 
       setUserLocation(coords, { center = false, accuracy = 0 } = {}) {
@@ -11822,6 +11704,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         try {
           this.map.setPaintProperty(this.userLocationAccuracyLayerId, "circle-radius", radius);
         } catch (e) {}
+        if (!this.userLocationMarker) {
+          const el = document.createElement("div");
+          el.className = "user-location-marker";
+          el.innerHTML = '<span class="user-location-dot"></span>';
+          this.userLocationMarker = new maplibregl.Marker({ element: el, anchor: "center", pitchAlignment: "map" })
+            .setLngLat([lon, lat])
+            .addTo(this.map);
+        } else {
+          this.userLocationMarker.setLngLat([lon, lat]);
+        }
         if (center) {
           try {
             this.map.easeTo({
@@ -11838,6 +11730,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const src = this.map.getSource(this.userLocationSourceId);
         if (src && typeof src.setData === "function") {
           src.setData({ type: "FeatureCollection", features: [] });
+        }
+        if (this.userLocationMarker) {
+          this.userLocationMarker.remove();
+          this.userLocationMarker = null;
         }
       }
 
@@ -15163,6 +15059,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let pendingVehicleFocusId = null;
     let pendingChartFocus = null;
     let initialHashSpec = null;
+    let hashPassthroughParams = new URLSearchParams();
 
     function formatNumber(value, decimals) {
       if (!Number.isFinite(value)) return null;
@@ -15195,15 +15092,25 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function buildHashParams() {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams(hashPassthroughParams.toString());
       const mapValue = encodeMapSegment(hashState.center);
       if (mapValue) params.set("map", mapValue);
+      else params.delete("map");
       const focusValue = encodeFocusSegment(hashState.focus);
       if (focusValue) params.set("focus", focusValue);
+      else params.delete("focus");
+      params.delete("stop");
+      params.delete("route");
+      params.delete("line");
+      params.delete("vehicle");
+      params.delete("bus");
       const chartValue = encodeChartSegment(hashState.chart);
       if (chartValue) params.set("chart", chartValue);
+      else params.delete("chart");
       if (hashState.filters.category) params.set("category", hashState.filters.category);
+      else params.delete("category");
       if (hashState.filters.variant) params.set("variant", hashState.filters.variant);
+      else params.delete("variant");
       return params;
     }
 
@@ -15311,22 +15218,34 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return null;
     }
 
+    function parseFocusAlias(params) {
+      if (!(params instanceof URLSearchParams)) return null;
+      const stop = (params.get("stop") || "").trim();
+      if (stop) return { type: "stop", id: stop };
+      const route = (params.get("route") || params.get("line") || "").trim();
+      if (route) return { type: "route", id: route };
+      const vehicle = (params.get("vehicle") || params.get("bus") || "").trim();
+      if (vehicle) return { type: "vehicle", id: vehicle };
+      return null;
+    }
+
     function extractModeAndQueryFromHash(raw) {
-      if (!raw) return { mode: null, query: "" };
-      const firstSeparatorIndex = raw.indexOf("&");
-      const modeToken = firstSeparatorIndex === -1 ? raw : raw.slice(0, firstSeparatorIndex);
-      const remainder = firstSeparatorIndex === -1 ? "" : raw.slice(firstSeparatorIndex + 1);
+      const normalizedRaw = String(raw || "").replace(/^\?/, "").trim();
+      if (!normalizedRaw) return { mode: null, query: "" };
+      const firstSeparatorIndex = normalizedRaw.search(/[&?]/);
+      const modeToken = firstSeparatorIndex === -1 ? normalizedRaw : normalizedRaw.slice(0, firstSeparatorIndex);
+      const remainder = firstSeparatorIndex === -1 ? "" : normalizedRaw.slice(firstSeparatorIndex + 1);
       const normalizedToken = (modeToken || "").toLowerCase();
       if (normalizedToken === MODE_REALTIME) {
         return { mode: normalizedToken, query: remainder };
       }
       if (normalizedToken.startsWith("mode=")) {
-        const value = normalizedToken.slice(5);
+        const value = decodeURIComponent(modeToken.slice(5) || "").toLowerCase();
         if (value === MODE_REALTIME) {
           return { mode: value, query: remainder };
         }
       }
-      return { mode: null, query: raw };
+      return { mode: null, query: normalizedRaw };
     }
 
     function parseHashSpec() {
@@ -15334,15 +15253,20 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (!raw) return null;
       const { mode, query } = extractModeAndQueryFromHash(raw);
       const params = new URLSearchParams(query);
+      const passthrough = new URLSearchParams(params.toString());
+      ["map", "focus", "chart", "category", "variant", "stop", "route", "line", "vehicle", "bus", "mode"].forEach(key => {
+        passthrough.delete(key);
+      });
       return {
         mode,
         center: parseMapSegment(params.get("map")),
-        focus: parseFocusSegment(params.get("focus")),
+        focus: parseFocusSegment(params.get("focus")) || parseFocusAlias(params),
         chart: parseChartSegment(params.get("chart")),
         filters: {
           category: params.get("category") || null,
           variant: params.get("variant") || null
-        }
+        },
+        passthrough
       };
     }
 
@@ -15350,6 +15274,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function applyInitialHashSpec(spec) {
       if (!spec) return;
+      hashPassthroughParams = new URLSearchParams(spec.passthrough ? spec.passthrough.toString() : "");
       if (spec.filters) {
         setHashFilters(spec.filters, { skipSync: true });
         if (spec.filters.category) {
@@ -16317,15 +16242,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     const requestModeChange = (mode) => {
       if (mode === "history") {
-        window.location.href = HISTORY_PAGE_URL;
+        window.location.href = withCurrentHash(HISTORY_PAGE_URL);
         return;
       }
       if (mode === "fleet") {
-        window.location.href = FLEET_PAGE_URL;
+        window.location.href = withCurrentHash(FLEET_PAGE_URL);
         return;
       }
       if (mode === "transit") {
-        window.location.href = TRANSIT_PAGE_URL;
+        window.location.href = withCurrentHash(TRANSIT_PAGE_URL);
         return;
       }
       const normalizedMode = setHashMode(MODE_REALTIME);
@@ -16339,6 +16264,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     });
 
     window.addEventListener("hashchange", () => {
+      const spec = parseHashSpec();
+      hashPassthroughParams = new URLSearchParams(spec?.passthrough ? spec.passthrough.toString() : "");
       applyMode(normalizeHashMode());
     });
 
