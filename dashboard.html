@@ -8195,7 +8195,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function fetchTrendSummary(lineCandidate) {
       const params = buildTrendQueryParams(lineCandidate);
-      const payload = await fetchFromEndpoints(CHARTS_ENDPOINTS, params).catch(err => {
+      const payload = await fetchFromEndpoints(CHARTS_ENDPOINTS, params, { timeoutMs: 12000 }).catch(err => {
         console.warn("Falha ao buscar gráficos:", err);
         return null;
       });
@@ -9406,7 +9406,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         return summary;
       }
 
-      // If nothing worked for the current selection (route/category), clear charts instead of keeping stale data.
+      if (chartCache.selectionKey === selectionKey && chartCache.summary) {
+        lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? null };
+        lastTrendLineCandidate = chartCache.lineCandidate ?? null;
+        updateTrendTimeline(lastTrendSummary.timeline || []);
+        return lastTrendSummary;
+      }
+      // If nothing worked for the current selection (route/category), clear charts.
       chartCache = { paramsKey: "", summary: null, timestamp: 0, lineCandidate: null, selectionKey };
       lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
       lastTrendLineCandidate = null;
@@ -9881,6 +9887,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     const endpointPreferredOriginByGroup = new Map(); // groupKey -> origin
 
+    function isAbortLikeError(err) {
+      const name = String(err?.name || "").toLowerCase();
+      const message = String(err?.message || err || "").toLowerCase();
+      if (name === "aborterror") return true;
+      return (
+        message.includes("aborted")
+        || message.includes("timeout")
+        || message.includes("context canceled")
+      );
+    }
+
     async function fetchFromEndpoints(endpoints, params = {}, opts = {}) {
       const resolved = (endpoints || [])
         .map(endpoint => buildUrlWithParams(endpoint, params))
@@ -9909,7 +9926,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             }),
           ]
         : resolved;
-      const timeoutMs = opts.timeoutMs || (ordered.length > 1 ? 2200 : 6000);
+      const timeoutMs = opts.timeoutMs || (ordered.length > 1 ? 3500 : 12000);
       let lastError = null;
       for (const url of ordered) {
         try {
@@ -9926,7 +9943,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         } catch (err) {
           if (opts.signal && opts.signal.aborted) throw err;
           lastError = err;
-          console.warn("Falha ao contactar endpoint", url, err);
+          if (!isAbortLikeError(err)) {
+            console.warn("Falha ao contactar endpoint", url, err);
+          }
         }
       }
       throw lastError || new Error("Todos os endpoints falharam");
@@ -9965,7 +9984,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	        const endpoints = KPI_ENDPOINTS.route.map(base => `${base}/${encoded}`);
 	        const params = { active_window_min: ACTIVE_WINDOW_MIN };
 	        if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) params.categoria = selectedCategory;
-	        const payload = await fetchFromEndpoints(endpoints, params);
+	        const payload = await fetchFromEndpoints(endpoints, params, { timeoutMs: 10000 });
 	        const row = Array.isArray(payload) ? (payload[0] || null) : payload;
 	        routeKpisCache = { timestamp: now, key, row };
 	        return row;
@@ -9988,7 +10007,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	        const endpoints = KPI_ENDPOINTS.routeVariant.map(base => `${base}/${encoded}`);
 	        const params = { active_window_min: ACTIVE_WINDOW_MIN };
 	        if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) params.categoria = selectedCategory;
-	        const payload = await fetchFromEndpoints(endpoints, params);
+	        const payload = await fetchFromEndpoints(endpoints, params, { timeoutMs: 10000 });
 	        const row = Array.isArray(payload) ? (payload[0] || null) : payload;
 	        routeKpisCache = { timestamp: now, key, row };
 	        return row;
@@ -10010,7 +10029,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	        const encoded = encodeURIComponent(String(category));
 	        const endpoints = KPI_ENDPOINTS.category.map(base => `${base}/${encoded}`);
 	        const params = { active_window_min: ACTIVE_WINDOW_MIN };
-	        const payload = await fetchFromEndpoints(endpoints, params);
+	        const payload = await fetchFromEndpoints(endpoints, params, { timeoutMs: 10000 });
 	        const row = Array.isArray(payload) ? (payload[0] || null) : payload;
 	        routeKpisCache = { timestamp: now, key, row };
 	        return row;
@@ -10029,7 +10048,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       }
       try {
         const params = { active_window_min: ACTIVE_WINDOW_MIN };
-        const payload = await fetchFromEndpoints(KPI_ENDPOINTS.global, params);
+        const payload = await fetchFromEndpoints(KPI_ENDPOINTS.global, params, { timeoutMs: 10000 });
         const row = Array.isArray(payload) ? (payload[0] || null) : payload;
         routeKpisCache = { timestamp: now, key, row };
         return row;
@@ -10076,59 +10095,78 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function refreshKpis(force = false) {
       if (!kpiPanel) return;
-      updateFloatingContext();
-      if (isMultiRouteSelection()) {
-        clearKpiDisplay(buildFloatingContext());
-        setKpiLoading(false);
-        return false;
+      if (kpiRefreshInFlight) {
+        kpiRefreshQueuedForce = kpiRefreshQueuedForce || Boolean(force);
+        return kpiRefreshInFlight;
       }
-      const contextKey = buildKpiContextKey();
-      const contextChanged = contextKey !== kpiDisplayedContextKey;
-      const requestToken = ++kpiRefreshToken;
-      kpiRefreshContextKey = contextKey;
-      if (contextChanged) {
-        clearKpiDisplay(buildFloatingContext());
-        kpiDisplayedContextKey = contextKey;
-      }
-      setKpiLoading(true);
-      const showRow = async (row, context) => {
-        if (requestToken !== kpiRefreshToken || contextKey !== kpiRefreshContextKey) return false;
-        if (!row) {
-          if (requestToken === kpiRefreshToken && contextKey === kpiRefreshContextKey) {
-            setKpiLoading(false);
-          }
+      const task = (async () => {
+        updateFloatingContext();
+        if (isMultiRouteSelection()) {
+          clearKpiDisplay(buildFloatingContext());
+          setKpiLoading(false);
           return false;
         }
-        updateKpiDisplay(row, context);
-        kpiDisplayedContextKey = contextKey;
-        setKpiLoading(false);
-        return true;
-      };
-      const routeCandidates = getRouteLineCandidates();
-      if (routeCandidates.length > 0) {
-        const contextText = buildRouteContext();
-        let realtimeKpi = null;
-        if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
-          realtimeKpi = await fetchRouteVariantKpi(selectedVariant, force);
+        const contextKey = buildKpiContextKey();
+        const contextChanged = contextKey !== kpiDisplayedContextKey;
+        const requestToken = ++kpiRefreshToken;
+        kpiRefreshContextKey = contextKey;
+        if (contextChanged) {
+          clearKpiDisplay(buildFloatingContext());
+          kpiDisplayedContextKey = contextKey;
+        }
+        setKpiLoading(true);
+        const showRow = async (row, context) => {
+          if (requestToken !== kpiRefreshToken || contextKey !== kpiRefreshContextKey) return false;
+          if (!row) {
+            if (requestToken === kpiRefreshToken && contextKey === kpiRefreshContextKey) {
+              setKpiLoading(false);
+            }
+            return false;
+          }
+          updateKpiDisplay(row, context);
+          kpiDisplayedContextKey = contextKey;
+          setKpiLoading(false);
+          return true;
+        };
+        const routeCandidates = getRouteLineCandidates();
+        if (routeCandidates.length > 0) {
+          const contextText = buildRouteContext();
+          let realtimeKpi = null;
+          if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
+            realtimeKpi = await fetchRouteVariantKpi(selectedVariant, force);
+          } else {
+            realtimeKpi = await fetchRouteKpi(routeCandidates[0], force);
+          }
+          if (realtimeKpi) {
+            return showRow(realtimeKpi, contextText);
+          }
+        }
+        if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
+          const categoryKpi = await fetchCategoryKpi(selectedCategory, force);
+          if (categoryKpi) {
+            return showRow(categoryKpi, buildCategoryContext(selectedCategory) || { text: selectedCategory });
+          }
         } else {
-          realtimeKpi = await fetchRouteKpi(routeCandidates[0], force);
+          const globalKpi = await fetchGlobalKpi(force);
+          if (globalKpi) {
+            return showRow(globalKpi, buildFloatingContext());
+          }
         }
-        if (realtimeKpi) {
-          return showRow(realtimeKpi, contextText);
+        return showRow(null, buildFloatingContext());
+      })();
+      kpiRefreshInFlight = task;
+      try {
+        return await task;
+      } finally {
+        if (kpiRefreshInFlight === task) {
+          kpiRefreshInFlight = null;
+        }
+        if (kpiRefreshQueuedForce) {
+          const queuedForce = kpiRefreshQueuedForce;
+          kpiRefreshQueuedForce = false;
+          refreshKpis(queuedForce).catch(() => {});
         }
       }
-      if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
-        const categoryKpi = await fetchCategoryKpi(selectedCategory, force);
-        if (categoryKpi) {
-          return showRow(categoryKpi, buildCategoryContext(selectedCategory) || { text: selectedCategory });
-        }
-      } else {
-        const globalKpi = await fetchGlobalKpi(force);
-        if (globalKpi) {
-          return showRow(globalKpi, buildFloatingContext());
-        }
-      }
-      return showRow(null, buildFloatingContext());
     }
 
     function handleRouteInputCommit() {
@@ -16177,6 +16215,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         return vehicles;
       } catch (err) {
         if (err?.name === "AbortError") return [];
+        if (isAbortLikeError(err)) return [];
         console.warn("Falha ao obter veículos:", err);
         showAppError(`Falha ao obter veículos: ${err?.message || err}`);
         updateStatus("erro");
