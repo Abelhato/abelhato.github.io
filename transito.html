@@ -3229,6 +3229,36 @@
         return 1000 - speed;
       }
 
+      function isAbortLikeError(err) {
+        const name = String(err?.name || "").toLowerCase();
+        const message = String(err?.message || err || "").toLowerCase();
+        if (name === "aborterror") return true;
+        return (
+          message.includes("aborted")
+          || message.includes("context canceled")
+          || message.includes("stream")
+          || message.includes("timeout")
+          || message.includes("failed to fetch")
+        );
+      }
+
+      async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+        const controller = new AbortController();
+        const origSignal = options.signal;
+        const onOrigAbort = () => controller.abort();
+        if (origSignal) {
+          if (origSignal.aborted) controller.abort();
+          origSignal.addEventListener("abort", onOrigAbort, { once: true });
+        }
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+          clearTimeout(timer);
+          if (origSignal) origSignal.removeEventListener("abort", onOrigAbort);
+        }
+      }
+
       async function fetchFromBackends(path, params, { signal } = {}) {
         const query = new URLSearchParams();
         Object.entries(params || {}).forEach(([key, value]) => {
@@ -3239,7 +3269,7 @@
         let lastError = null;
         for (const base of API_BASES) {
           try {
-            const resp = await fetch(`${base}${suffix}`, { cache: "no-store", signal });
+            const resp = await fetchWithTimeout(`${base}${suffix}`, { cache: "no-store", signal }, 12000);
             if (!resp.ok) {
               let detail = "";
               try {
@@ -3252,7 +3282,7 @@
             }
             return await resp.json();
           } catch (error) {
-            if (error?.name === "AbortError") throw error;
+            if (error?.name === "AbortError" && signal?.aborted) throw error;
             lastError = error;
           }
         }
@@ -3452,6 +3482,12 @@
               statusNote.textContent = `${routeCount} carreiras desenhadas no mapa.`;
             } catch (error) {
               if (error?.name === "AbortError") continue;
+              if (isAbortLikeError(error)) {
+                statusNote.textContent = lastTransitRouteCount > 0
+                  ? `${lastTransitRouteCount} carreiras desenhadas no mapa.`
+                  : "A atualizar segmentos no mapa…";
+                continue;
+              }
               adapter.clearOverlay();
               summarySegments.textContent = "Segmentos: 0";
               statusNote.textContent = `Erro: ${error?.message || error}`;
