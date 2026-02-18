@@ -1935,7 +1935,7 @@
       const mql = window.matchMedia("(max-width: 900px)");
 
       const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href).href;
-      const KNOWN_BACKEND_PORTS = [2026];
+      const KNOWN_BACKEND_PORTS = [8002, 2026];
       const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
       function normalizeBackendUrl(raw) {
         if (!raw) return null;
@@ -2036,6 +2036,8 @@
       const TRANSIT_CACHE_TTL_MS = 20000;
       let transitFetchController = null;
       let latestTransitRefreshToken = 0;
+      let transitRefreshInFlight = false;
+      let transitRefreshQueued = false;
       let lastTransitGroups = [];
       let lastTransitRouteCount = 0;
       let pendingSelectionFit = false;
@@ -3366,84 +3368,99 @@
       }
 
       async function refreshTransit() {
-        const refreshToken = ++latestTransitRefreshToken;
-        if (transitFetchController) transitFetchController.abort();
-        transitFetchController = new AbortController();
-        const routeIds = effectiveRouteIds();
-        if (!routeIds.length) {
-          statusNote.textContent = "Sem carreiras disponíveis para carregar.";
-          adapter.clearOverlay();
-          summarySegments.textContent = "Segmentos: 0";
+        if (transitRefreshInFlight) {
+          transitRefreshQueued = true;
           return;
         }
 
-        const windowValue = windowSelect.value;
-        const hourValue = hourFilterSelect.value;
-        const hourStartValue = hourFilterStart ? String(hourFilterStart.value ?? "") : "";
-        const hourEndValue = hourFilterEnd ? String(hourFilterEnd.value ?? "") : "";
-        const hourRangeActive = windowValue !== "1h";
-        summaryWindow.textContent = `Janela: ${windowSelect.options[windowSelect.selectedIndex]?.textContent || "—"}`;
-        summaryHour.textContent = windowValue === "1h"
-          ? "Hora: janela corrente"
-          : `Hora: ${hourTextFromValue(hourStartValue)} → ${hourTextFromValue(hourEndValue)}`;
-        summaryRoutes.textContent = selectedRouteSet.size
-          ? `Carreiras: ${routeIds.length}`
-          : "Carreiras: todas";
-
+        transitRefreshInFlight = true;
         if (loadBtn) loadBtn.disabled = true;
         setStatusLoading(true);
-        statusNote.textContent = "A carregar segmentos no mapa…";
 
         try {
-          let groups = [];
-          const routesParam = routesQueryParam(routeIds);
-          const serviceDate = currentLocalServiceDate();
-          const excludeNonWorkingDays = excludeNonWorkingToggle?.checked ? "1" : undefined;
-          const queryParams = windowValue === "1h"
-            ? {
-                window: "1h",
-                routes: routesParam,
-                service_date: serviceDate,
-                exclude_non_working_days: excludeNonWorkingDays,
-                limit: 0,
-              }
-            : {
-                window: windowValue,
-                routes: routesParam,
-                service_date: serviceDate,
-                exclude_non_working_days: excludeNonWorkingDays,
-                hour_of_day: hourRangeActive && hourStartValue === hourEndValue && hourStartValue !== "24" ? hourStartValue : undefined,
-                hour_start: hourRangeActive ? hourStartValue : undefined,
-                hour_end: hourRangeActive ? hourEndValue : undefined,
-                limit: 0,
-              };
-          const cacheKey = JSON.stringify(queryParams);
-          const cached = transitResponseCache.get(cacheKey);
-          if (cached && (Date.now() - cached.ts) <= TRANSIT_CACHE_TTL_MS && Array.isArray(cached.groups)) {
-            groups = cached.groups;
-          } else {
-            const rows = await fetchFromBackends("/api/transit-stats", queryParams, { signal: transitFetchController.signal });
-            groups = aggregateSegments(Array.isArray(rows) ? rows : []);
-            transitResponseCache.set(cacheKey, { ts: Date.now(), groups });
-            if (transitResponseCache.size > 24) {
-              const oldestKey = transitResponseCache.keys().next().value;
-              if (oldestKey) transitResponseCache.delete(oldestKey);
+          do {
+            transitRefreshQueued = false;
+            const refreshToken = ++latestTransitRefreshToken;
+            transitFetchController = new AbortController();
+
+            const routeIds = effectiveRouteIds();
+            if (!routeIds.length) {
+              statusNote.textContent = "Sem carreiras disponíveis para carregar.";
+              adapter.clearOverlay();
+              summarySegments.textContent = "Segmentos: 0";
+              lastTransitGroups = [];
+              lastTransitRouteCount = 0;
+              pendingSelectionFit = false;
+              continue;
             }
-          }
-          if (refreshToken !== latestTransitRefreshToken) return;
-          lastTransitGroups = groups;
-          drawSegments(groups, { fit: pendingSelectionFit });
-          pendingSelectionFit = false;
-          const routeCount = groups.filter((g) => (g.segments || []).length > 0).length;
-          lastTransitRouteCount = routeCount;
-          statusNote.textContent = `${routeCount} carreiras desenhadas no mapa.`;
-        } catch (error) {
-          if (error?.name === "AbortError") return;
-          adapter.clearOverlay();
-          summarySegments.textContent = "Segmentos: 0";
-          statusNote.textContent = `Erro: ${error?.message || error}`;
+
+            const windowValue = windowSelect.value;
+            const hourStartValue = hourFilterStart ? String(hourFilterStart.value ?? "") : "";
+            const hourEndValue = hourFilterEnd ? String(hourFilterEnd.value ?? "") : "";
+            const hourRangeActive = windowValue !== "1h";
+            summaryWindow.textContent = `Janela: ${windowSelect.options[windowSelect.selectedIndex]?.textContent || "—"}`;
+            summaryHour.textContent = windowValue === "1h"
+              ? "Hora: janela corrente"
+              : `Hora: ${hourTextFromValue(hourStartValue)} → ${hourTextFromValue(hourEndValue)}`;
+            summaryRoutes.textContent = selectedRouteSet.size
+              ? `Carreiras: ${routeIds.length}`
+              : "Carreiras: todas";
+            statusNote.textContent = "A carregar segmentos no mapa…";
+
+            try {
+              let groups = [];
+              const routesParam = routesQueryParam(routeIds);
+              const serviceDate = currentLocalServiceDate();
+              const excludeNonWorkingDays = excludeNonWorkingToggle?.checked ? "1" : undefined;
+              const queryParams = windowValue === "1h"
+                ? {
+                    window: "1h",
+                    routes: routesParam,
+                    service_date: serviceDate,
+                    exclude_non_working_days: excludeNonWorkingDays,
+                    limit: 0,
+                  }
+                : {
+                    window: windowValue,
+                    routes: routesParam,
+                    service_date: serviceDate,
+                    exclude_non_working_days: excludeNonWorkingDays,
+                    hour_of_day: hourRangeActive && hourStartValue === hourEndValue && hourStartValue !== "24" ? hourStartValue : undefined,
+                    hour_start: hourRangeActive ? hourStartValue : undefined,
+                    hour_end: hourRangeActive ? hourEndValue : undefined,
+                    limit: 0,
+                  };
+              const cacheKey = JSON.stringify(queryParams);
+              const cached = transitResponseCache.get(cacheKey);
+              if (cached && (Date.now() - cached.ts) <= TRANSIT_CACHE_TTL_MS && Array.isArray(cached.groups)) {
+                groups = cached.groups;
+              } else {
+                const rows = await fetchFromBackends("/api/transit-stats", queryParams, { signal: transitFetchController.signal });
+                groups = aggregateSegments(Array.isArray(rows) ? rows : []);
+                transitResponseCache.set(cacheKey, { ts: Date.now(), groups });
+                if (transitResponseCache.size > 24) {
+                  const oldestKey = transitResponseCache.keys().next().value;
+                  if (oldestKey) transitResponseCache.delete(oldestKey);
+                }
+              }
+              if (refreshToken !== latestTransitRefreshToken) continue;
+              lastTransitGroups = groups;
+              drawSegments(groups, { fit: pendingSelectionFit });
+              pendingSelectionFit = false;
+              const routeCount = groups.filter((g) => (g.segments || []).length > 0).length;
+              lastTransitRouteCount = routeCount;
+              statusNote.textContent = `${routeCount} carreiras desenhadas no mapa.`;
+            } catch (error) {
+              if (error?.name === "AbortError") continue;
+              adapter.clearOverlay();
+              summarySegments.textContent = "Segmentos: 0";
+              statusNote.textContent = `Erro: ${error?.message || error}`;
+            } finally {
+              transitFetchController = null;
+            }
+          } while (transitRefreshQueued);
         } finally {
-          if (refreshToken !== latestTransitRefreshToken) return;
+          transitRefreshInFlight = false;
           if (loadBtn) loadBtn.disabled = false;
           setStatusLoading(false);
         }

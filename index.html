@@ -3809,7 +3809,7 @@
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    const KNOWN_BACKEND_PORTS = [2026];
+    const KNOWN_BACKEND_PORTS = [8002, 2026];
     const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
     const MODE_REALTIME = "realtime";
     const HISTORY_PAGE_URL = (() => {
@@ -8630,7 +8630,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     async function checkApiHealth() {
       for (const url of HEALTH_ENDPOINTS) {
         try {
-          const resp = await fetch(url, withNgrokBypass({ cache: "no-store" }, url));
+          const resp = await fetch(url, withNgrokBypass({ cache: "no-store", keepalive: true }, url));
           if (resp.ok) return true;
         } catch (err) {
           continue;
@@ -12336,7 +12336,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const GLOBAL_STOPS_KEY_PRECISION = 1e4;
     const GLOBAL_STOPS_CACHE_TTL_MS = 120_000;
 	    const globalStopsCache = new Map(); // key -> { ts, payload }
-    let globalStopsAbort = null;
+    let globalStopsFetchInFlight = false;
+    let globalStopsRefreshQueued = false;
+    let globalStopsQueuedForce = false;
+    let globalStopsStateVersion = 0;
     let globalStopsKey = null;
     let lastRenderedGlobalStopsKey = null;
     const renderedStopsMap = new Map(); // stopKey -> { marker, lat, lon, angleDeg }
@@ -12591,10 +12594,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function cancelGlobalStopsFetch() {
-      if (globalStopsAbort) {
-        try { globalStopsAbort.abort(); } catch (e) {}
-        globalStopsAbort = null;
-      }
+      globalStopsRefreshQueued = false;
+      globalStopsQueuedForce = false;
+      globalStopsStateVersion += 1;
     }
 
     const scheduleRefreshStops = (() => {
@@ -15848,6 +15850,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function refreshGlobalStops(force = false) {
       if (!adapter) return;
+      if (globalStopsFetchInFlight) {
+        globalStopsRefreshQueued = true;
+        globalStopsQueuedForce = globalStopsQueuedForce || Boolean(force);
+        globalStopsStateVersion += 1;
+        return;
+      }
+      const requestVersion = ++globalStopsStateVersion;
+      globalStopsFetchInFlight = true;
+      let cached = null;
+      let key = null;
+      try {
       if (!force && adapter?.isInteracting) return;
       if (adapter instanceof MapLibreAdapter && adapter.globalStopTilesEnabled) {
         const z = adapterZoom();
@@ -15889,50 +15902,48 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (!b) return;
       const roundedBounds = roundBoundsForStops(b, GLOBAL_STOPS_KEY_PRECISION);
       const effLimit = dynamicGlobalStopsLimit(z);
-      const key = JSON.stringify({ ...(roundedBounds || {}), z: Math.round(z * 10) / 10, limit: effLimit });
-      const sameViewport = globalStopsKey === key;
+      key = JSON.stringify({ ...(roundedBounds || {}), z: Math.round(z * 10) / 10, limit: effLimit });
       globalStopsKey = key;
 
       const now = Date.now();
-      const cached = globalStopsCache.get(key);
+      cached = globalStopsCache.get(key);
       const cachedFresh = cached && (now - cached.ts) < GLOBAL_STOPS_CACHE_TTL_MS;
       if (cached && lastRenderedGlobalStopsKey !== key) {
         renderGlobalStops(cached.payload);
         lastRenderedGlobalStopsKey = key;
       }
       if (!force && cachedFresh) return;
-      if (!force && sameViewport && globalStopsAbort) return;
-
-      cancelGlobalStopsFetch();
-      const controller = new AbortController();
-      globalStopsAbort = controller;
-      (async () => {
-        try {
-          if (adapter.ready instanceof Promise) await adapter.ready;
-        const payload = await fetchFromEndpoints(stopsBboxEndpoints(), {
-            min_lat: String(b.minLat),
-            max_lat: String(b.maxLat),
-            min_lon: String(b.minLon),
-            max_lon: String(b.maxLon),
-            limit: String(effLimit),
-            include_routes: "0"
-          }, { signal: controller.signal, timeoutMs: 5000, cacheKey: "stops-bbox" });
-          const stops = Array.isArray(payload) ? payload : (payload?.stops || []);
-          const data = { stops };
-          globalStopsCache.set(key, { ts: now, payload: data });
-          renderGlobalStops(data);
+      if (adapter.ready instanceof Promise) await adapter.ready;
+      const payload = await fetchFromEndpoints(stopsBboxEndpoints(), {
+          min_lat: String(b.minLat),
+          max_lat: String(b.maxLat),
+          min_lon: String(b.minLon),
+          max_lon: String(b.maxLon),
+          limit: String(effLimit),
+          include_routes: "0"
+        }, { timeoutMs: 8000, cacheKey: "stops-bbox" });
+      if (requestVersion !== globalStopsStateVersion) return;
+      const stops = Array.isArray(payload) ? payload : (payload?.stops || []);
+      const data = { stops };
+      globalStopsCache.set(key, { ts: now, payload: data });
+      renderGlobalStops(data);
+      lastRenderedGlobalStopsKey = key;
+      } catch (err) {
+        if (requestVersion !== globalStopsStateVersion) return;
+        console.warn("Falha ao carregar paragens (rede global):", err);
+        if (cached?.payload) {
+          renderGlobalStops(cached.payload);
           lastRenderedGlobalStopsKey = key;
-        } catch (err) {
-          if (controller.signal.aborted) return;
-          console.warn("Falha ao carregar paragens (rede global):", err);
-          if (cached?.payload) {
-            renderGlobalStops(cached.payload);
-            lastRenderedGlobalStopsKey = key;
-          }
-        } finally {
-          if (globalStopsAbort === controller) globalStopsAbort = null;
         }
-      })();
+      } finally {
+        globalStopsFetchInFlight = false;
+        if (globalStopsRefreshQueued) {
+          const queuedForce = globalStopsQueuedForce;
+          globalStopsRefreshQueued = false;
+          globalStopsQueuedForce = false;
+          refreshGlobalStops(queuedForce).catch(() => {});
+        }
+      }
     }
 
     function filterVehicles(list) {
