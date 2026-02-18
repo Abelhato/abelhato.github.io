@@ -6623,6 +6623,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let kpiRefreshToken = 0;
     let kpiRefreshContextKey = "";
     let kpiDisplayedContextKey = "";
+    let kpiRefreshInFlight = null;
+    let kpiRefreshQueuedForce = false;
     const timeLabelFormatter = new Intl.DateTimeFormat("pt-PT", {
       hour: "2-digit",
       minute: "2-digit",
