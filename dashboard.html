@@ -10738,6 +10738,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         tripId,
         currentStopSequence,
         stopId,
+        currentStatus: normalizeVehicleCurrentStatus(props.current_status ?? props.currentStatus ?? ""),
         directionId,
         bearing: toNumber(props.heading ?? props.bearing ?? props.azimuth ?? props.course ?? 0, 0),
         speed: toNumber(props.velocidade ?? props.speed ?? props.velocity ?? 0, 0),
@@ -13260,8 +13261,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const REALTIME_LIVE_SPEED_MIN_KMH = 2;
     const REALTIME_STUCK_AFTER_MS = 60_000;
     const REALTIME_STUCK_DISTANCE_METERS = 18;
-    const REALTIME_STUCK_SPEED_FACTOR = 0.45;
-    const REALTIME_STUCK_SPEED_FLOOR_KMH = 2.5;
+    const REALTIME_PASSED_STOP_TOLERANCE_METERS = 12;
+    const REALTIME_AT_STOP_DISTANCE_METERS = 25;
+    const REALTIME_MOVING_AWAY_DELTA_METERS = 20;
+    const REALTIME_MOVING_AWAY_MIN_DISTANCE_METERS = 90;
     const REALTIME_STOP_COMPUTE_BUDGET_MS = 1200;
     const VEHICLE_MOTION_STATE_MAX_AGE_MS = 12 * 60_000;
     const tripsCache = new Map(); // route|direction|shape -> { ts, trips }
@@ -13272,7 +13275,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const transitSpeedInflight = new Map(); // key -> Promise
     const tripStopProfileCache = new Map(); // tripId -> { ts, profile }
     const tripStopProfileInflight = new Map(); // tripId -> Promise
-    const vehicleMotionState = new Map(); // vehicleId -> { lat, lon, seenAtTs, stationarySinceTs }
+    const vehicleMotionState = new Map(); // vehicleId -> { lat, lon, prevLat, prevLon, seenAtTs, stationarySinceTs }
     const STOP_SCHEDULE_CACHE_TTL_MS = 20_000;
     const stopScheduleCache = new Map(); // "{stopId}|{contextKey}" -> { ts, schedule }
     let stopScheduleRequestSeq = 0;
@@ -13528,6 +13531,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function normalizeDirectionId(value) {
       const num = Number.parseInt(String(value), 10);
       return Number.isFinite(num) ? num : null;
+    }
+
+    function normalizeVehicleCurrentStatus(value) {
+      if (value == null) return "";
+      const raw = String(value).trim().toUpperCase();
+      if (!raw) return "";
+      if (raw === "0") return "INCOMING_AT";
+      if (raw === "1") return "STOPPED_AT";
+      if (raw === "2") return "IN_TRANSIT_TO";
+      if (raw === "INCOMING_AT" || raw === "STOPPED_AT" || raw === "IN_TRANSIT_TO") return raw;
+      return raw;
     }
 
     function normalizeStopSequence(value) {
@@ -13793,7 +13807,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         seen.add(id);
         const previous = vehicleMotionState.get(id);
         if (!previous) {
-          vehicleMotionState.set(id, { lat, lon, seenAtTs: nowTs, stationarySinceTs: nowTs });
+          vehicleMotionState.set(id, { lat, lon, prevLat: lat, prevLon: lon, seenAtTs: nowTs, stationarySinceTs: nowTs });
           continue;
         }
         const movedMeters = distanceBetweenCoords(previous.lat, previous.lon, lat, lon);
@@ -13801,6 +13815,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         vehicleMotionState.set(id, {
           lat,
           lon,
+          prevLat: Number.isFinite(Number(previous.lat)) ? Number(previous.lat) : lat,
+          prevLon: Number.isFinite(Number(previous.lon)) ? Number(previous.lon) : lon,
           seenAtTs: nowTs,
           stationarySinceTs: isStationary ? (Number(previous.stationarySinceTs) || nowTs) : nowTs
         });
@@ -13822,6 +13838,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const stationarySinceTs = Number(state.stationarySinceTs);
       if (!Number.isFinite(stationarySinceTs)) return false;
       return (nowTs - stationarySinceTs) >= REALTIME_STUCK_AFTER_MS;
+    }
+
+    function previousVehicleCoords(vehicle) {
+      const id = normalizeVehicleIdentity(vehicle);
+      if (!id) return null;
+      const state = vehicleMotionState.get(id);
+      if (!state) return null;
+      const prevLat = Number(state.prevLat);
+      const prevLon = Number(state.prevLon);
+      if (!Number.isFinite(prevLat) || !Number.isFinite(prevLon)) return null;
+      return { lat: prevLat, lon: prevLon };
     }
 
     function transitSpeedCacheKeyForRouteBases(routeBases, now = new Date()) {
@@ -13996,6 +14023,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function buildTripStopProfile(rows) {
       const bySequence = new Map();
+      const stopSeqById = new Map();
       for (const row of Array.isArray(rows) ? rows : []) {
         const stopSequence = normalizeStopSequence(row?.stop_sequence ?? row?.stopSequence);
         const shapeDist = normalizeShapeDistance(
@@ -14004,6 +14032,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           row?.shape_dist ??
           row?.shapeDist
         );
+        const stopId = normalizeStopId(row?.stop_id ?? row?.stopId ?? "");
+        if (stopId && stopSequence != null) {
+          const existingSeq = stopSeqById.get(stopId);
+          if (!Number.isFinite(existingSeq) || stopSequence < existingSeq) {
+            stopSeqById.set(stopId, stopSequence);
+          }
+        }
         if (stopSequence == null || shapeDist == null) continue;
         const existing = bySequence.get(stopSequence);
         if (!Number.isFinite(Number(existing)) || shapeDist > Number(existing)) {
@@ -14015,7 +14050,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         .map(([seq, dist]) => ({ seq: Number(seq), dist: Number(dist) }))
         .filter(p => Number.isFinite(p.seq) && Number.isFinite(p.dist))
         .sort((a, b) => a.seq - b.seq);
-      return points.length ? { points } : null;
+      if (!points.length) return null;
+      return { points, stopSeqById };
     }
 
     function readTripStopProfile(tripId) {
@@ -14103,6 +14139,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return null;
     }
 
+    function estimateSequenceForStopId(profile, stopId) {
+      const normalizedStopId = normalizeStopId(stopId);
+      if (!normalizedStopId) return null;
+      const seq = profile?.stopSeqById?.get?.(normalizedStopId);
+      return Number.isFinite(Number(seq)) ? Number(seq) : null;
+    }
+
     function buildRealtimeTripStopIndex(stopTimes, routeFilter) {
       const matchesRouteFilter = buildRouteFilterMatcher(routeFilter);
       const byTripId = new Map();
@@ -14156,6 +14199,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
       const speedIndex = await fetchTransitSpeedByRouteBases(routeBases);
       const bestByTripId = new Map();
+      const suppressedTripIds = new Set();
       const nowTs = Date.now();
       const activeTripIds = Array.from(new Set(
         (Array.isArray(lastVehicles) ? lastVehicles : [])
@@ -14175,15 +14219,26 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (!routeBase || !routeBases.includes(routeBase)) continue;
         const vehicleDirectionId = normalizeDirectionId(getDirectionId(vehicle));
         if (!isDirectionCompatible(matchedStopTime.directionId, vehicleDirectionId)) continue;
-        const targetStopSequence = normalizeStopSequence(matchedStopTime.stopSequence);
-        const vehicleStopSequence = normalizeStopSequence(
+        const targetStopId = normalizeStopId(stopId);
+        const targetStopSequenceRaw = normalizeStopSequence(matchedStopTime.stopSequence);
+        const vehicleStopSequenceRaw = normalizeStopSequence(
           vehicle?.currentStopSequence ??
           vehicle?.current_stop_sequence ??
           vehicle?.currentStopSeq ??
           vehicle?.current_stop_seq
         );
-        // If sequence says vehicle already passed the target stop, skip it.
-        if (vehicleStopSequence != null && targetStopSequence != null && vehicleStopSequence > targetStopSequence) continue;
+        const vehicleStopId = normalizeStopId(vehicle?.stopId ?? vehicle?.stop_id ?? vehicle?.current_stop_id ?? "");
+        const vehicleCurrentStatus = normalizeVehicleCurrentStatus(vehicle?.currentStatus ?? vehicle?.current_status ?? "");
+        const prevCoords = previousVehicleCoords(vehicle);
+        const geoDistanceNow = (hasStopCoords && Number.isFinite(vLat) && Number.isFinite(vLon))
+          ? distanceBetweenCoords(vLat, vLon, lat, lon)
+          : NaN;
+        const geoDistancePrev = (hasStopCoords && Number.isFinite(prevCoords?.lat) && Number.isFinite(prevCoords?.lon))
+          ? distanceBetweenCoords(prevCoords.lat, prevCoords.lon, lat, lon)
+          : NaN;
+        const isMovingAwayFromStop = Number.isFinite(geoDistanceNow)
+          && Number.isFinite(geoDistancePrev)
+          && (geoDistanceNow - geoDistancePrev) >= REALTIME_MOVING_AWAY_DELTA_METERS;
 
         const directionForSpeed = (matchedStopTime.directionId === 0 || matchedStopTime.directionId === 1)
           ? matchedStopTime.directionId
@@ -14199,26 +14254,80 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
         const targetShapeDist = normalizeShapeDistance(matchedStopTime.targetShapeDist);
         const profile = readTripStopProfile(vehicleTripId);
-        const currentShapeDist = estimateShapeDistanceForSequence(profile, vehicleStopSequence);
+        const targetStopSequence = targetStopSequenceRaw ?? estimateSequenceForStopId(profile, targetStopId);
+        const statusStopMismatchLooksPassed =
+          vehicleCurrentStatus === "IN_TRANSIT_TO" &&
+          vehicleStopId &&
+          targetStopId &&
+          vehicleStopId !== targetStopId &&
+          targetStopSequence != null &&
+          vehicleStopSequenceRaw != null &&
+          vehicleStopSequenceRaw >= targetStopSequence;
+        if (statusStopMismatchLooksPassed) continue;
+        const locationIndicatesPassed =
+          vehicleCurrentStatus === "IN_TRANSIT_TO" &&
+          targetStopSequence != null &&
+          vehicleStopSequenceRaw != null &&
+          vehicleStopSequenceRaw >= targetStopSequence &&
+          isMovingAwayFromStop &&
+          Number.isFinite(geoDistanceNow) &&
+          geoDistanceNow >= REALTIME_MOVING_AWAY_MIN_DISTANCE_METERS;
+        if (locationIndicatesPassed) continue;
+        const vehicleStopSeqFromStopId = estimateSequenceForStopId(profile, vehicleStopId);
+        const vehicleSeqCandidates = [vehicleStopSequenceRaw, vehicleStopSeqFromStopId]
+          .filter(seq => seq != null && Number.isFinite(Number(seq)))
+          .map(seq => Number(seq));
+        const vehicleStopSequence = vehicleSeqCandidates.length ? Math.max(...vehicleSeqCandidates) : null;
+        // If sequence says vehicle already passed the target stop, skip it.
+        if (vehicleStopSequence != null && targetStopSequence != null && vehicleStopSequence > targetStopSequence) continue;
+        const currentShapeDist = estimateShapeDistanceForSequence(profile, vehicleStopSequenceRaw ?? vehicleStopSeqFromStopId);
         let distanceMeters = NaN;
         if (targetShapeDist != null && currentShapeDist != null) {
-          distanceMeters = Math.max(0, targetShapeDist - currentShapeDist);
+          const shapeDelta = targetShapeDist - currentShapeDist;
+          const shapeIndicatesPassed = shapeDelta < -REALTIME_PASSED_STOP_TOLERANCE_METERS;
+          const locationClearlyAfterStop =
+            isMovingAwayFromStop &&
+            Number.isFinite(geoDistanceNow) &&
+            geoDistanceNow >= REALTIME_MOVING_AWAY_MIN_DISTANCE_METERS;
+          // If both shape progression and live location indicate the vehicle is already after this stop,
+          // suppress the trip entirely (including scheduled fallback rows).
+          if (shapeIndicatesPassed && locationClearlyAfterStop) {
+            suppressedTripIds.add(vehicleTripId);
+            continue;
+          }
+          const stopIdIndicatesPassed =
+            vehicleCurrentStatus === "IN_TRANSIT_TO" &&
+            vehicleStopId &&
+            targetStopId &&
+            vehicleStopId !== targetStopId &&
+            vehicleStopSeqFromStopId != null &&
+            targetStopSequence != null &&
+            vehicleStopSeqFromStopId > targetStopSequence;
+          if (stopIdIndicatesPassed) continue;
+          // If GTFS shape distance indicates the vehicle already passed this stop, skip this candidate.
+          if (shapeIndicatesPassed) continue;
+          distanceMeters = Math.max(0, shapeDelta);
         }
         if (!Number.isFinite(distanceMeters)) {
-          if (!hasStopCoords || !Number.isFinite(vLat) || !Number.isFinite(vLon)) continue;
-          distanceMeters = distanceBetweenCoords(vLat, vLon, lat, lon);
+          if (!Number.isFinite(geoDistanceNow)) continue;
+          distanceMeters = geoDistanceNow;
+        } else if (Number.isFinite(geoDistanceNow)) {
+          // Keep geodesic distance as a lower bound to avoid unrealistically low ETAs.
+          distanceMeters = Math.max(distanceMeters, geoDistanceNow);
         }
         if (!Number.isFinite(distanceMeters) || distanceMeters > REALTIME_STOP_DISTANCE_MAX_METERS) continue;
 
         const stuck = isVehicleStuck(vehicle, nowTs);
-        if (stuck) {
-          speedKmh = Math.max(REALTIME_STUCK_SPEED_FLOOR_KMH, speedKmh * REALTIME_STUCK_SPEED_FACTOR);
-        }
+        // Keep "stuck" only as a visual status; ETA should not be penalized by this flag.
         speedKmh = Math.max(REALTIME_MIN_EFFECTIVE_SPEED_KMH, speedKmh);
 
         const etaMinutesRaw = (distanceMeters / (speedKmh * (1000 / 3600))) / 60;
         if (!Number.isFinite(etaMinutesRaw)) continue;
         let etaMinutes = Math.max(0, Math.round(etaMinutesRaw));
+        const isAtTargetStop = Number.isFinite(distanceMeters) && distanceMeters <= REALTIME_AT_STOP_DISTANCE_METERS;
+        if (etaMinutes === 0 && !isAtTargetStop) {
+          etaMinutes = 1;
+        }
         if (vehicleStopSequence != null && targetStopSequence != null && vehicleStopSequence === targetStopSequence) {
           etaMinutes = Math.min(etaMinutes, 1);
         }
@@ -14253,11 +14362,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         }
       }
 
-      return Array.from(bestByTripId.values())
+      const rows = Array.from(bestByTripId.values())
         .sort((a, b) => {
           if (a.etaMinutes !== b.etaMinutes) return a.etaMinutes - b.etaMinutes;
           return String(a.routeId || "").localeCompare(String(b.routeId || ""), "pt", { numeric: true });
         });
+      rows.suppressedTripIds = Array.from(suppressedTripIds);
+      return rows;
     }
 
     function initialScheduleStateForContext() {
@@ -14322,10 +14433,19 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             })
             .filter(Boolean)
         );
+        const suppressedRealtimeTripIds = new Set(
+          (Array.isArray(realtimeDepartures?.suppressedTripIds) ? realtimeDepartures.suppressedTripIds : [])
+            .map(tid => normalizeTripId(tid))
+            .filter(Boolean)
+        );
         const departuresFiltered = departures.filter(dep => {
-          if (!realtimeTripIds.size) return true;
+          if (!realtimeTripIds.size && !suppressedRealtimeTripIds.size) return true;
           const tripIds = Array.isArray(dep?.tripIds) ? dep.tripIds : [];
-          return !tripIds.some(tid => realtimeTripIds.has(normalizeTripId(tid)));
+          return !tripIds.some(tid => {
+            const normalized = normalizeTripId(tid);
+            if (!normalized) return false;
+            return realtimeTripIds.has(normalized) || suppressedRealtimeTripIds.has(normalized);
+          });
         });
         latest = stopScheduleTracker.get(key);
         if (!latest || latest.requestId !== requestId || latest.contextKey !== contextKey) return null;
@@ -15949,6 +16069,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               tripId: trip.tripId ?? trip.trip_id ?? "",
               currentStopSequence: veh.currentStopSequence ?? veh.current_stop_sequence ?? null,
               stopId: veh.stopId ?? veh.stop_id ?? "",
+              currentStatus: normalizeVehicleCurrentStatus(veh.currentStatus ?? veh.current_status ?? ""),
               linha: trip.routeId ?? "",
               directionId: trip.directionId ?? trip.direction_id ?? null,
               bearing: pos.bearing ?? pos.heading ?? pos.course ?? null,
@@ -15974,6 +16095,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
                 item.currentStopSeq ??
                 null,
               stopId: item.stopId ?? item.stop_id ?? item.current_stop_id ?? "",
+              currentStatus: normalizeVehicleCurrentStatus(
+                item.currentStatus ??
+                item.current_status ??
+                item.vehicle?.currentStatus ??
+                item.vehicle?.current_status
+              ),
               linha: item.linha ?? item.routeId ?? item.route_id ?? item.route ?? "",
               directionId: item.directionId ?? item.direction_id ?? item.direction ?? item.sentido ?? null,
               bearing: item.bearing ?? item.heading ?? item.azimuth ?? item.course ?? 0,
