@@ -13231,7 +13231,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const payload = await fetchFromEndpoints(
             stopRoutesEndpoints(key),
             {},
-            { cacheKey: "stop-routes", timeoutMs: 5000 }
+            { cacheKey: `stop-routes:${key}`, timeoutMs: 5000 }
           );
           const routes = Array.isArray(payload?.routes) ? payload.routes : [];
           stopRoutesCache.set(key, routes);
