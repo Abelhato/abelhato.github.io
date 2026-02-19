@@ -6605,8 +6605,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let lastKpiTimestamp = null;
     let kpiAgeTimer = null;
     let chartRefreshIntervalId = null;
+    let kpiRefreshIntervalId = null;
+    let pageVisibilityInitialized = false;
     let chartCache = { paramsKey: "", timestamp: 0, summary: null, lineCandidate: null };
     let lastChartFetchTs = 0;
+    let chartRefreshInFlight = null;
+    let chartRefreshQueuedForce = false;
     let trendTimeline = [];
     let previewCharts = { speed: null, volume: null };
     let overlayChartInstance = null;
@@ -9340,89 +9344,108 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     async function refreshCharts(force = false) {
-      if (isMultiRouteSelection()) {
-        chartCache = { paramsKey: "", summary: null, timestamp: 0, lineCandidate: null, selectionKey: "" };
-        lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
-        lastTrendLineCandidate = null;
-        updateTrendTimeline([]);
-        closeChartOverlay();
-        closeFleetTableOverlay();
-        closeTripsTableOverlay();
-        return lastTrendSummary;
+      if (chartRefreshInFlight) {
+        chartRefreshQueuedForce = chartRefreshQueuedForce || Boolean(force);
+        return chartRefreshInFlight;
       }
-      const routeCandidates = getRouteLineCandidates();
-      // Se uma carreira está selecionada, só tenta essa; caso contrário, usa o agregado (null).
-      const chartLineCandidates = routeCandidates.length ? [...routeCandidates] : [null];
-      const now = Date.now();
-      let found = false;
-      const selectedIds = selectedRouteIds().slice().sort();
-      const selectionKey = JSON.stringify({
-        category: selectedCategory || null,
-        route: routeCandidates.join("|") || null,
-        route_ids: selectedIds.length ? selectedIds : null
-      });
+      const task = (async () => {
+        if (isMultiRouteSelection()) {
+          chartCache = { paramsKey: "", summary: null, timestamp: 0, lineCandidate: null, selectionKey: "" };
+          lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
+          lastTrendLineCandidate = null;
+          updateTrendTimeline([]);
+          closeChartOverlay();
+          closeFleetTableOverlay();
+          closeTripsTableOverlay();
+          return lastTrendSummary;
+        }
+        const routeCandidates = getRouteLineCandidates();
+        // Se uma carreira está selecionada, só tenta essa; caso contrário, usa o agregado (null).
+        const chartLineCandidates = routeCandidates.length ? [...routeCandidates] : [null];
+        const now = Date.now();
+        const selectedIds = selectedRouteIds().slice().sort();
+        const selectionKey = JSON.stringify({
+          category: selectedCategory || null,
+          route: routeCandidates.join("|") || null,
+          route_ids: selectedIds.length ? selectedIds : null
+        });
 
-      if (!force) {
-        if (chartCache.selectionKey === selectionKey && now - lastChartFetchTs < CHARTS_MIN_INTERVAL_MS && chartCache.summary) {
+        if (!force) {
+          if (chartCache.selectionKey === selectionKey && now - lastChartFetchTs < CHARTS_MIN_INTERVAL_MS && chartCache.summary) {
+            lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? null };
+            lastTrendLineCandidate = chartCache.lineCandidate ?? null;
+            updateTrendTimeline(lastTrendSummary.timeline || []);
+            return lastTrendSummary;
+          }
+        }
+
+        for (const candidate of chartLineCandidates) {
+          const params = buildTrendQueryParams(candidate);
+          const paramsKey = JSON.stringify(params);
+
+          if (!force && chartCache.selectionKey === selectionKey && paramsKey === chartCache.paramsKey && now - chartCache.timestamp < CHARTS_CACHE_TTL_MS && chartCache.summary) {
+            lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? candidate };
+            lastTrendLineCandidate = chartCache.lineCandidate ?? candidate;
+            updateTrendTimeline(lastTrendSummary.timeline || []);
+            return lastTrendSummary;
+          }
+
+          let summary = await fetchTrendSummary(candidate).catch(err => {
+            showAppError(`Falha nos gráficos: ${err?.message || err}`);
+            return { timeline: [], rows: [], kpi: null };
+          });
+          let paramsKeyUsed = paramsKey;
+          const unfilteredSummary = summary;
+          if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
+            const filtered = filterTrendSummaryByCategory(summary);
+            const filteredEmpty = (!filtered.timeline?.length) && (!filtered.rows?.length) && !filtered.kpi;
+            const unfilteredHasData = (unfilteredSummary.timeline?.length) || (unfilteredSummary.rows?.length) || unfilteredSummary.kpi;
+            summary = (!filteredEmpty || !unfilteredHasData) ? filtered : unfilteredSummary;
+          }
+          if (!summary.timeline.length && !summary.rows.length && !summary.kpi) continue;
+
+          chartCache = { paramsKey: paramsKeyUsed, summary, timestamp: now, lineCandidate: candidate, selectionKey };
+          lastChartFetchTs = now;
+          lastTrendSummary = { ...summary, lineCandidate: candidate };
+          lastTrendLineCandidate = candidate;
+          updateTrendTimeline(summary.timeline || []);
+          await refreshKpis(true);
+          return summary;
+        }
+
+        if (chartCache.selectionKey === selectionKey && chartCache.summary) {
           lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? null };
           lastTrendLineCandidate = chartCache.lineCandidate ?? null;
           updateTrendTimeline(lastTrendSummary.timeline || []);
           return lastTrendSummary;
         }
-      }
-
-      for (const candidate of chartLineCandidates) {
-        const params = buildTrendQueryParams(candidate);
-        const paramsKey = JSON.stringify(params);
-
-        if (!force && chartCache.selectionKey === selectionKey && paramsKey === chartCache.paramsKey && now - chartCache.timestamp < CHARTS_CACHE_TTL_MS && chartCache.summary) {
-          lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? candidate };
-          lastTrendLineCandidate = chartCache.lineCandidate ?? candidate;
-          updateTrendTimeline(lastTrendSummary.timeline || []);
-          return lastTrendSummary;
-        }
-
-        let summary = await fetchTrendSummary(candidate).catch(err => {
-          showAppError(`Falha nos gráficos: ${err?.message || err}`);
-          return { timeline: [], rows: [], kpi: null };
-        });
-        let paramsKeyUsed = paramsKey;
-        const unfilteredSummary = summary;
-        if (selectedCategory && selectedCategory !== CATEGORY_FILTER_ALL) {
-          const filtered = filterTrendSummaryByCategory(summary);
-          const filteredEmpty = (!filtered.timeline?.length) && (!filtered.rows?.length) && !filtered.kpi;
-          const unfilteredHasData = (unfilteredSummary.timeline?.length) || (unfilteredSummary.rows?.length) || unfilteredSummary.kpi;
-          summary = (!filteredEmpty || !unfilteredHasData) ? filtered : unfilteredSummary;
-        }
-        if (!summary.timeline.length && !summary.rows.length && !summary.kpi) continue;
-
-        chartCache = { paramsKey: paramsKeyUsed, summary, timestamp: now, lineCandidate: candidate, selectionKey };
-        lastChartFetchTs = now;
-        lastTrendSummary = { ...summary, lineCandidate: candidate };
-        lastTrendLineCandidate = candidate;
-        updateTrendTimeline(summary.timeline || []);
-        await refreshKpis(true);
-        found = true;
-        return summary;
-      }
-
-      if (chartCache.selectionKey === selectionKey && chartCache.summary) {
-        lastTrendSummary = { ...(chartCache.summary || {}), lineCandidate: chartCache.lineCandidate ?? null };
-        lastTrendLineCandidate = chartCache.lineCandidate ?? null;
-        updateTrendTimeline(lastTrendSummary.timeline || []);
+        // If nothing worked for the current selection (route/category), clear charts.
+        chartCache = { paramsKey: "", summary: null, timestamp: 0, lineCandidate: null, selectionKey };
+        lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
+        lastTrendLineCandidate = null;
+        updateTrendTimeline([]);
         return lastTrendSummary;
+      })();
+      chartRefreshInFlight = task;
+      try {
+        return await task;
+      } finally {
+        if (chartRefreshInFlight === task) {
+          chartRefreshInFlight = null;
+        }
+        if (chartRefreshQueuedForce) {
+          const queuedForce = chartRefreshQueuedForce;
+          chartRefreshQueuedForce = false;
+          refreshCharts(queuedForce).catch(err => showAppError(`Falha nos gráficos: ${err?.message || err}`));
+        }
       }
-      // If nothing worked for the current selection (route/category), clear charts.
-      chartCache = { paramsKey: "", summary: null, timestamp: 0, lineCandidate: null, selectionKey };
-      lastTrendSummary = { timeline: [], kpi: null, rows: [], lineCandidate: null };
-      lastTrendLineCandidate = null;
-      updateTrendTimeline([]);
-      return lastTrendSummary;
     }
 
     function startChartRefreshLoop() {
       if (chartRefreshIntervalId) return;
       chartRefreshIntervalId = setInterval(() => {
+        if (document.hidden) return;
+        if (chartRefreshInFlight) return;
         refreshCharts().catch(err => showAppError(`Falha nos gráficos: ${err?.message || err}`));
       }, CHARTS_REFRESH_INTERVAL_MS);
     }
@@ -9886,6 +9909,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     const endpointPreferredOriginByGroup = new Map(); // groupKey -> origin
+    const endpointRequestInflight = new Map(); // dedupeKey -> Promise<any>
 
     function isAbortLikeError(err) {
       const name = String(err?.name || "").toLowerCase();
@@ -9896,6 +9920,18 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         || message.includes("timeout")
         || message.includes("context canceled")
       );
+    }
+
+    function stableParamsKey(params = {}) {
+      const entries = Object.entries(params || {})
+        .filter(([key, value]) => key != null && value != null && value !== "")
+        .map(([key, value]) => {
+          if (Array.isArray(value)) return [String(key), value.map(item => String(item)).join(",")];
+          if (typeof value === "object") return [String(key), JSON.stringify(value)];
+          return [String(key), String(value)];
+        })
+        .sort(([a], [b]) => a.localeCompare(b));
+      return entries.map(([key, value]) => `${key}:${value}`).join("|");
     }
 
     async function fetchFromEndpoints(endpoints, params = {}, opts = {}) {
@@ -9927,28 +9963,45 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           ]
         : resolved;
       const timeoutMs = opts.timeoutMs || (ordered.length > 1 ? 3500 : 12000);
-      let lastError = null;
-      for (const url of ordered) {
-        try {
-          const response = await fetchWithTimeout(
-            url,
-            withNgrokBypass({ cache: "no-store", signal: opts.signal }, url),
-            timeoutMs
-          );
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const dedupeKey = (opts.signal || opts.disableDedupe)
+        ? ""
+        : `${groupKey}|${stableParamsKey(params)}`;
+      if (dedupeKey) {
+        const inflight = endpointRequestInflight.get(dedupeKey);
+        if (inflight) return inflight;
+      }
+      const requestTask = (async () => {
+        let lastError = null;
+        for (const url of ordered) {
           try {
-            endpointPreferredOriginByGroup.set(groupKey, new URL(url).origin);
-          } catch (err) {}
-          return await response.json();
-        } catch (err) {
-          if (opts.signal && opts.signal.aborted) throw err;
-          lastError = err;
-          if (!isAbortLikeError(err)) {
-            console.warn("Falha ao contactar endpoint", url, err);
+            const response = await fetchWithTimeout(
+              url,
+              withNgrokBypass({ cache: "no-store", signal: opts.signal }, url),
+              timeoutMs
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            try {
+              endpointPreferredOriginByGroup.set(groupKey, new URL(url).origin);
+            } catch (err) {}
+            return await response.json();
+          } catch (err) {
+            if (opts.signal && opts.signal.aborted) throw err;
+            lastError = err;
+            if (!isAbortLikeError(err)) {
+              console.warn("Falha ao contactar endpoint", url, err);
+            }
           }
         }
+        throw lastError || new Error("Todos os endpoints falharam");
+      })();
+      if (dedupeKey) endpointRequestInflight.set(dedupeKey, requestTask);
+      try {
+        return await requestTask;
+      } finally {
+        if (dedupeKey && endpointRequestInflight.get(dedupeKey) === requestTask) {
+          endpointRequestInflight.delete(dedupeKey);
+        }
       }
-      throw lastError || new Error("Todos os endpoints falharam");
     }
 
     async function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
@@ -12371,15 +12424,23 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const STOPS_MIN_ZOOM = 13;
     const STOP_ANIMATION_MS = 320;
     const STOP_REMOVE_DELAY_MS = STOP_ANIMATION_MS + 80;
-    const GLOBAL_STOPS_LIMIT = 1200;
-    const GLOBAL_STOPS_LIMIT_MIN = 600;
-    const GLOBAL_STOPS_KEY_PRECISION = 1e4;
+    const GLOBAL_STOPS_LIMIT = 700;
+    const GLOBAL_STOPS_LIMIT_MIN = 300;
+    const GLOBAL_STOPS_KEY_PRECISION = 1e3;
     const GLOBAL_STOPS_CACHE_TTL_MS = 120_000;
+    const GLOBAL_STOPS_FETCH_DEBOUNCE_MS = 650;
+    const GLOBAL_STOPS_MIN_FETCH_INTERVAL_MS = 3000;
+    const GLOBAL_STOPS_FAIL_BACKOFF_BASE_MS = 4000;
+    const GLOBAL_STOPS_FAIL_BACKOFF_MAX_MS = 30_000;
 	    const globalStopsCache = new Map(); // key -> { ts, payload }
     let globalStopsFetchInFlight = false;
+    let globalStopsFetchAbortController = null;
     let globalStopsRefreshQueued = false;
     let globalStopsQueuedForce = false;
     let globalStopsStateVersion = 0;
+    let globalStopsLastFetchAttemptTs = 0;
+    let globalStopsFailStreak = 0;
+    let globalStopsBackoffUntilTs = 0;
     let globalStopsKey = null;
     let lastRenderedGlobalStopsKey = null;
     const renderedStopsMap = new Map(); // stopKey -> { marker, lat, lon, angleDeg }
@@ -12634,13 +12695,20 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function cancelGlobalStopsFetch() {
+      if (globalStopsFetchAbortController) {
+        try { globalStopsFetchAbortController.abort(); } catch (e) {}
+        globalStopsFetchAbortController = null;
+      }
       globalStopsRefreshQueued = false;
       globalStopsQueuedForce = false;
       globalStopsStateVersion += 1;
     }
 
     const scheduleRefreshStops = (() => {
-      const debounced = debounce((force = false) => refreshGlobalStops(force).catch(() => {}), 220);
+      const debounced = debounce(
+        (force = false) => refreshGlobalStops(force).catch(() => {}),
+        GLOBAL_STOPS_FETCH_DEBOUNCE_MS
+      );
       return (force = false) => {
         cancelGlobalStopsFetch();
         debounced(force);
@@ -13450,6 +13518,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (!stopScheduleRefreshTimerId) {
           stopScheduleRefreshTimerId = setInterval(() => {
             if (!activeStopPopup) return;
+            if (document.hidden) return;
             refreshActiveStopSchedule();
           }, STOP_MENU_REFRESH_MS);
         }
@@ -13568,7 +13637,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const payload = await fetchFromEndpoints(
             GTFS_STOP_TIMES_ENDPOINTS,
             params,
-            { cacheKey: "gtfs-stop-times", timeoutMs: 5000 }
+            { cacheKey: "gtfs-stop-times", timeoutMs: 9000 }
           );
           rows = Array.isArray(payload) ? payload : [];
         } catch (err) {
@@ -15890,97 +15959,122 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function refreshGlobalStops(force = false) {
       if (!adapter) return;
+      if (document.hidden) return;
       if (globalStopsFetchInFlight) {
         globalStopsRefreshQueued = true;
         globalStopsQueuedForce = globalStopsQueuedForce || Boolean(force);
-        globalStopsStateVersion += 1;
         return;
       }
       const requestVersion = ++globalStopsStateVersion;
       globalStopsFetchInFlight = true;
+      globalStopsFetchAbortController = null;
       let cached = null;
       let key = null;
       try {
-      if (!force && adapter?.isInteracting) return;
-      if (adapter instanceof MapLibreAdapter && adapter.globalStopTilesEnabled) {
+        if (!force && adapter?.isInteracting) return;
+        if (adapter instanceof MapLibreAdapter && adapter.globalStopTilesEnabled) {
+          const z = adapterZoom();
+          const visible = Number.isFinite(z) && z >= STOPS_MIN_ZOOM && !hasRouteSelection();
+          adapter.setGlobalStopTilesVisible(visible);
+          if (!visible) {
+            clearMapLibreStopLabels();
+          } else {
+            updateMapLibreStopLabels();
+          }
+          return;
+        }
+        if (hasRouteSelection()) {
+          // Clear when leaving global mode.
+          if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer);
+          if (adapter instanceof MapLibreAdapter) adapter.setGlobalStops({ stops: [] });
+          if (adapter instanceof MapLibreAdapter) clearMapLibreStopLabels();
+          globalStopsKey = null;
+          lastRenderedGlobalStopsKey = null;
+          return;
+        }
+
         const z = adapterZoom();
-        const visible = Number.isFinite(z) && z >= STOPS_MIN_ZOOM && !hasRouteSelection();
-        adapter.setGlobalStopTilesVisible(visible);
-        if (!visible) {
-          clearMapLibreStopLabels();
-        } else {
-          updateMapLibreStopLabels();
+        if (!Number.isFinite(z) || z < STOPS_MIN_ZOOM) {
+          if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer);
+          if (adapter instanceof MapLibreAdapter) {
+            // remove global stops by re-rendering empty list
+            renderGlobalStops({ stops: [] });
+          }
+          if (adapter instanceof MapLibreAdapter) clearMapLibreStopLabels();
+          globalStopsKey = null;
+          lastRenderedGlobalStopsKey = null;
+          return;
         }
-        return;
-      }
-      if (hasRouteSelection()) {
-        // Clear when leaving global mode
-        cancelGlobalStopsFetch();
-        if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer);
-        if (adapter instanceof MapLibreAdapter) adapter.setGlobalStops({ stops: [] });
-        if (adapter instanceof MapLibreAdapter) clearMapLibreStopLabels();
-        globalStopsKey = null;
-        lastRenderedGlobalStopsKey = null;
-        return;
-      }
 
-      const z = adapterZoom();
-      if (!Number.isFinite(z) || z < STOPS_MIN_ZOOM) {
-        cancelGlobalStopsFetch();
-        if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer);
-        if (adapter instanceof MapLibreAdapter) {
-          // remove global stops by re-rendering empty list
-          renderGlobalStops({ stops: [] });
+        const b = adapterBounds();
+        if (!b) return;
+        const roundedBounds = roundBoundsForStops(b, GLOBAL_STOPS_KEY_PRECISION);
+        const effLimit = dynamicGlobalStopsLimit(z);
+        key = JSON.stringify({ ...(roundedBounds || {}), z: Math.round(z * 10) / 10, limit: effLimit });
+        globalStopsKey = key;
+
+        const now = Date.now();
+        cached = globalStopsCache.get(key);
+        const cachedFresh = cached && (now - cached.ts) < GLOBAL_STOPS_CACHE_TTL_MS;
+        if (cached && lastRenderedGlobalStopsKey !== key) {
+          renderGlobalStops(cached.payload);
+          lastRenderedGlobalStopsKey = key;
         }
-        if (adapter instanceof MapLibreAdapter) clearMapLibreStopLabels();
-        globalStopsKey = null;
-        lastRenderedGlobalStopsKey = null;
-        return;
-      }
+        if (!force && cachedFresh) return;
 
-      const b = adapterBounds();
-      if (!b) return;
-      const roundedBounds = roundBoundsForStops(b, GLOBAL_STOPS_KEY_PRECISION);
-      const effLimit = dynamicGlobalStopsLimit(z);
-      key = JSON.stringify({ ...(roundedBounds || {}), z: Math.round(z * 10) / 10, limit: effLimit });
-      globalStopsKey = key;
+        if (!force && globalStopsBackoffUntilTs && now < globalStopsBackoffUntilTs) {
+          return;
+        }
+        if (!force && cached && (now - globalStopsLastFetchAttemptTs) < GLOBAL_STOPS_MIN_FETCH_INTERVAL_MS) {
+          return;
+        }
 
-      const now = Date.now();
-      cached = globalStopsCache.get(key);
-      const cachedFresh = cached && (now - cached.ts) < GLOBAL_STOPS_CACHE_TTL_MS;
-      if (cached && lastRenderedGlobalStopsKey !== key) {
-        renderGlobalStops(cached.payload);
-        lastRenderedGlobalStopsKey = key;
-      }
-      if (!force && cachedFresh) return;
-      if (adapter.ready instanceof Promise) await adapter.ready;
-      const payload = await fetchFromEndpoints(stopsBboxEndpoints(), {
+        if (adapter.ready instanceof Promise) await adapter.ready;
+        const controller = new AbortController();
+        globalStopsFetchAbortController = controller;
+        globalStopsLastFetchAttemptTs = Date.now();
+        const payload = await fetchFromEndpoints(stopsBboxEndpoints(), {
           min_lat: String(b.minLat),
           max_lat: String(b.maxLat),
           min_lon: String(b.minLon),
           max_lon: String(b.maxLon),
           limit: String(effLimit),
           include_routes: "0"
-        }, { timeoutMs: 8000, cacheKey: "stops-bbox" });
-      if (requestVersion !== globalStopsStateVersion) return;
-      const stops = Array.isArray(payload) ? payload : (payload?.stops || []);
-      const data = { stops };
-      globalStopsCache.set(key, { ts: now, payload: data });
-      renderGlobalStops(data);
-      lastRenderedGlobalStopsKey = key;
+        }, { timeoutMs: 10000, cacheKey: "stops-bbox", signal: controller.signal });
+        if (requestVersion !== globalStopsStateVersion) return;
+        globalStopsFailStreak = 0;
+        globalStopsBackoffUntilTs = 0;
+        const stops = Array.isArray(payload) ? payload : (payload?.stops || []);
+        const data = { stops };
+        globalStopsCache.set(key, { ts: Date.now(), payload: data });
+        renderGlobalStops(data);
+        lastRenderedGlobalStopsKey = key;
       } catch (err) {
         if (requestVersion !== globalStopsStateVersion) return;
+        if (isAbortLikeError(err)) return;
+        globalStopsFailStreak = Math.min(globalStopsFailStreak + 1, 8);
+        const cooldown = Math.min(
+          GLOBAL_STOPS_FAIL_BACKOFF_MAX_MS,
+          GLOBAL_STOPS_FAIL_BACKOFF_BASE_MS * (2 ** (globalStopsFailStreak - 1))
+        );
+        globalStopsBackoffUntilTs = Date.now() + cooldown;
         console.warn("Falha ao carregar paragens (rede global):", err);
         if (cached?.payload) {
           renderGlobalStops(cached.payload);
           lastRenderedGlobalStopsKey = key;
         }
       } finally {
+        if (globalStopsFetchAbortController?.signal?.aborted) {
+          globalStopsFetchAbortController = null;
+        } else if (globalStopsFetchAbortController) {
+          globalStopsFetchAbortController = null;
+        }
         globalStopsFetchInFlight = false;
         if (globalStopsRefreshQueued) {
           const queuedForce = globalStopsQueuedForce;
           globalStopsRefreshQueued = false;
           globalStopsQueuedForce = false;
+          if (document.hidden) return;
           refreshGlobalStops(queuedForce).catch(() => {});
         }
       }
@@ -16182,6 +16276,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function startChapaRefreshLoop() {
       if (chapaRefreshTimerId) return;
       chapaRefreshTimerId = setInterval(() => {
+        if (document.hidden) return;
         refreshVehicleChapas().catch(err => console.warn("Falha ao atualizar chapas:", err));
       }, CHAPA_REFRESH_INTERVAL_MS);
     }
@@ -16225,8 +16320,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function startPolling() {
       if (window.__pollingTimer) clearTimeout(window.__pollingTimer);
-      if (window.__pollingAbort) {
-        try { window.__pollingAbort.abort(); } catch (e) {}
+      if (typeof window.__pollingAbort === "function") {
+        try { window.__pollingAbort(); } catch (e) {}
       }
       let inFlight = false;
       let currentAbort = null;
@@ -16235,6 +16330,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         window.__pollingTimer = setTimeout(tick, delayMs);
       };
       const tick = async () => {
+        if (document.hidden) {
+          scheduleNext(Math.max(15_000, REFRESH_RATE_MS * 3));
+          return;
+        }
         if (inFlight) {
           try { currentAbort?.abort(); } catch (e) {}
         }
@@ -16256,19 +16355,40 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           scheduleNext(delay);
         }
       };
-      scheduleNext(0);
       window.__pollingAbort = () => {
         try { currentAbort?.abort(); } catch (e) {}
         clearTimeout(window.__pollingTimer);
       };
+      scheduleNext(0);
     }
 
     function startKpiRefreshLoop() {
+      if (kpiRefreshIntervalId) return;
       refreshKpis(true).catch(() => {});
-      setInterval(() => {
+      kpiRefreshIntervalId = setInterval(() => {
+        if (document.hidden) return;
+        if (kpiRefreshInFlight) return;
         // Force refresh to bypass caches so KPIs update even if other polling loops are quiet.
         refreshKpis(true).catch(() => {});
       }, KPI_REFRESH_INTERVAL_MS);
+    }
+
+    function initVisibilityAwareRefresh() {
+      if (pageVisibilityInitialized) return;
+      pageVisibilityInitialized = true;
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) return;
+        if (!kpiRefreshInFlight) {
+          refreshKpis(true).catch(() => {});
+        }
+        if (!chartRefreshInFlight) {
+          refreshCharts().catch(err => showAppError(`Falha nos gráficos: ${err?.message || err}`));
+        }
+        if (activeStopPopup) {
+          refreshActiveStopSchedule();
+        }
+        startPolling();
+      });
     }
 
     const normalizeHashMode = () => {
@@ -16330,6 +16450,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     initRouteFilter();
     initFloatingSearch();
     wireFloatingContextActions();
+    initVisibilityAwareRefresh();
     initVariantFilter();
     initPreviewCharts();
     updateRouteChartHintVisibility();
