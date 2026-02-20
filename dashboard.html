@@ -213,6 +213,10 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
+      }
+      .sidebar-inline-popover {
+        display: inline-flex;
+        align-items: center;
         position: relative;
       }
       .sidebar-info-button {
@@ -2357,10 +2361,17 @@
       background: var(--map-bg);
     }
 
-    .user-location-btn {
+    .map-action-controls {
       position: absolute;
       bottom: 16px;
       right: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 4500;
+    }
+    .user-location-btn,
+    .map-dev-note-btn {
       width: 46px;
       height: 46px;
       border-radius: 50%;
@@ -2372,7 +2383,66 @@
       justify-content: center;
       cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-      z-index: 4500;
+    }
+    .map-dev-note-control {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .map-dev-note-btn {
+      background: var(--text-primary);
+      color: var(--surface-1);
+      border-color: rgba(245, 159, 0, 0.8);
+      font-size: 1.25rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .map-dev-note-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.3);
+      filter: brightness(1.04);
+    }
+    .map-dev-note-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    .map-dev-note-popover {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 10px);
+      width: min(320px, calc(100vw - 30px));
+      padding: 10px 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--surface-1);
+      color: var(--text-muted);
+      box-shadow: 0 14px 26px rgba(2, 6, 23, 0.24);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(6px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 4600;
+    }
+    .map-dev-note-popover.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+    .map-dev-note-popover::after {
+      content: "";
+      position: absolute;
+      right: 16px;
+      top: 100%;
+      border-width: 6px;
+      border-style: solid;
+      border-color: var(--surface-1) transparent transparent transparent;
+    }
+    .dev-note-content {
+      margin: 0;
+      white-space: pre-wrap;
+      color: var(--text-primary);
     }
     .user-location-btn:hover {
       transform: translateY(-1px);
@@ -3608,7 +3678,7 @@
         <button id="open-trips-table-btn" class="route-action-btn" type="button">VER TABELA DE VIAGENS</button>
       </div>
       <div class="sidebar-footer">
-        <div class="sidebar-author-meta" data-carris-info>
+        <div class="sidebar-author-meta">
           <a
             class="sidebar-author-link"
             href="https://discord.com/users/666907356789080066"
@@ -3618,18 +3688,20 @@
             <span class="sidebar-author-label">Feito por</span>
             <span class="sidebar-author-handle">@Abelhato</span>
           </a>
-          <button
-            class="sidebar-info-button"
-            type="button"
-            aria-label="Informação sobre os dados"
-            aria-expanded="false"
-            data-carris-info-btn
-          >
-            i
-          </button>
-          <div class="sidebar-info-popover" role="note" hidden data-carris-info-popover>
-            <p>Informação baseada em dados da API pública da Carris. Os valores apresentados são estimativas e não refletem a operação com exatidão. Este é um projeto pessoal que procura ajudar a compreender melhor a operação e contribuir para a melhoria da mobilidade em Lisboa.</p>
-          </div>
+          <span class="sidebar-inline-popover" data-sidebar-popover-block>
+            <button
+              class="sidebar-info-button"
+              type="button"
+              aria-label="Informação sobre os dados"
+              aria-expanded="false"
+              data-sidebar-popover-btn
+            >
+              i
+            </button>
+            <div class="sidebar-info-popover" role="note" hidden data-sidebar-popover-panel>
+              <p>Informação baseada em dados da API pública da Carris. Os valores apresentados são estimativas e não refletem a operação com exatidão. Este é um projeto pessoal que procura ajudar a compreender melhor a operação e contribuir para a melhoria da mobilidade em Lisboa.</p>
+            </div>
+          </span>
         </div>
       </div>
     </aside>
@@ -3795,9 +3867,26 @@
           </div>
         </div>
       </div>
-      <button id="user-location-btn" class="user-location-btn" type="button" aria-label="Mostrar a minha localização">
-        <i class="fa fa-location-arrow" aria-hidden="true"></i>
-      </button>
+      <div class="map-action-controls">
+        <span class="map-dev-note-control" data-sidebar-popover-block data-dev-note-block>
+          <button
+            id="map-dev-note-btn"
+            class="map-dev-note-btn"
+            type="button"
+            aria-label="Nota do programador"
+            aria-expanded="false"
+            data-sidebar-popover-btn
+          >
+            !
+          </button>
+          <div class="map-dev-note-popover" role="note" hidden data-sidebar-popover-panel>
+            <p class="dev-note-content" data-dev-note-content data-note-src="./dev-note.txt">A carregar nota do programador...</p>
+          </div>
+        </span>
+        <button id="user-location-btn" class="user-location-btn" type="button" aria-label="Mostrar a minha localização">
+          <i class="fa fa-location-arrow" aria-hidden="true"></i>
+        </button>
+      </div>
     </div>
     <div id="floating-search" class="floating-search floating-search--map hidden" aria-label="Pesquisar carreira (mobile)">
       <input id="floating-route-input" class="floating-route-input" type="text" placeholder="Pesquise carreira, paragem..." autocomplete="off">
@@ -9910,6 +9999,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     const endpointPreferredOriginByGroup = new Map(); // groupKey -> origin
     const endpointRequestInflight = new Map(); // dedupeKey -> Promise<any>
+    const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+    const DEFAULT_FETCH_RETRY_ATTEMPTS = 2;
+    const DEFAULT_FETCH_RETRY_BASE_DELAY_MS = 250;
 
     function isAbortLikeError(err) {
       const name = String(err?.name || "").toLowerCase();
@@ -9920,6 +10012,56 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         || message.includes("timeout")
         || message.includes("context canceled")
       );
+    }
+
+    function isRetryableFetchError(err) {
+      const name = String(err?.name || "").toLowerCase();
+      const message = String(err?.message || err || "").toLowerCase();
+      if (name === "aborterror") return true;
+      return (
+        message.includes("failed to fetch")
+        || message.includes("networkerror")
+        || message.includes("timeout")
+        || message.includes("connection refused")
+        || message.includes("eof")
+        || message.includes("context canceled")
+      );
+    }
+
+    function createAbortError() {
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      return err;
+    }
+
+    async function delayWithAbort(delayMs, signal) {
+      const waitMs = Math.max(0, Number(delayMs) || 0);
+      if (!waitMs) return;
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          if (signal) signal.removeEventListener("abort", onAbort);
+          resolve();
+        }, waitMs);
+        const onAbort = () => {
+          clearTimeout(timer);
+          if (signal) signal.removeEventListener("abort", onAbort);
+          reject(createAbortError());
+        };
+        if (signal) {
+          if (signal.aborted) {
+            onAbort();
+            return;
+          }
+          signal.addEventListener("abort", onAbort, { once: true });
+        }
+      });
+    }
+
+    function retryDelayMs(baseDelayMs, attemptIndex) {
+      const safeBase = Math.max(50, Number(baseDelayMs) || DEFAULT_FETCH_RETRY_BASE_DELAY_MS);
+      const attempt = Math.max(0, Number(attemptIndex) || 0);
+      const jitter = Math.floor(Math.random() * 80);
+      return (safeBase * (2 ** attempt)) + jitter;
     }
 
     function stableParamsKey(params = {}) {
@@ -9963,6 +10105,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           ]
         : resolved;
       const timeoutMs = opts.timeoutMs || (ordered.length > 1 ? 3500 : 12000);
+      const retryAttempts = Math.max(1, Number(opts.retryAttempts || DEFAULT_FETCH_RETRY_ATTEMPTS));
+      const retryBaseDelayMs = Math.max(50, Number(opts.retryBaseDelayMs || DEFAULT_FETCH_RETRY_BASE_DELAY_MS));
       const dedupeKey = (opts.signal || opts.disableDedupe)
         ? ""
         : `${groupKey}|${stableParamsKey(params)}`;
@@ -9973,23 +10117,38 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const requestTask = (async () => {
         let lastError = null;
         for (const url of ordered) {
-          try {
-            const response = await fetchWithTimeout(
-              url,
-              withNgrokBypass({ cache: "no-store", signal: opts.signal }, url),
-              timeoutMs
-            );
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          let endpointError = null;
+          for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
             try {
-              endpointPreferredOriginByGroup.set(groupKey, new URL(url).origin);
-            } catch (err) {}
-            return await response.json();
-          } catch (err) {
-            if (opts.signal && opts.signal.aborted) throw err;
-            lastError = err;
-            if (!isAbortLikeError(err)) {
-              console.warn("Falha ao contactar endpoint", url, err);
+              const response = await fetchWithTimeout(
+                url,
+                withNgrokBypass({ cache: "no-store", signal: opts.signal }, url),
+                timeoutMs
+              );
+              if (!response.ok) {
+                if (RETRYABLE_HTTP_STATUSES.has(Number(response.status)) && attempt < (retryAttempts - 1)) {
+                  await delayWithAbort(retryDelayMs(retryBaseDelayMs, attempt), opts.signal);
+                  continue;
+                }
+                throw new Error(`HTTP ${response.status}`);
+              }
+              try {
+                endpointPreferredOriginByGroup.set(groupKey, new URL(url).origin);
+              } catch (err) {}
+              return await response.json();
+            } catch (err) {
+              if (opts.signal && opts.signal.aborted) throw err;
+              endpointError = err;
+              if (isRetryableFetchError(err) && attempt < (retryAttempts - 1)) {
+                await delayWithAbort(retryDelayMs(retryBaseDelayMs, attempt), opts.signal);
+                continue;
+              }
+              break;
             }
+          }
+          lastError = endpointError;
+          if (endpointError && !isAbortLikeError(endpointError)) {
+            console.warn("Falha ao contactar endpoint", url, endpointError);
           }
         }
         throw lastError || new Error("Todos os endpoints falharam");
@@ -16489,21 +16648,21 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
   </script>
   <script>
     (function () {
-      const infoBlocks = Array.from(document.querySelectorAll("[data-carris-info]"));
-      if (!infoBlocks.length) return;
+      const popoverBlocks = Array.from(document.querySelectorAll("[data-sidebar-popover-block]"));
+      if (!popoverBlocks.length) return;
 
-      function closeInfoBlock(block) {
-        const button = block.querySelector("[data-carris-info-btn]");
-        const popover = block.querySelector("[data-carris-info-popover]");
+      function closePopoverBlock(block) {
+        const button = block.querySelector("[data-sidebar-popover-btn]");
+        const popover = block.querySelector("[data-sidebar-popover-panel]");
         if (!button || !popover) return;
         popover.hidden = true;
         popover.classList.remove("visible");
         button.setAttribute("aria-expanded", "false");
       }
 
-      function openInfoBlock(block) {
-        const button = block.querySelector("[data-carris-info-btn]");
-        const popover = block.querySelector("[data-carris-info-popover]");
+      function openPopoverBlock(block) {
+        const button = block.querySelector("[data-sidebar-popover-btn]");
+        const popover = block.querySelector("[data-sidebar-popover-panel]");
         if (!button || !popover) return;
         popover.hidden = false;
         button.setAttribute("aria-expanded", "true");
@@ -16512,37 +16671,61 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         });
       }
 
-      infoBlocks.forEach((block, index) => {
-        const button = block.querySelector("[data-carris-info-btn]");
-        const popover = block.querySelector("[data-carris-info-popover]");
+      popoverBlocks.forEach((block, index) => {
+        const button = block.querySelector("[data-sidebar-popover-btn]");
+        const popover = block.querySelector("[data-sidebar-popover-panel]");
         if (!button || !popover) return;
         if (!popover.id) {
-          popover.id = `carris-info-popover-${index + 1}`;
+          popover.id = `sidebar-popover-${index + 1}`;
         }
         button.setAttribute("aria-controls", popover.id);
         button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
           const isHidden = popover.hidden;
-          infoBlocks.forEach(closeInfoBlock);
-          if (isHidden) openInfoBlock(block);
+          popoverBlocks.forEach(closePopoverBlock);
+          if (isHidden) openPopoverBlock(block);
         });
       });
 
       document.addEventListener("mousedown", (event) => {
-        infoBlocks.forEach((block) => {
-          const button = block.querySelector("[data-carris-info-btn]");
-          const popover = block.querySelector("[data-carris-info-popover]");
+        popoverBlocks.forEach((block) => {
+          const button = block.querySelector("[data-sidebar-popover-btn]");
+          const popover = block.querySelector("[data-sidebar-popover-panel]");
           if (!button || !popover || popover.hidden) return;
           if (block.contains(event.target) || button.contains(event.target)) return;
-          closeInfoBlock(block);
+          closePopoverBlock(block);
         });
       });
 
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
-        infoBlocks.forEach(closeInfoBlock);
+        popoverBlocks.forEach(closePopoverBlock);
       });
+
+      const devNoteEl = document.querySelector("[data-dev-note-content]");
+      if (!devNoteEl) return;
+
+      const noteSrc = devNoteEl.getAttribute("data-note-src") || "./dev-note.txt";
+      const setNoteText = (value) => {
+        const safeText = String(value || "").trim();
+        devNoteEl.textContent = safeText || "Sem nota do programador neste momento.";
+      };
+
+      fetch(noteSrc, { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.text();
+        })
+        .then((text) => {
+          setNoteText(text);
+        })
+        .catch((error) => {
+          console.warn("Falha ao carregar nota do programador:", error);
+          setNoteText("Não foi possível carregar a nota. Verifique frontend/dev-note.txt.");
+        });
     })();
   </script>
 </body>

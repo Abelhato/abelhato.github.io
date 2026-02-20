@@ -3622,20 +3622,109 @@
 
       const HISTORIC_BASES = resolveHistoricBases();
       const REALTIME_BASES = HISTORIC_BASES;
+      const HISTORY_FETCH_TIMEOUT_MS = 12000;
+      const HISTORY_FETCH_RETRY_ATTEMPTS = 2;
+      const HISTORY_FETCH_RETRY_BASE_DELAY_MS = 250;
+      const HISTORY_RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
-      async function requestHistoricEndpoint(path, options = {}) {
+      function createAbortError() {
+        const err = new Error("Aborted");
+        err.name = "AbortError";
+        return err;
+      }
+
+      function isRetryableFetchError(error) {
+        const name = String(error?.name || "").toLowerCase();
+        const message = String(error?.message || error || "").toLowerCase();
+        if (name === "aborterror") return true;
+        return (
+          message.includes("failed to fetch")
+          || message.includes("networkerror")
+          || message.includes("timeout")
+          || message.includes("connection refused")
+          || message.includes("eof")
+          || message.includes("context canceled")
+        );
+      }
+
+      async function delayWithAbort(delayMs, signal) {
+        const waitMs = Math.max(0, Number(delayMs) || 0);
+        if (!waitMs) return;
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            resolve();
+          }, waitMs);
+          const onAbort = () => {
+            clearTimeout(timer);
+            if (signal) signal.removeEventListener("abort", onAbort);
+            reject(createAbortError());
+          };
+          if (signal) {
+            if (signal.aborted) {
+              onAbort();
+              return;
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        });
+      }
+
+      function retryDelayMs(attemptIndex) {
+        const safeAttempt = Math.max(0, Number(attemptIndex) || 0);
+        const jitter = Math.floor(Math.random() * 80);
+        return (HISTORY_FETCH_RETRY_BASE_DELAY_MS * (2 ** safeAttempt)) + jitter;
+      }
+
+      async function fetchWithTimeout(url, options = {}, timeoutMs = HISTORY_FETCH_TIMEOUT_MS) {
+        const controller = new AbortController();
+        const sourceSignal = options.signal;
+        const onSourceAbort = () => controller.abort();
+        if (sourceSignal) {
+          if (sourceSignal.aborted) controller.abort();
+          sourceSignal.addEventListener("abort", onSourceAbort, { once: true });
+        }
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+          clearTimeout(timer);
+          if (sourceSignal) sourceSignal.removeEventListener("abort", onSourceAbort);
+        }
+      }
+
+      async function requestFromBases(bases, path, options = {}, label = "endpoint") {
         let lastError = null;
         let lastResponse = null;
-        for (const base of HISTORIC_BASES) {
-          try {
-            const url = new URL(path, base);
-            const response = await fetch(url, options);
-            if (response.ok) return response;
-            lastResponse = response;
-          } catch (error) {
-            lastError = error;
+        for (const base of bases) {
+          let endpointError = null;
+          for (let attempt = 0; attempt < HISTORY_FETCH_RETRY_ATTEMPTS; attempt += 1) {
+            try {
+              const url = new URL(path, base).toString();
+              const response = await fetchWithTimeout(url, options, HISTORY_FETCH_TIMEOUT_MS);
+              if (response.ok) return response;
+              if (HISTORY_RETRYABLE_HTTP_STATUSES.has(Number(response.status)) && attempt < (HISTORY_FETCH_RETRY_ATTEMPTS - 1)) {
+                await delayWithAbort(retryDelayMs(attempt), options.signal);
+                continue;
+              }
+              lastResponse = response;
+              endpointError = new Error(`HTTP ${response.status} from ${response.url}`);
+              break;
+            } catch (error) {
+              if (options.signal?.aborted) throw error;
+              endpointError = error;
+              if (isRetryableFetchError(error) && attempt < (HISTORY_FETCH_RETRY_ATTEMPTS - 1)) {
+                await delayWithAbort(retryDelayMs(attempt), options.signal);
+                continue;
+              }
+              break;
+            }
           }
           if (options.signal?.aborted) break;
+          if (endpointError) {
+            lastError = endpointError;
+            console.warn(`Falha ${label} em ${base}`, endpointError);
+          }
         }
         if (lastResponse) {
           const err = new Error(`HTTP ${lastResponse.status} from ${lastResponse.url}`);
@@ -3643,30 +3732,15 @@
           throw err;
         }
         if (lastError) throw lastError;
-        throw new Error("Não foi possível contactar um endpoint histórico.");
+        throw new Error("Não foi possível contactar um endpoint.");
+      }
+
+      async function requestHistoricEndpoint(path, options = {}) {
+        return requestFromBases(HISTORIC_BASES, path, options, "histórico");
       }
 
       async function requestRealtimeEndpoint(path, options = {}) {
-        let lastError = null;
-        let lastResponse = null;
-        for (const base of REALTIME_BASES) {
-          try {
-            const url = new URL(path, base);
-            const response = await fetch(url, options);
-            if (response.ok) return response;
-            lastResponse = response;
-          } catch (error) {
-            lastError = error;
-          }
-          if (options.signal?.aborted) break;
-        }
-        if (lastResponse) {
-          const err = new Error(`HTTP ${lastResponse.status} from ${lastResponse.url}`);
-          err.response = lastResponse;
-          throw err;
-        }
-        if (lastError) throw lastError;
-        throw new Error("Não foi possível contactar um endpoint realtime.");
+        return requestFromBases(REALTIME_BASES, path, options, "realtime");
       }
 
       function normalizeRouteKey(value) {

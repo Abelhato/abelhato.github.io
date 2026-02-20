@@ -2586,22 +2586,109 @@
         return dedupeBases(bases);
       }
       const FLEET_API_BASES = resolveFleetApiBases();
+      const FLEET_FETCH_TIMEOUT_MS = 12000;
+      const FLEET_FETCH_RETRY_ATTEMPTS = 2;
+      const FLEET_FETCH_RETRY_BASE_DELAY_MS = 250;
+      const FLEET_RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
       const ROUTES_DATA_URLS = dedupeBases([
         new URL("gtfs/routes.txt", location.href).toString(),
         ...FLEET_API_BASES.map(base => `${base}/gtfs/routes.txt`),
       ]);
+
+      function createAbortError() {
+        const err = new Error("Aborted");
+        err.name = "AbortError";
+        return err;
+      }
+
+      function isRetryableFetchError(error) {
+        const name = String(error?.name || "").toLowerCase();
+        const message = String(error?.message || error || "").toLowerCase();
+        if (name === "aborterror") return true;
+        return (
+          message.includes("failed to fetch")
+          || message.includes("networkerror")
+          || message.includes("timeout")
+          || message.includes("connection refused")
+          || message.includes("eof")
+          || message.includes("context canceled")
+        );
+      }
+
+      async function delayWithAbort(delayMs, signal) {
+        const waitMs = Math.max(0, Number(delayMs) || 0);
+        if (!waitMs) return;
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            resolve();
+          }, waitMs);
+          const onAbort = () => {
+            clearTimeout(timer);
+            if (signal) signal.removeEventListener("abort", onAbort);
+            reject(createAbortError());
+          };
+          if (signal) {
+            if (signal.aborted) {
+              onAbort();
+              return;
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        });
+      }
+
+      function retryDelayMs(attemptIndex) {
+        const safeAttempt = Math.max(0, Number(attemptIndex) || 0);
+        const jitter = Math.floor(Math.random() * 80);
+        return (FLEET_FETCH_RETRY_BASE_DELAY_MS * (2 ** safeAttempt)) + jitter;
+      }
+
+      async function fetchWithTimeout(url, options = {}, timeoutMs = FLEET_FETCH_TIMEOUT_MS) {
+        const controller = new AbortController();
+        const sourceSignal = options.signal;
+        const onSourceAbort = () => controller.abort();
+        if (sourceSignal) {
+          if (sourceSignal.aborted) controller.abort();
+          sourceSignal.addEventListener("abort", onSourceAbort, { once: true });
+        }
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+          clearTimeout(timer);
+          if (sourceSignal) sourceSignal.removeEventListener("abort", onSourceAbort);
+        }
+      }
+
       async function fetchFromFleetBases(path, options = {}) {
         let lastError = null;
         let lastResponse = null;
         for (const base of FLEET_API_BASES) {
-          try {
-            const url = new URL(path, base).toString();
-            const response = await fetch(url, options);
-            if (response.ok) return response;
-            lastResponse = response;
-          } catch (error) {
-            lastError = error;
+          let endpointError = null;
+          for (let attempt = 0; attempt < FLEET_FETCH_RETRY_ATTEMPTS; attempt += 1) {
+            try {
+              const url = new URL(path, base).toString();
+              const response = await fetchWithTimeout(url, options, FLEET_FETCH_TIMEOUT_MS);
+              if (response.ok) return response;
+              if (FLEET_RETRYABLE_HTTP_STATUSES.has(Number(response.status)) && attempt < (FLEET_FETCH_RETRY_ATTEMPTS - 1)) {
+                await delayWithAbort(retryDelayMs(attempt), options.signal);
+                continue;
+              }
+              lastResponse = response;
+              endpointError = new Error(`HTTP ${response.status} from ${response.url}`);
+              break;
+            } catch (error) {
+              if (options.signal?.aborted) throw error;
+              endpointError = error;
+              if (isRetryableFetchError(error) && attempt < (FLEET_FETCH_RETRY_ATTEMPTS - 1)) {
+                await delayWithAbort(retryDelayMs(attempt), options.signal);
+                continue;
+              }
+              break;
+            }
           }
+          lastError = endpointError;
         }
         if (lastResponse) {
           const err = new Error(`HTTP ${lastResponse.status} from ${lastResponse.url}`);
@@ -2614,12 +2701,24 @@
       async function fetchRoutesText() {
         let lastError = null;
         for (const url of ROUTES_DATA_URLS) {
-          try {
-            const resp = await fetch(url, { cache: "no-store" });
-            if (resp.ok) return await resp.text();
-            lastError = new Error(`HTTP ${resp.status} from ${url}`);
-          } catch (error) {
-            lastError = error;
+          for (let attempt = 0; attempt < FLEET_FETCH_RETRY_ATTEMPTS; attempt += 1) {
+            try {
+              const resp = await fetchWithTimeout(url, { cache: "no-store" }, FLEET_FETCH_TIMEOUT_MS);
+              if (resp.ok) return await resp.text();
+              lastError = new Error(`HTTP ${resp.status} from ${url}`);
+              if (FLEET_RETRYABLE_HTTP_STATUSES.has(Number(resp.status)) && attempt < (FLEET_FETCH_RETRY_ATTEMPTS - 1)) {
+                await delayWithAbort(retryDelayMs(attempt));
+                continue;
+              }
+              break;
+            } catch (error) {
+              lastError = error;
+              if (isRetryableFetchError(error) && attempt < (FLEET_FETCH_RETRY_ATTEMPTS - 1)) {
+                await delayWithAbort(retryDelayMs(attempt));
+                continue;
+              }
+              break;
+            }
           }
         }
         throw lastError || new Error("Falha ao carregar gtfs/routes.txt");

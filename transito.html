@@ -3242,6 +3242,59 @@
         );
       }
 
+      const TRANSIT_RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+      const TRANSIT_FETCH_RETRY_ATTEMPTS = 2;
+      const TRANSIT_FETCH_RETRY_BASE_DELAY_MS = 250;
+
+      function isRetryableFetchError(err) {
+        const name = String(err?.name || "").toLowerCase();
+        const message = String(err?.message || err || "").toLowerCase();
+        if (name === "aborterror") return true;
+        return (
+          message.includes("failed to fetch")
+          || message.includes("networkerror")
+          || message.includes("timeout")
+          || message.includes("connection refused")
+          || message.includes("eof")
+          || message.includes("context canceled")
+        );
+      }
+
+      function makeAbortError() {
+        const err = new Error("Aborted");
+        err.name = "AbortError";
+        return err;
+      }
+
+      async function delayWithAbort(delayMs, signal) {
+        const waitMs = Math.max(0, Number(delayMs) || 0);
+        if (!waitMs) return;
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            resolve();
+          }, waitMs);
+          const onAbort = () => {
+            clearTimeout(timer);
+            if (signal) signal.removeEventListener("abort", onAbort);
+            reject(makeAbortError());
+          };
+          if (signal) {
+            if (signal.aborted) {
+              onAbort();
+              return;
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        });
+      }
+
+      function retryDelayMs(attempt) {
+        const safeAttempt = Math.max(0, Number(attempt) || 0);
+        const jitter = Math.floor(Math.random() * 80);
+        return (TRANSIT_FETCH_RETRY_BASE_DELAY_MS * (2 ** safeAttempt)) + jitter;
+      }
+
       async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
         const controller = new AbortController();
         const origSignal = options.signal;
@@ -3268,23 +3321,39 @@
         const suffix = query.toString() ? `${path}?${query.toString()}` : path;
         let lastError = null;
         for (const base of API_BASES) {
-          try {
-            const resp = await fetchWithTimeout(`${base}${suffix}`, { cache: "no-store", signal }, 12000);
-            if (!resp.ok) {
-              let detail = "";
-              try {
-                const payload = await resp.json();
-                detail = payload?.detail ? ` - ${payload.detail}` : "";
-              } catch (e) {
-                try { detail = ` - ${await resp.text()}`; } catch (e2) {}
+          let endpointError = null;
+          for (let attempt = 0; attempt < TRANSIT_FETCH_RETRY_ATTEMPTS; attempt += 1) {
+            try {
+              const resp = await fetchWithTimeout(`${base}${suffix}`, { cache: "no-store", signal }, 12000);
+              if (!resp.ok) {
+                if (TRANSIT_RETRYABLE_HTTP_STATUSES.has(Number(resp.status)) && attempt < (TRANSIT_FETCH_RETRY_ATTEMPTS - 1)) {
+                  await delayWithAbort(retryDelayMs(attempt), signal);
+                  continue;
+                }
+                let detail = "";
+                try {
+                  const payload = await resp.json();
+                  detail = payload?.detail ? ` - ${payload.detail}` : "";
+                } catch (e) {
+                  try { detail = ` - ${await resp.text()}`; } catch (e2) {}
+                }
+                throw new Error(`${resp.status} ${resp.statusText}${detail}`);
               }
-              throw new Error(`${resp.status} ${resp.statusText}${detail}`);
+              return await resp.json();
+            } catch (error) {
+              if (error?.name === "AbortError" && signal?.aborted) throw error;
+              endpointError = error;
+              if (isRetryableFetchError(error) && attempt < (TRANSIT_FETCH_RETRY_ATTEMPTS - 1)) {
+                await delayWithAbort(retryDelayMs(attempt), signal);
+                continue;
+              }
+              break;
             }
-            return await resp.json();
-          } catch (error) {
-            if (error?.name === "AbortError" && signal?.aborted) throw error;
-            lastError = error;
           }
+          if (endpointError && !isAbortLikeError(endpointError)) {
+            console.warn("Falha transit backend", `${base}${suffix}`, endpointError);
+          }
+          lastError = endpointError;
         }
         throw lastError || new Error("Falha a contactar o backend.");
       }
