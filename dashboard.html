@@ -973,6 +973,15 @@
       font-size: 0.85rem;
       justify-self: start;
     }
+    .kpi-floating-icon svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
     body.theme-dark .kpi-floating-icon,
     body.theme-auto .kpi-floating-icon {
       background: rgba(255, 255, 255, 0.08);
@@ -1216,7 +1225,7 @@
       border: 1px solid rgba(15, 23, 42, 0.05);
       align-items: center;
       text-align: center;
-      justify-content: center;
+      justify-content: flex-start;
     }
 
 	    .kpi-card strong {
@@ -1290,6 +1299,9 @@
 	      letter-spacing: 0.02em;
 	      color: var(--text-muted);
 	    }
+    .kpi-label--nowrap {
+      white-space: nowrap;
+    }
 
     .kpi-meta {
       font-size: 0.8rem;
@@ -2370,7 +2382,14 @@
       gap: 10px;
       z-index: 4500;
     }
+    .map-primary-controls {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
     .user-location-btn,
+    .map-north-btn,
     .map-dev-note-btn {
       width: 46px;
       height: 46px;
@@ -2384,10 +2403,16 @@
       cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     }
+    .map-north-btn {
+      background: var(--surface-1);
+    }
     .map-dev-note-control {
       position: relative;
       display: inline-flex;
       align-items: center;
+    }
+    .map-dev-note-control.hidden {
+      display: none;
     }
     .map-dev-note-btn {
       background: var(--text-primary);
@@ -2444,26 +2469,59 @@
       white-space: pre-wrap;
       color: var(--text-primary);
     }
-    .user-location-btn:hover {
+    .user-location-btn:hover,
+    .map-north-btn:hover {
       transform: translateY(-1px);
       box-shadow: 0 10px 24px rgba(15, 23, 42, 0.26);
     }
-    .user-location-btn:focus-visible {
+    .user-location-btn:focus-visible,
+    .map-north-btn:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 3px;
     }
-    .user-location-btn .fa {
+    .user-location-btn svg,
+    .map-north-btn svg {
       font-size: 1.2rem;
       color: var(--text-primary);
       transition: transform 0.3s ease;
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
-    .user-location-btn.is-active .fa {
+    .map-north-btn svg {
+      width: 30px;
+      height: 30px;
+      transition: transform 0.22s ease, color 0.2s ease;
+      transform-origin: 50% 50%;
+    }
+    .map-north-btn svg .compass-ring {
+      stroke-width: 1.5;
+      opacity: 0.5;
+    }
+    .map-north-btn svg .compass-needle-n {
+      fill: #e23b2f;
+      stroke: none;
+    }
+    .map-north-btn svg .compass-needle-s {
+      fill: rgba(15, 23, 42, 0.55);
+      stroke: none;
+    }
+    .map-north-btn svg .compass-core {
+      fill: var(--surface-1);
+      stroke: rgba(15, 23, 42, 0.45);
+      stroke-width: 1.1;
+    }
+    .user-location-btn.is-active svg {
       color: var(--accent);
     }
     .user-location-btn.is-loading {
       opacity: 0.9;
     }
-    .user-location-btn.is-loading .fa {
+    .user-location-btn.is-loading svg {
       animation: location-spin 1.2s linear infinite;
     }
     @keyframes location-spin {
@@ -3708,7 +3766,12 @@
     <div id="map-container">
       <div class="kpi-floating-context" id="kpi-floating-context">
         <div id="kpi-floating-chip" class="kpi-floating-chip" role="button" tabindex="0" aria-label="Pesquisar carreira">
-          <span class="kpi-floating-icon" aria-hidden="true"><i class="fa fa-search"></i></span>
+          <span class="kpi-floating-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <circle cx="11" cy="11" r="6"></circle>
+              <path d="M16 16L21 21"></path>
+            </svg>
+          </span>
           <span id="kpi-floating-text" class="kpi-floating-text--placeholder">pesquise carreira, paragem...</span>
           <button id="kpi-floating-clear" class="kpi-floating-clear hidden" type="button" aria-label="Voltar à Rede Global" title="Voltar à Rede Global">✕</button>
         </div>
@@ -3728,7 +3791,7 @@
             <strong class="kpi-value kpi-speed" id="kpi-vel-day">—</strong>
           </article>
           <article class="kpi-card">
-            <span class="kpi-label">Vel. comercial (1 hora)</span>
+            <span class="kpi-label kpi-label--nowrap">Vel. comercial(1 hora)</span>
             <strong class="kpi-value kpi-speed" id="kpi-vel-hour">—</strong>
             <span class="kpi-delta" id="kpi-vel-hour-delta">—</span>
           </article>
@@ -3883,9 +3946,21 @@
             <p class="dev-note-content" data-dev-note-content data-note-src="./dev-note.txt">A carregar nota do programador...</p>
           </div>
         </span>
-        <button id="user-location-btn" class="user-location-btn" type="button" aria-label="Mostrar a minha localização">
-          <i class="fa fa-location-arrow" aria-hidden="true"></i>
-        </button>
+        <div class="map-primary-controls">
+          <button id="map-north-btn" class="map-north-btn" type="button" aria-label="Alinhar mapa a norte" title="Alinhar mapa a norte">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <circle class="compass-ring" cx="12" cy="12" r="8"></circle>
+              <path class="compass-needle-n" d="M12 5.3L14.6 12L12 10.9L9.4 12Z"></path>
+              <path class="compass-needle-s" d="M12 18.7L9.4 12L12 13.1L14.6 12Z"></path>
+              <circle class="compass-core" cx="12" cy="12" r="1.55"></circle>
+            </svg>
+          </button>
+          <button id="user-location-btn" class="user-location-btn" type="button" aria-label="Mostrar a minha localização">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M3 11.5L21 3L12.5 21L11 13L3 11.5Z"></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
     <div id="floating-search" class="floating-search floating-search--map hidden" aria-label="Pesquisar carreira (mobile)">
@@ -6653,6 +6728,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const floatingSearch = document.getElementById("floating-search");
     const floatingRouteInput = document.getElementById("floating-route-input");
     const floatingRoutePreview = document.getElementById("floating-route-preview");
+    const northResetButton = document.getElementById("map-north-btn");
     const userLocationButton = document.getElementById("user-location-btn");
     const chartOverlayClose = document.getElementById("chart-overlay-close");
     const mapContainer = document.getElementById("map-container");
@@ -6718,6 +6794,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let kpiDisplayedContextKey = "";
     let kpiRefreshInFlight = null;
     let kpiRefreshQueuedForce = false;
+    let appAlertTimer = null;
     const timeLabelFormatter = new Intl.DateTimeFormat("pt-PT", {
       hour: "2-digit",
       minute: "2-digit",
@@ -6726,12 +6803,21 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function showAppError(message) {
       console.error("[Dashboard]", message);
       if (!appAlert) return;
-      appAlert.textContent = "";
-      appAlert.classList.remove("visible");
+      appAlert.textContent = String(message || "Erro inesperado.");
+      appAlert.classList.add("visible");
+      if (appAlertTimer) clearTimeout(appAlertTimer);
+      appAlertTimer = setTimeout(() => {
+        if (!appAlert) return;
+        appAlert.classList.remove("visible");
+      }, 4200);
     }
 
     function clearAppError() {
       if (!appAlert) return;
+      if (appAlertTimer) {
+        clearTimeout(appAlertTimer);
+        appAlertTimer = null;
+      }
       appAlert.classList.remove("visible");
     }
 
@@ -7884,8 +7970,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const accuracy = Number.isFinite(coords.accuracy) ? Number(coords.accuracy) : null;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
       lastUserLocationCoords = { lat, lon, accuracy };
-      if (adapter?.setUserLocation) {
-        adapter.setUserLocation([lat, lon], { center, accuracy });
+      try {
+        if (adapter?.setUserLocation) {
+          adapter.setUserLocation([lat, lon], { center, accuracy });
+        }
+      } catch (err) {
+        console.warn("Falha ao desenhar localização no mapa:", err);
+      }
+      if (floatingSearch?.classList.contains("visible") && floatingRouteInput && !String(floatingRouteInput.value || "").trim()) {
+        renderFloatingRoutePreview("");
       }
     }
 
@@ -7901,14 +7994,30 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (watch && err?.code === 1) {
         stopUserLocationTracking();
       }
-      const msg = err?.message || "Não foi possível obter a localização.";
+      let msg = err?.message || "Não foi possível obter a localização.";
+      if (err?.code === 1) {
+        msg = "Permissão de localização bloqueada no navegador.";
+      } else if (err?.code === 2) {
+        msg = "Localização indisponível neste momento.";
+      } else if (err?.code === 3) {
+        msg = "Tempo de espera de localização excedido.";
+      }
       console.warn("Geolocalização falhou:", err);
+      showAppError(msg);
       updateUserLocationButtonState({ loading: false, message: msg, tracking: userLocationTracking });
     }
 
     function requestUserLocation({ center = true, auto = false } = {}) {
+      if (!window.isSecureContext) {
+        const msg = "A localização no desktop requer HTTPS (ou localhost).";
+        showAppError(msg);
+        updateUserLocationButtonState({ loading: false, message: msg, tracking: false });
+        return;
+      }
       if (!navigator?.geolocation) {
-        updateUserLocationButtonState({ message: "Localização indisponível neste navegador." });
+        const msg = "Localização indisponível neste navegador.";
+        showAppError(msg);
+        updateUserLocationButtonState({ message: msg });
         return;
       }
       if (userLocationWatchId != null) {
@@ -7963,6 +8072,67 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (!isMobileViewport()) return;
       mobileLocationPrompted = true;
       requestUserLocation({ center: true, auto: true });
+    }
+
+    function alignMapNorth() {
+      const map = adapter?.map;
+      if (!map) return;
+      try {
+        if (typeof map.getBearing === "function" && typeof map.easeTo === "function") {
+          const center = map.getCenter?.();
+          const centerLon = Number(center?.lng ?? center?.lon);
+          const centerLat = Number(center?.lat);
+          const zoom = Number(map.getZoom?.());
+          map.easeTo({
+            center: (Number.isFinite(centerLon) && Number.isFinite(centerLat)) ? [centerLon, centerLat] : undefined,
+            zoom: Number.isFinite(zoom) ? zoom : undefined,
+            bearing: 0,
+            pitch: 0,
+            duration: 650,
+            essential: true
+          });
+          return;
+        }
+        if (typeof map.setBearing === "function") {
+          map.setBearing(0);
+        }
+      } catch (err) {
+        console.warn("Falha ao alinhar mapa a norte:", err);
+      }
+    }
+
+    function updateNorthButtonState() {
+      if (!northResetButton) return;
+      const map = adapter?.map;
+      if (!map) return;
+      let bearing = 0;
+      try {
+        if (typeof map.getBearing === "function") {
+          const raw = Number(map.getBearing());
+          if (Number.isFinite(raw)) bearing = raw;
+        }
+      } catch (err) {}
+      const normalized = ((bearing % 360) + 360) % 360;
+      const rounded = Math.round(normalized * 10) / 10;
+      const isNorth = rounded < 0.5 || rounded > 359.5;
+      // Compass should indicate geographic north on screen, so it rotates opposite to map bearing.
+      northResetButton.style.transform = `rotate(${-rounded}deg)`;
+      northResetButton.style.opacity = isNorth ? "0.88" : "1";
+    }
+
+    function initNorthResetControl() {
+      const map = adapter?.map;
+      if (!map || !northResetButton) return;
+      updateNorthButtonState();
+      try {
+        if (typeof map.on === "function") {
+          map.on("rotate", updateNorthButtonState);
+          map.on("move", updateNorthButtonState);
+          map.on("pitch", updateNorthButtonState);
+        }
+      } catch (err) {
+        console.warn("Falha ao ligar eventos da bússola:", err);
+      }
     }
 
     updateUserLocationButtonState();
@@ -11182,14 +11352,20 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         }
 
         const stops = Array.isArray(payload.stops) ? payload.stops : [];
-        for (const s of stops) {
+        const routePreferredAngles = stops.map(s => Number(s?.direction_angle));
+        const routeNeighborAngles = estimateAnglesFromNeighbors(stops, routePreferredAngles);
+        for (let idx = 0; idx < stops.length; idx++) {
+          const s = stops[idx];
           const lat = Number(s?.stop_lat);
           const lon = Number(s?.stop_lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
           const stopBorderColor = s?.color || STOP_MARKER_BORDER_COLOR;
           const arrowColor = STOP_MARKER_ARROW_COLOR;
           const payloadAngle = Number(s?.direction_angle);
-          const fallbackAngle = Number.isFinite(payloadAngle) ? payloadAngle : 0;
+          const neighborAngle = Number(routeNeighborAngles[idx]);
+          const fallbackAngle = Number.isFinite(neighborAngle)
+            ? neighborAngle
+            : (Number.isFinite(payloadAngle) ? payloadAngle : 0);
           const alignedAngle = closestSegmentAngleForPoint(lat, lon, segments, fallbackAngle);
           const iconHtml = `<div class="stop-marker stop--hidden" style="--stop-border:${stopBorderColor}; --stop-arrow:${arrowColor}; --stop-ang:${alignedAngle}deg"><span class="stop-arrow"></span></div>`;
           const icon = L.divIcon({ html: iconHtml, className: "stop-fade", iconSize: [1, 1], iconAnchor: [0, 0] });
@@ -11359,6 +11535,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         this.userLocationSourceId = "user-location-source";
         this.userLocationAccuracyLayerId = "user-location-accuracy-layer";
         this.userLocationMarker = null;
+        this.pendingUserLocation = null;
+        this._pendingUserLocationBound = false;
         this._lastRouteStopsCount = 0;
         this._lastGlobalStopsCount = 0;
         this.activePopups = [];
@@ -11867,16 +12045,22 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           }
         }
 
-	        for (const s of stops) {
-	          const lat = Number(s?.stop_lat);
-	          const lon = Number(s?.stop_lon);
-	          if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        const routePreferredAngles = stops.map(s => Number(s?.direction_angle));
+        const routeNeighborAngles = estimateAnglesFromNeighbors(stops, routePreferredAngles);
+        for (let idx = 0; idx < stops.length; idx++) {
+          const s = stops[idx];
+          const lat = Number(s?.stop_lat);
+          const lon = Number(s?.stop_lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 	          const stopBorderColor = s?.color || STOP_MARKER_BORDER_COLOR;
 	          const stopArrowColor = STOP_MARKER_ARROW_COLOR;
 	          const stopId = s?.stop_id || "";
-	          const payloadAngle = Number(s?.direction_angle);
-	          const fallbackAngle = Number.isFinite(payloadAngle) ? payloadAngle : 0;
-	          const alignedAngle = closestSegmentAngleForPoint(lat, lon, segments, fallbackAngle);
+          const payloadAngle = Number(s?.direction_angle);
+          const neighborAngle = Number(routeNeighborAngles[idx]);
+          const fallbackAngle = Number.isFinite(neighborAngle)
+            ? neighborAngle
+            : (Number.isFinite(payloadAngle) ? payloadAngle : 0);
+          const alignedAngle = closestSegmentAngleForPoint(lat, lon, segments, fallbackAngle);
 	          features.push({
             type: "Feature",
             properties: {
@@ -11939,6 +12123,19 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (!this.map || !coords || coords.length < 2) return;
         const [lat, lon] = coords;
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        if (typeof this.map.isStyleLoaded === "function" && !this.map.isStyleLoaded()) {
+          this.pendingUserLocation = { coords: [lat, lon], options: { center, accuracy } };
+          if (!this._pendingUserLocationBound) {
+            this._pendingUserLocationBound = true;
+            this.map.once("load", () => {
+              this._pendingUserLocationBound = false;
+              const pending = this.pendingUserLocation;
+              this.pendingUserLocation = null;
+              if (pending) this.setUserLocation(pending.coords, pending.options || {});
+            });
+          }
+          return;
+        }
         this.initUserLocationLayer();
         const src = this.map.getSource(this.userLocationSourceId);
         if (src && typeof src.setData === "function") {
@@ -11978,6 +12175,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       }
 
       clearUserLocation() {
+        this.pendingUserLocation = null;
         if (!this.map) return;
         const src = this.map.getSource(this.userLocationSourceId);
         if (src && typeof src.setData === "function") {
@@ -12013,8 +12211,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const angleRaw = Number(s?.direction_angle);
           const local = Number(fallbackAngles[idx] || 0);
           // Prefer backend-provided tangent; fallback to neighbor estimate only if missing.
-          const angle = Number.isFinite(angleRaw) ? angleRaw : local;
+          let angle = Number.isFinite(angleRaw) ? angleRaw : local;
           const routes = Array.isArray(s?.routes) ? s.routes : [];
+          if (Boolean(s?.is_terminal)) {
+            angle = wrapAngleDeg(angle + 180);
+          }
           const routesLabel = routes.map(r => String(r || "").trim()).filter(Boolean).slice(0, 6).join(" · ");
           if (stopId && routes.length) stopRoutesCache.set(stopId, routes);
           const finalColors = [STOP_MARKER_BORDER_COLOR];
@@ -12282,10 +12483,14 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const adapterReady = Promise.resolve(adapter.ready);
     adapterReady.then(() => {
       maybePromptMobileLocation();
+      initNorthResetControl();
     });
     window.addEventListener("resize", () => maybePromptMobileLocation(), { passive: true });
     if (userLocationButton) {
       userLocationButton.addEventListener("click", () => requestUserLocation({ center: true }));
+    }
+    if (northResetButton) {
+      northResetButton.addEventListener("click", alignMapNorth);
     }
 
     function clampNumber(v, min, max) {
@@ -12374,7 +12579,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 		        const use = neigh.slice(0, K);
 
 		        if (use.length === 1) {
-		          out[p.i] = bearingDegFromEast(p.lat, p.lon, use[0].q.lat, use[0].q.lon);
+		          // Endpoint/terminal heuristic: orient by approach direction (neighbor -> stop)
+		          // to avoid 180deg flips on dead-end stops.
+		          out[p.i] = bearingDegFromEast(use[0].q.lat, use[0].q.lon, p.lat, p.lon);
 		          continue;
 		        }
 
@@ -12397,6 +12604,40 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       }
 	      return out;
 	    }
+
+    function estimateNeighborSupportCounts(stops, maxDistanceMeters = 260) {
+      const list = Array.isArray(stops) ? stops : [];
+      const counts = new Array(list.length).fill(0);
+      const pts = [];
+      for (let i = 0; i < list.length; i++) {
+        const s = list[i];
+        const lat = Number(s?.stop_lat);
+        const lon = Number(s?.stop_lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        pts.push({ i, lat, lon });
+      }
+      if (pts.length < 2) return counts;
+
+      const R = 6371000;
+      const maxD2 = Math.max(0, Number(maxDistanceMeters) || 0) ** 2;
+      for (const p of pts) {
+        const refLat = (p.lat * Math.PI) / 180;
+        const cosRef = Math.cos(refLat);
+        const px = ((p.lon * Math.PI) / 180) * cosRef * R;
+        const py = ((p.lat * Math.PI) / 180) * R;
+        let c = 0;
+        for (const q of pts) {
+          if (q.i === p.i) continue;
+          const qx = ((q.lon * Math.PI) / 180) * cosRef * R;
+          const qy = ((q.lat * Math.PI) / 180) * R;
+          const dx = qx - px;
+          const dy = qy - py;
+          if ((dx * dx + dy * dy) <= maxD2) c += 1;
+        }
+        counts[p.i] = c;
+      }
+      return counts;
+    }
 
     function canonicalPieColors(colors) {
       const seen = new Set();
@@ -16025,7 +16266,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const angleRaw = Number(s?.direction_angle);
           const local = Number(fallbackAngles[idx] || 0);
           // Prefer payload (backend shape tangent); fallback to neighbor estimate only if missing.
-          const angleDeg = Number.isFinite(angleRaw) ? angleRaw : local;
+          let angleDeg = Number.isFinite(angleRaw) ? angleRaw : local;
+          if (Boolean(s?.is_terminal)) {
+            angleDeg = wrapAngleDeg(angleDeg + 180);
+          }
           const angCss = Number.isFinite(angleDeg) ? `${angleDeg}deg` : "0deg";
           const existing = renderedStopsMap.get(key);
 
@@ -16704,11 +16948,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       });
 
       const devNoteEl = document.querySelector("[data-dev-note-content]");
+      const devNoteBlock = document.querySelector("[data-dev-note-block]");
       if (!devNoteEl) return;
 
       const noteSrc = devNoteEl.getAttribute("data-note-src") || "./dev-note.txt";
       const setNoteText = (value) => {
         const safeText = String(value || "").trim();
+        if (devNoteBlock) {
+          devNoteBlock.classList.toggle("hidden", !safeText);
+        }
         devNoteEl.textContent = safeText || "Sem nota do programador neste momento.";
       };
 
