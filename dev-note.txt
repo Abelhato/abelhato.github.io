@@ -1,10 +1,1 @@
-Alô!
 
-Obrigado a todos pelo interesse e pela receção positiva deste projeto.
-A adesão tem sido muito grande, especialmente tendo em conta os recursos limitados que tenho disponíveis.
-
-Para aumentar a disponibilidade e a estabilidade do sistema,  alterei umas coisas e fiz uma atualização.
-Infelizmente, isso obrigou a reiniciar o programa e interromper momentaneamente a recolha de dados no dia 20/02/2026.
-Por esse motivo, os dados desse dia não estão 100% corretos.
-
-Obrigado!
