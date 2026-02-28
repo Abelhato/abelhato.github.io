@@ -2397,6 +2397,41 @@
       gap: 10px;
       z-index: 4400;
     }
+    .map-credits {
+      position: absolute;
+      right: max(84px, calc(env(safe-area-inset-right, 0px) + 84px));
+      bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+      z-index: 4300;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: min(360px, calc(100vw - 132px));
+      padding: 5px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: rgba(255, 255, 255, 0.24);
+      box-shadow: none;
+      backdrop-filter: none;
+      font-size: 0.68rem;
+      line-height: 1.25;
+      color: #0f172a;
+    }
+    body.theme-dark .map-credits {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow: none;
+      color: #0f172a;
+    }
+    .map-credits a {
+      color: inherit;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .map-credits a:hover,
+    .map-credits a:focus-visible {
+      color: var(--text-primary);
+      text-decoration: underline;
+    }
     .map-primary-controls {
       display: inline-flex;
       flex-direction: column;
@@ -3701,6 +3736,14 @@
 		        width: var(--mobile-action-diameter);
 		        height: var(--mobile-action-diameter);
 		      }
+	      .map-credits {
+	        left: auto;
+	        right: max(calc(var(--mobile-safe-end) + var(--mobile-action-diameter) + 12px), 72px);
+	        bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+	        max-width: min(250px, calc(100vw - (var(--mobile-safe-start) + var(--mobile-safe-end) + var(--mobile-action-diameter) + 24px)));
+	        padding: 4px 7px;
+	        font-size: 0.62rem;
+	      }
 
       body:not(.sidebar-collapsed) .kpi-panel {
         opacity: 0;
@@ -3742,6 +3785,14 @@
       }
       .kpi-floating-context {
         --floating-width: min(280px, 90vw);
+      }
+      .map-credits {
+        left: auto;
+        right: max(calc(var(--mobile-safe-end) + var(--mobile-action-diameter) + 10px), 68px);
+        bottom: max(10px, calc(env(safe-area-inset-bottom, 0px) + 10px));
+        max-width: min(220px, calc(100vw - (var(--mobile-safe-start) + var(--mobile-safe-end) + var(--mobile-action-diameter) + 18px)));
+        padding: 3px 6px;
+        font-size: 0.56rem;
       }
     }
 
@@ -4046,6 +4097,10 @@
             </svg>
           </button>
         </div>
+      </div>
+      <div class="map-credits" aria-label="Créditos do mapa">
+        <a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a>
+        <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>
       </div>
     </div>
     <div id="floating-search" class="floating-search floating-search--map hidden" aria-label="Pesquisar carreira (mobile)">
@@ -11266,7 +11321,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     // --- LEAFLET ADAPTER ---
     class LeafletAdapter {
       constructor() {
-        this.map = L.map('map', { zoomControl: false, preferCanvas: true, inertia: true }).setView(MAP_CENTER, MAP_ZOOM);
+        this.map = L.map('map', { zoomControl: false, attributionControl: false, preferCanvas: true, inertia: true }).setView(MAP_CENTER, MAP_ZOOM);
         this.markers = new Map();
         this.overlayGroup = L.layerGroup().addTo(this.map);
         this.routeShapesLayer = L.layerGroup().addTo(this.overlayGroup);
@@ -11277,7 +11332,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         this._interactionTimeout = null;
         this.animationDuration = Math.max(300, Math.min(ANIMATION_MS, REFRESH_RATE_MS - 150));
         L.tileLayer(LEAFLET_TILE_URL, {
-          attribution: '&copy; OpenStreetMap contributors &copy; MapTiler',
           maxZoom: 19,
           tileSize: 512,
           zoomOffset: -1,
