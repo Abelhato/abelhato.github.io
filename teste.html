@@ -7040,6 +7040,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let vehicleFeedStatusState = "offline";
     let vehiclesRequestSeq = 0;
     let vehiclesLatestAppliedId = 0;
+    let lastVehicleFetchHadError = false;
+    let vehiclePollingConsecutiveErrors = 0;
     const routeOptions = new Map(); // baseId -> { label: string, variants: Map<variantId, label>, categories: Set<string>, operators: Set<string> }
     const ROUTE_DETAILS = new Map(); // routeId -> { shortName, longName }
     const BASE_ROUTE_DETAILS = new Map(); // baseId -> { shortName, longName }
@@ -8003,9 +8005,36 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return "";
     }
 
+    function normalizeRouteLabel(value) {
+      return (value == null) ? "" : String(value).trim();
+    }
+
+    function routeLabelDedupKey(label) {
+      const normalized = normalizeRouteLabel(label);
+      if (!normalized) return "";
+      const routeCode = parseRouteCodeParts(normalized).code || normalized;
+      return routeCode.toUpperCase();
+    }
+
+    function dedupeRouteLabels(routeList) {
+      if (!Array.isArray(routeList) || !routeList.length) return [];
+      const seen = new Set();
+      const deduped = [];
+      for (const raw of routeList) {
+        const label = normalizeRouteLabel(raw);
+        if (!label) continue;
+        const key = routeLabelDedupKey(label);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(label);
+      }
+      return deduped;
+    }
+
     function buildStopPreviewPillsHtml(routes) {
-      if (!Array.isArray(routes) || !routes.length) return "";
-      const ordered = routes.slice().sort((a, b) => {
+      const deduped = dedupeRouteLabels(routes);
+      if (!deduped.length) return "";
+      const ordered = deduped.slice().sort((a, b) => {
         const aKey = stopPreviewRouteSortKey(a);
         const bKey = stopPreviewRouteSortKey(b);
         return STOP_PREVIEW_ROUTE_COLLATOR.compare(aKey, bKey);
@@ -11340,10 +11369,38 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return cleaned || text;
     }
 
+    function cmetAreaFromVehicleId(value) {
+      const raw = (value == null) ? "" : String(value).trim();
+      if (!raw) return null;
+      const digits = raw.replace(/\D/g, "");
+      if (digits.length < 2) return null;
+      const areaCode = digits.slice(0, 2);
+      if (!/^4[1-4]$/.test(areaCode)) return null;
+      const areaByCode = {
+        "41": "1 - Viação Alvorada",
+        "42": "2 - Rodoviária de Lisnoa",
+        "43": "3 - Transportes Sul do Tejo",
+        "44": "4 - Alsa Todi"
+      };
+      return areaByCode[areaCode] || null;
+    }
+
+    function cmetVehicleDisplayId(value) {
+      const raw = (value == null) ? "" : String(value).trim().replace(/^#/, "");
+      if (!raw) return "—";
+      const digitsOnly = raw.replace(/\D/g, "");
+      if (/^4[1-4]\d+$/.test(digitsOnly)) {
+        const stripped = digitsOnly.slice(2);
+        if (stripped) return stripped;
+      }
+      return raw;
+    }
+
     function popupHtml(v, style) {
       const label = v.routeLabel || v.linha || "—";
+      const isCmetVehicle = normalizeOperator(v?.operator || "") === OPERATOR_CMET;
       const dirId = getDirectionId(v);
-      const cmetHeadsign = normalizeOperator(v?.operator || "") === OPERATOR_CMET
+      const cmetHeadsign = isCmetVehicle
         ? String(v?.headsign || "").trim()
         : "";
       const dirLabel = cmetHeadsign
@@ -11360,7 +11417,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const pill = `<span class="route-pill route-pill--clickable popup-route-link" data-route-label="${safeLabel}" title="Filtrar pela carreira" style="--pill-bg:${headerFg === '#0f172a' ? '#ffffff' : 'rgba(255,255,255,0.14)'};--pill-fg:${headerFg};--pill-border:rgba(255,255,255,0.18)">${escapeHtml(code || label)}</span>`;
       const rawVehicleId = v.id ?? v.vehicleId ?? v.vehicle ?? v.id_veiculo ?? "";
       const normalizedVehicleId = (rawVehicleId == null) ? "" : String(rawVehicleId).trim().replace(/^#/, "");
-      const vehicleIdLabel = normalizedVehicleId ? `#${normalizedVehicleId}` : "—";
+      const vehicleIdLabel = isCmetVehicle
+        ? cmetVehicleDisplayId(normalizedVehicleId)
+        : (normalizedVehicleId ? `#${normalizedVehicleId}` : "—");
       const fleetModel = fleetModelLabelForId(normalizedVehicleId);
       const fallbackModel = (v.modelo || v.model || v.vehicle_model || v.tipo || v.type || "").trim();
       const modelLabel = fleetModel || fallbackModel;
@@ -11368,6 +11427,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const safeVehicleInfo = modelLabel ? `${safeVehicleIdLabel} - ${escapeHtml(modelLabel)}` : safeVehicleIdLabel;
       const chapaDisplay = v.chapa || v.plate || "—";
       const safeChapa = escapeHtml(chapaDisplay);
+      const areaLabel = cmetAreaFromVehicleId(normalizedVehicleId);
+      const safeAreaLabel = escapeHtml(areaLabel || "Área não identificada");
       return `
         <div class="pop-header" style="background-color: ${headerColor}; color:${headerFg}">
           <div class="pop-header__left">
@@ -11380,7 +11441,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             <span><b>Veículo:</b> ${safeVehicleInfo}</span>
           </div>
           ${safeDirLabel ? `<div style="margin-bottom:4px"><b>${safeDirLabel}</b></div>` : ""}
-          <div style="margin-bottom:4px"><b>Chapa:</b> ${safeChapa}</div>
+          ${isCmetVehicle
+            ? `<div style="margin-bottom:4px"><b>Área:</b> ${safeAreaLabel}</div>`
+            : `<div style="margin-bottom:4px"><b>Chapa:</b> ${safeChapa}</div>`
+          }
         </div>
       `;
     }
@@ -13246,7 +13310,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             angle = wrapAngleDeg(angle + 180);
           }
           const routesLabel = routes.map(r => String(r || "").trim()).filter(Boolean).slice(0, 6).join(" · ");
-          if (stopId && routes.length) stopRoutesCache.set(stopRoutesCacheKey(stopId, s?.operator || OPERATOR_CARRIS), routes);
+          if (stopId && routes.length) {
+            stopRoutesCache.set(stopRoutesCacheKey(stopId, s?.operator || OPERATOR_CARRIS), dedupeRouteLabels(routes));
+          }
           const finalColors = [STOP_MARKER_BORDER_COLOR];
           const comboKey = finalColors.length ? finalColors.join("|") : "default";
           if (!comboColors.has(comboKey)) comboColors.set(comboKey, finalColors);
@@ -15148,9 +15214,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function cmetRouteLabelsForStop(stop) {
       const routeIds = Array.isArray(stop?.route_ids) ? stop.route_ids : [];
-      return routeIds
+      return dedupeRouteLabels(routeIds
         .map(routeId => resolvePublicRouteLabel(routeId) || formatRouteLabel(routeId, routeId) || String(routeId || "").trim())
-        .filter(Boolean);
+        .filter(Boolean));
     }
 
     async function fetchCmetPattern(patternId) {
@@ -15342,7 +15408,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             await loadRoutesCatalog();
             const stops = await ensureCmetStopsCatalog();
             const stop = cmetStopsById.get(key) || stops.find(entry => String(entry?.id || "").trim() === key);
-            const routes = cmetRouteLabelsForStop(stop);
+            const routes = dedupeRouteLabels(cmetRouteLabelsForStop(stop));
             stopRoutesCache.set(cacheKey, routes);
             return routes;
           }
@@ -15351,7 +15417,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             {},
             { cacheKey: `stop-routes:${key}`, timeoutMs: 5000 }
           );
-          const routes = Array.isArray(payload?.routes) ? payload.routes : [];
+          const routes = dedupeRouteLabels(Array.isArray(payload?.routes) ? payload.routes : []);
           stopRoutesCache.set(cacheKey, routes);
           return routes;
         } catch (err) {
@@ -15382,6 +15448,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const CM_VEHICLE_RENDER_DEBOUNCE_MS = 180;
     const STOP_MENU_REFRESH_MS = 5000;
     const STOP_SCHEDULE_VISUAL_TICK_MS = 1000;
+    const CM_STOP_ARRIVALS_CACHE_TTL_SUCCESS_MS = 20_000;
+    const CM_STOP_ARRIVALS_CACHE_TTL_EMPTY_MS = 2_500;
+    const CM_STOP_ARRIVALS_CACHE_TTL_ERROR_MS = 1_500;
     const GTFS_TRIP_IDS_CACHE_TTL_MS = 6 * 60 * 60_000;
     const TRANSIT_SPEED_CACHE_TTL_MS = 8 * 60_000;
     const TRIP_STOP_PROFILE_CACHE_TTL_MS = 30 * 60_000;
@@ -16727,7 +16796,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const stopOperator = normalizeOperator(options.operator || activeStopPopup?.operator || "");
       const useCmetScheduleSource = stopOperator === OPERATOR_CMET || (effectiveHasCmetOperator() && (
         currentOperator === OPERATOR_CMET ||
-        selectionUsesOnlyCmetRoutes()
+        selectionUsesOnlyCmetRoutes() ||
+        !hasRouteSelection()
       ));
       if (useCmetScheduleSource) {
         try {
@@ -16746,9 +16816,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               }
             }
           } catch (err) {}
-          const cacheKey = `${cmetStopLookupId}|${selectedRouteIds().slice().sort().join(",") || "*"}`;
+          const routeFilterKey = hasRouteSelection()
+            ? selectedRouteIds().slice().sort().join(",")
+            : "*";
+          const cacheKey = `${cmetStopLookupId}|${routeFilterKey}`;
           const cached = cmetArrivalsCache.get(cacheKey);
-          if (cached && (Date.now() - cached.ts) < 20_000) {
+          const cachedTtlMs = Number(cached?.ttlMs);
+          if (cached && Number.isFinite(cachedTtlMs) && (Date.now() - cached.ts) < cachedTtlMs) {
             return cached.value;
           }
           await loadRoutesCatalog();
@@ -16758,7 +16832,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             { timeoutMs: 10000, cacheKey: `cm-arrivals-stop:${cmetStopLookupId}` }
           );
           const rows = cmetArrivalRowsFromPayload(payload);
-          const routeFilter = new Set(resolveRouteFilter());
+          const routeFilterValues = hasRouteSelection()
+            ? (Array.isArray(resolveRouteFilter()) ? resolveRouteFilter() : [])
+            : [];
+          const routeFilter = new Set(routeFilterValues.filter(Boolean));
           const matchesRoute = (routeId) => !routeFilter.size || routeFilter.has(routeId) || routeFilter.has(getBaseRouteKey(routeId));
           const scopedRows = rows.filter(row => matchesRoute(cmetArrivalRouteId(row)));
           const rowsToRender = scopedRows.length ? scopedRows : rows;
@@ -16860,11 +16937,20 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             departures: departures.slice(0, STOP_SCHEDULE_LIMIT),
             contextKey
           };
-          cmetArrivalsCache.set(cacheKey, { ts: Date.now(), value });
+          const ttlMs = value.status === "success"
+            ? CM_STOP_ARRIVALS_CACHE_TTL_SUCCESS_MS
+            : CM_STOP_ARRIVALS_CACHE_TTL_EMPTY_MS;
+          cmetArrivalsCache.set(cacheKey, { ts: Date.now(), ttlMs, value });
           return value;
         } catch (err) {
           console.warn("Falha ao carregar horários CM:", err);
-          return { status: "error", contextKey };
+          const value = { status: "error", contextKey };
+          cmetArrivalsCache.set(`${key}|${hasRouteSelection() ? selectedRouteIds().slice().sort().join(",") : "*"}`, {
+            ts: Date.now(),
+            ttlMs: CM_STOP_ARRIVALS_CACHE_TTL_ERROR_MS,
+            value
+          });
+          return value;
         }
       }
       const requestId = ++stopScheduleRequestSeq;
@@ -17025,7 +17111,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function routePillsHtml(routes) {
-      const list = Array.isArray(routes) ? routes : [];
+      const list = dedupeRouteLabels(Array.isArray(routes) ? routes : []);
       if (!list.length) {
         return `<span class="route-pill" style="--pill-bg:#e2e8f0">—</span>`;
       }
@@ -18553,7 +18639,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
           const stopId = (s?.stop_id || "").trim();
           const routes = (Array.isArray(s?.routes) ? s.routes : []);
-          if (stopId && routes.length) stopRoutesCache.set(stopRoutesCacheKey(stopId, s?.operator || OPERATOR_CARRIS), routes);
+          if (stopId && routes.length) {
+            stopRoutesCache.set(stopRoutesCacheKey(stopId, s?.operator || OPERATOR_CARRIS), dedupeRouteLabels(routes));
+          }
           const primaryColor = STOP_MARKER_BORDER_COLOR;
           const angleRaw = Number(s?.direction_angle);
           const arrowColor = Number.isFinite(angleRaw)
@@ -19188,11 +19276,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           vehicles = normalizeVehicles(payload, OPERATOR_CARRIS);
         }
         const applied = await applyResult(vehicles, "online");
+        lastVehicleFetchHadError = false;
         if (applied && !carrisFeedStaleAlertActive) clearAppError();
         return vehicles;
       } catch (err) {
         if (err?.name === "AbortError") return [];
         if (isAbortLikeError(err)) return [];
+        lastVehicleFetchHadError = true;
         console.warn("Falha ao obter veículos:", err);
         carrisFeedStaleAlertActive = false;
         if (effectiveHasCarrisOperator() && !effectiveHasCmetOperator() && isCarrisUpstreamDownError(err)) {
@@ -19210,6 +19300,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (typeof window.__pollingAbort === "function") {
         try { window.__pollingAbort(); } catch (e) {}
       }
+      vehiclePollingConsecutiveErrors = 0;
+      lastVehicleFetchHadError = false;
       let inFlight = false;
       let currentAbort = null;
       const scheduleNext = (delayMs = REFRESH_RATE_MS) => {
@@ -19236,9 +19328,20 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         } finally {
           inFlight = false;
           if (currentAbort === controller) currentAbort = null;
-          const now = Date.now();
-          const age = now - lastVehicleApplyTs;
-          const delay = age > VEHICLE_STALE_FORCE_MS ? 0 : REFRESH_RATE_MS;
+          let delay = REFRESH_RATE_MS;
+          if (lastVehicleFetchHadError) {
+            vehiclePollingConsecutiveErrors += 1;
+            const failureStep = Math.min(vehiclePollingConsecutiveErrors, 4);
+            const jitterMs = Math.floor(Math.random() * 250);
+            delay = Math.min(60_000, (REFRESH_RATE_MS * (2 ** failureStep)) + jitterMs);
+          } else {
+            vehiclePollingConsecutiveErrors = 0;
+            const now = Date.now();
+            const age = now - lastVehicleApplyTs;
+            if (age > VEHICLE_STALE_FORCE_MS) {
+              delay = Math.max(1_500, Math.floor(REFRESH_RATE_MS * 0.5));
+            }
+          }
           scheduleNext(delay);
         }
       };
