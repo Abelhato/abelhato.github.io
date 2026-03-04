@@ -6902,6 +6902,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+      const isGithubPages = /\.github\.io$/i.test(hostname);
+      const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
       if (originOk && hostname) {
         bases.push(location.origin);
       }
@@ -6911,6 +6913,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             bases.push(`${proto}//${loopHost}:${port}`);
           });
         });
+      }
+      if (isGithubPages || isMoverLisboa) {
+        const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
+        if (normalizedFallback) bases.push(normalizedFallback);
       }
       return dedupeList(bases);
     })();
