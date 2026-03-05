@@ -421,6 +421,24 @@
       pointer-events: auto;
     }
 
+    @media (max-width: 700px), (max-height: 720px) {
+      .sidebar-info-popover {
+        left: 12px;
+        right: 12px;
+        top: max(12px, env(safe-area-inset-top, 0px));
+        bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        width: auto;
+        max-height: none;
+        transform: translateY(10px);
+        border-radius: 14px;
+        padding: 16px 48px 14px 14px;
+      }
+
+      .sidebar-info-popover.visible {
+        transform: translateY(0);
+      }
+    }
+
     .sidebar-info-popover::after {
       display: none;
     }
