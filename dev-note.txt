@@ -1,0 +1,3 @@
+Alô!
+Adicionei algumas coisas novas! Para além disso alterei algumas e corrigi alguns erros. Obrigado pelas sugestões! A mudança maior é a adição da operação da Carris Metropolitana, apenas os veículos, paragens e carreiras. Para já, é de forma experimental. Métricas e tableas ficam indisponíveis apenas na seleção Carris.
+Obrigado! Qualquer sugestão ou feedback podem enviar para moverlisboa@icloud.com
