@@ -242,53 +242,97 @@
         color: var(--text-primary);
       }
       .sidebar-info-popover {
-        position: absolute;
+        position: fixed;
         left: 50%;
-        bottom: calc(100% + 12px);
-        transform: translate(-50%, 6px);
-        width: min(280px, calc(100vw - 84px));
-        padding: 10px 12px;
+        top: 50%;
+        transform: translate(-50%, calc(-50% + 12px));
+        width: min(540px, calc(100vw - 36px));
+        max-height: min(78vh, 680px);
+        overflow: auto;
+        padding: 18px 52px 16px 16px;
         border: 1px solid var(--border-strong);
-        border-radius: 12px;
+        border-radius: 16px;
         background: var(--surface-1);
-        color: var(--text-muted);
-        box-shadow: 0 14px 26px rgba(2, 6, 23, 0.2);
-        font-size: 0.76rem;
-        line-height: 1.45;
+        color: var(--text-primary);
+        box-shadow: 0 28px 64px rgba(2, 6, 23, 0.34);
+        font-size: 0.9rem;
+        line-height: 1.62;
         letter-spacing: 0;
         text-transform: none;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.18s ease, transform 0.18s ease;
-        z-index: 2;
-      }
-      .sidebar-info-popover.sidebar-info-popover--fixed {
-        position: fixed;
-        left: 0;
-        bottom: auto;
-        transform: translateY(6px);
-        z-index: 4700;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        z-index: 5601;
       }
       .sidebar-info-popover.visible {
         opacity: 1;
-        transform: translate(-50%, 0);
+        transform: translate(-50%, -50%);
         pointer-events: auto;
       }
-      .sidebar-info-popover.sidebar-info-popover--fixed.visible {
-        transform: translateY(0);
+      @media (max-width: 700px), (max-height: 720px) {
+        .sidebar-info-popover {
+          left: 12px;
+          right: 12px;
+          top: max(12px, env(safe-area-inset-top, 0px));
+          bottom: max(12px, env(safe-area-inset-bottom, 0px));
+          width: auto;
+          max-height: none;
+          transform: translateY(10px);
+          border-radius: 14px;
+          padding: 16px 48px 14px 14px;
+        }
+        .sidebar-info-popover.visible {
+          transform: translateY(0);
+        }
       }
       .sidebar-info-popover::after {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 100%;
-        transform: translateX(-50%);
-        border-width: 6px;
-        border-style: solid;
-        border-color: var(--surface-1) transparent transparent transparent;
+        display: none;
       }
       .sidebar-info-popover p {
-        margin: 0;
+        margin: 0 0 12px;
+        color: var(--text-primary);
+      }
+      .sidebar-info-popover p:last-child {
+        margin-bottom: 0;
+      }
+      .sidebar-info-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.56);
+        backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 5600;
+      }
+      .sidebar-info-backdrop.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      body.sidebar-info-modal-open {
+        overflow: hidden;
+      }
+      .sidebar-info-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface-2);
+        color: var(--text-primary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+      }
+      .sidebar-info-close:hover,
+      .sidebar-info-close:focus-visible {
+        border-color: var(--accent);
+        background: rgba(245, 159, 0, 0.16);
       }
       .sidebar-author-link::after {
         content: "";
@@ -4063,15 +4107,10 @@
       </div>
       <div class="sidebar-footer">
         <div class="sidebar-author-meta">
-          <a
-            class="sidebar-author-link"
-            href="https://discord.com/users/666907356789080066"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="sidebar-author-label">Feito por</span>
-            <span class="sidebar-author-handle">@Abelhato</span>
-          </a>
+          <span class="sidebar-author-link" role="text" aria-label="Feito por @Abelhato">
+            <span class="sidebar-author-label">FEITO POR</span>
+            <span class="sidebar-author-handle">@ABELHATO</span>
+          </span>
           <span class="sidebar-inline-popover" data-sidebar-popover-block>
             <button
               class="sidebar-info-button"
@@ -4084,6 +4123,7 @@
             </button>
             <div class="sidebar-info-popover" role="note" hidden data-sidebar-popover-panel>
               <p>Informação baseada em dados da API pública da Carris. Os valores apresentados são estimativas e não refletem a operação com exatidão. Este é um projeto pessoal que procura ajudar a compreender melhor a operação e contribuir para a melhoria da mobilidade em Lisboa.</p>
+              <p><strong>Contacto</strong><br>Discord: @Abelhato<br>Email: <a href="mailto:moverlisboa@icloud.com">moverlisboa@icloud.com</a></p>
             </div>
           </span>
         </div>
@@ -19507,6 +19547,44 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     (function () {
       const popoverBlocks = Array.from(document.querySelectorAll("[data-sidebar-popover-block]"));
       if (!popoverBlocks.length) return;
+      let infoBackdrop = null;
+
+      function ensureInfoBackdrop() {
+        if (infoBackdrop) return infoBackdrop;
+        infoBackdrop = document.createElement("div");
+        infoBackdrop.className = "sidebar-info-backdrop";
+        infoBackdrop.hidden = true;
+        document.body.appendChild(infoBackdrop);
+        infoBackdrop.addEventListener("click", () => {
+          popoverBlocks.forEach(closePopoverBlock);
+        });
+        return infoBackdrop;
+      }
+
+      function syncInfoModalBodyState() {
+        const anyInfoOpen = popoverBlocks.some((block) => {
+          const popover = block.querySelector("[data-sidebar-popover-panel]");
+          return Boolean(popover && popover.classList.contains("sidebar-info-popover") && !popover.hidden);
+        });
+        document.body.classList.toggle("sidebar-info-modal-open", anyInfoOpen);
+      }
+
+      function ensureInfoCloseButton(popover, block) {
+        if (!popover || !popover.classList.contains("sidebar-info-popover")) return;
+        let closeBtn = popover.querySelector(".sidebar-info-close");
+        if (closeBtn) return;
+        closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "sidebar-info-close";
+        closeBtn.setAttribute("aria-label", "Fechar informação");
+        closeBtn.textContent = "×";
+        closeBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closePopoverBlock(block);
+        });
+        popover.prepend(closeBtn);
+      }
 
       function closePopoverBlock(block) {
         const button = block.querySelector("[data-sidebar-popover-btn]");
@@ -19515,9 +19593,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         popover.hidden = true;
         popover.classList.remove("visible");
         if (popover.classList.contains("sidebar-info-popover")) {
-          popover.classList.remove("sidebar-info-popover--fixed");
-          popover.style.removeProperty("left");
-          popover.style.removeProperty("top");
+          if (infoBackdrop) {
+            infoBackdrop.classList.remove("visible");
+            infoBackdrop.hidden = true;
+          }
+          syncInfoModalBodyState();
         }
         button.setAttribute("aria-expanded", "false");
       }
@@ -19526,22 +19606,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const button = block.querySelector("[data-sidebar-popover-btn]");
         const popover = block.querySelector("[data-sidebar-popover-panel]");
         if (!button || !popover || !popover.classList.contains("sidebar-info-popover")) return;
-        popover.classList.add("sidebar-info-popover--fixed");
-        popover.style.left = "0px";
-        popover.style.top = "0px";
-        const buttonRect = button.getBoundingClientRect();
-        const popRect = popover.getBoundingClientRect();
-        const margin = 12;
-        const vw = window.innerWidth || document.documentElement.clientWidth || 0;
-        const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-        const targetLeft = Math.round(Math.min(
-          Math.max(margin, buttonRect.left + (buttonRect.width / 2) - (popRect.width / 2)),
-          Math.max(margin, vw - popRect.width - margin)
-        ));
-        const preferredTop = buttonRect.top - popRect.height - 12;
-        const top = Math.round(Math.max(margin, Math.min(preferredTop, Math.max(margin, vh - popRect.height - margin))));
-        popover.style.left = `${targetLeft}px`;
-        popover.style.top = `${top}px`;
+        ensureInfoCloseButton(popover, block);
       }
 
       function openPopoverBlock(block) {
@@ -19550,7 +19615,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (!button || !popover) return;
         popover.hidden = false;
         button.setAttribute("aria-expanded", "true");
-        positionSidebarInfoPopover(block);
+        if (popover.classList.contains("sidebar-info-popover")) {
+          const backdrop = ensureInfoBackdrop();
+          backdrop.hidden = false;
+          document.body.classList.add("sidebar-info-modal-open");
+          positionSidebarInfoPopover(block);
+          requestAnimationFrame(() => {
+            backdrop.classList.add("visible");
+            popover.classList.add("visible");
+          });
+          return;
+        }
         requestAnimationFrame(() => {
           popover.classList.add("visible");
         });
