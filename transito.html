@@ -244,46 +244,90 @@
     }
 
     .sidebar-info-popover {
-      position: absolute;
+      position: fixed;
       left: 50%;
-      bottom: calc(100% + 12px);
-      transform: translate(-50%, 6px);
-      width: min(280px, calc(100vw - 84px));
-      padding: 10px 12px;
+      top: 50%;
+      transform: translate(-50%, calc(-50% + 12px));
+      width: min(540px, calc(100vw - 36px));
+      max-height: min(78vh, 680px);
+      overflow: auto;
+      padding: 18px 52px 16px 16px;
       border: 1px solid var(--border-strong);
-      border-radius: 12px;
+      border-radius: 16px;
       background: var(--surface-1);
-      color: var(--text-muted);
-      box-shadow: 0 14px 26px rgba(2, 6, 23, 0.2);
-      font-size: 0.76rem;
-      line-height: 1.45;
+      color: var(--text-primary);
+      box-shadow: 0 28px 64px rgba(2, 6, 23, 0.34);
+      font-size: 0.9rem;
+      line-height: 1.62;
       letter-spacing: 0;
       text-transform: none;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.18s ease, transform 0.18s ease;
-      z-index: 2;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 5601;
     }
 
     .sidebar-info-popover.visible {
       opacity: 1;
-      transform: translate(-50%, 0);
+      transform: translate(-50%, -50%);
       pointer-events: auto;
     }
 
     .sidebar-info-popover::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 100%;
-      transform: translateX(-50%);
-      border-width: 6px;
-      border-style: solid;
-      border-color: var(--surface-1) transparent transparent transparent;
+      display: none;
     }
 
     .sidebar-info-popover p {
-      margin: 0;
+      margin: 0 0 12px;
+      color: var(--text-primary);
+    }
+
+    .sidebar-info-popover p:last-child {
+      margin-bottom: 0;
+    }
+
+    .sidebar-info-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.56);
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 5600;
+    }
+
+    .sidebar-info-backdrop.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    body.sidebar-info-modal-open {
+      overflow: hidden;
+    }
+
+    .sidebar-info-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .sidebar-info-close:hover,
+    .sidebar-info-close:focus-visible {
+      border-color: var(--accent);
+      background: rgba(245, 159, 0, 0.16);
     }
 
     .sidebar-author-link::after {
@@ -1833,15 +1877,10 @@
       </div>
       <div class="sidebar-footer">
         <div class="sidebar-author-meta">
-          <a
-            class="sidebar-author-link"
-            href="https://discord.com/users/666907356789080066"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="sidebar-author-label">Feito por</span>
-            <span class="sidebar-author-handle">@Abelhato</span>
-          </a>
+          <span class="sidebar-author-link" role="text" aria-label="Feito por @Abelhato">
+            <span class="sidebar-author-label">FEITO POR</span>
+            <span class="sidebar-author-handle">@ABELHATO</span>
+          </span>
           <button
             id="sidebar-info-btn"
             class="sidebar-info-button"
@@ -1854,6 +1893,7 @@
           </button>
           <div id="sidebar-info-popover" class="sidebar-info-popover" role="note" hidden>
             <p>Informação baseada em dados da API pública da Carris. Os valores apresentados são estimativas e não refletem a operação com exatidão. Este é um projeto pessoal que procura ajudar a compreender melhor a operação e contribuir para a melhoria da mobilidade em Lisboa.</p>
+            <p><strong>Contacto</strong><br>Discord: @Abelhato<br>Email: <a href="mailto:moverlisboa@icloud.com">moverlisboa@icloud.com</a></p>
           </div>
         </div>
       </div>
@@ -1979,6 +2019,10 @@
       const summarySegments = document.getElementById("summary-segments");
       const sidebarInfoBtn = document.getElementById("sidebar-info-btn");
       const sidebarInfoPopover = document.getElementById("sidebar-info-popover");
+      if (sidebarInfoPopover && sidebarInfoPopover.parentElement !== document.body) {
+        document.body.appendChild(sidebarInfoPopover);
+      }
+      let sidebarInfoBackdrop = null;
       const mql = window.matchMedia("(max-width: 900px)");
 
       const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href).href;
@@ -2601,13 +2645,50 @@
         sidebarInfoPopover.hidden = true;
         sidebarInfoPopover.classList.remove("visible");
         sidebarInfoBtn.setAttribute("aria-expanded", "false");
+        if (sidebarInfoBackdrop) {
+          sidebarInfoBackdrop.classList.remove("visible");
+          sidebarInfoBackdrop.hidden = true;
+        }
+        document.body.classList.remove("sidebar-info-modal-open");
+      }
+
+      function ensureSidebarInfoBackdrop() {
+        if (sidebarInfoBackdrop) return sidebarInfoBackdrop;
+        sidebarInfoBackdrop = document.createElement("div");
+        sidebarInfoBackdrop.className = "sidebar-info-backdrop";
+        sidebarInfoBackdrop.hidden = true;
+        document.body.appendChild(sidebarInfoBackdrop);
+        sidebarInfoBackdrop.addEventListener("click", () => closeSidebarInfoPopover());
+        return sidebarInfoBackdrop;
+      }
+
+      function ensureSidebarInfoCloseButton() {
+        if (!sidebarInfoPopover) return;
+        let closeBtn = sidebarInfoPopover.querySelector(".sidebar-info-close");
+        if (closeBtn) return;
+        closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "sidebar-info-close";
+        closeBtn.setAttribute("aria-label", "Fechar informação");
+        closeBtn.textContent = "×";
+        closeBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closeSidebarInfoPopover();
+        });
+        sidebarInfoPopover.prepend(closeBtn);
       }
 
       function openSidebarInfoPopover() {
         if (!sidebarInfoBtn || !sidebarInfoPopover) return;
+        ensureSidebarInfoCloseButton();
+        const backdrop = ensureSidebarInfoBackdrop();
+        backdrop.hidden = false;
+        document.body.classList.add("sidebar-info-modal-open");
         sidebarInfoPopover.hidden = false;
         sidebarInfoBtn.setAttribute("aria-expanded", "true");
         requestAnimationFrame(() => {
+          backdrop.classList.add("visible");
           sidebarInfoPopover.classList.add("visible");
         });
       }

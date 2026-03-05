@@ -29,7 +29,7 @@
       margin: 0;
       padding: 0;
       min-height: 100%;
-      overscroll-behavior: none;
+      overscroll-behavior: auto;
       overflow-x: hidden;
       overflow-y: auto;
       scrollbar-gutter: stable;
@@ -371,46 +371,90 @@
     }
 
     .sidebar-info-popover {
-      position: absolute;
+      position: fixed;
       left: 50%;
-      bottom: calc(100% + 12px);
-      transform: translate(-50%, 6px);
-      width: min(280px, calc(100vw - 84px));
-      padding: 10px 12px;
+      top: 50%;
+      transform: translate(-50%, calc(-50% + 12px));
+      width: min(520px, calc(100vw - 36px));
+      max-height: min(76vh, 640px);
+      overflow: auto;
+      padding: 18px 52px 16px 16px;
       border: 1px solid var(--border-strong);
-      border-radius: 12px;
+      border-radius: 16px;
       background: var(--surface-1);
-      color: var(--text-muted);
-      box-shadow: 0 14px 26px rgba(2, 6, 23, 0.2);
-      font-size: 0.76rem;
-      line-height: 1.45;
+      color: var(--text-primary);
+      box-shadow: 0 24px 56px rgba(2, 6, 23, 0.32);
+      font-size: 0.9rem;
+      line-height: 1.62;
       letter-spacing: 0;
       text-transform: none;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.18s ease, transform 0.18s ease;
-      z-index: 2;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 5601;
     }
 
     .sidebar-info-popover.visible {
       opacity: 1;
-      transform: translate(-50%, 0);
+      transform: translate(-50%, -50%);
       pointer-events: auto;
     }
 
     .sidebar-info-popover::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 100%;
-      transform: translateX(-50%);
-      border-width: 6px;
-      border-style: solid;
-      border-color: var(--surface-1) transparent transparent transparent;
+      display: none;
     }
 
     .sidebar-info-popover p {
-      margin: 0;
+      margin: 0 0 12px;
+      color: var(--text-primary);
+    }
+
+    .sidebar-info-popover p:last-child {
+      margin-bottom: 0;
+    }
+
+    .sidebar-info-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.56);
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 5600;
+    }
+
+    .sidebar-info-backdrop.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    body.sidebar-info-modal-open {
+      overflow: hidden;
+    }
+
+    .sidebar-info-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .sidebar-info-close:hover,
+    .sidebar-info-close:focus-visible {
+      border-color: var(--accent-strong);
+      background: rgba(245, 159, 0, 0.14);
     }
 
     .fleet-grid {
@@ -2337,15 +2381,10 @@
       </section>
       <footer class="page-end-credit">
         <div class="page-end-credit-inner" data-carris-info>
-          <a
-            class="page-end-author-link"
-            href="https://discord.com/users/666907356789080066"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span>Feito por</span>
-            <span class="page-end-author-handle">@Abelhato</span>
-          </a>
+          <span class="page-end-author-link" role="text" aria-label="Feito por @Abelhato">
+            <span>FEITO POR</span>
+            <span class="page-end-author-handle">@ABELHATO</span>
+          </span>
           <button
             class="sidebar-info-button"
             type="button"
@@ -2356,7 +2395,9 @@
             i
           </button>
           <div class="sidebar-info-popover" role="note" hidden data-carris-info-popover>
+            <button class="sidebar-info-close" type="button" aria-label="Fechar informação" data-carris-info-close>×</button>
             <p>Informação baseada em dados da API pública da Carris. Os valores apresentados são estimativas e não refletem a operação com exatidão. Este é um projeto pessoal que procura ajudar a compreender melhor a operação e contribuir para a melhoria da mobilidade em Lisboa.</p>
+            <p><strong>Contacto</strong><br>Discord: @Abelhato<br>Email: <a href="mailto:moverlisboa@icloud.com">moverlisboa@icloud.com</a></p>
           </div>
         </div>
       </footer>
@@ -3655,8 +3696,8 @@
 
       function filterSeriesModels(query) {
         const normalized = (query || "").trim().toLowerCase();
-        if (!normalized) return seriesModelsCache.slice(0, 12);
-        return seriesModelsCache.filter(model => model.toLowerCase().includes(normalized)).slice(0, 12);
+        if (!normalized) return seriesModelsCache.slice();
+        return seriesModelsCache.filter(model => model.toLowerCase().includes(normalized));
       }
 
       let seriesSearchHasInteracted = false;
@@ -4669,6 +4710,27 @@
     (function () {
       const infoBlocks = Array.from(document.querySelectorAll("[data-carris-info]"));
       if (!infoBlocks.length) return;
+      let backdrop = null;
+
+      function ensureBackdrop() {
+        if (backdrop) return backdrop;
+        backdrop = document.createElement("div");
+        backdrop.className = "sidebar-info-backdrop";
+        backdrop.hidden = true;
+        document.body.appendChild(backdrop);
+        backdrop.addEventListener("click", () => {
+          infoBlocks.forEach(closeInfoBlock);
+        });
+        return backdrop;
+      }
+
+      function syncModalBodyState() {
+        const anyOpen = infoBlocks.some((block) => {
+          const popover = block.querySelector("[data-carris-info-popover]");
+          return Boolean(popover && !popover.hidden);
+        });
+        document.body.classList.toggle("sidebar-info-modal-open", anyOpen);
+      }
 
       function closeInfoBlock(block) {
         const button = block.querySelector("[data-carris-info-btn]");
@@ -4677,6 +4739,11 @@
         popover.hidden = true;
         popover.classList.remove("visible");
         button.setAttribute("aria-expanded", "false");
+        if (backdrop) {
+          backdrop.classList.remove("visible");
+          backdrop.hidden = true;
+        }
+        syncModalBodyState();
       }
 
       function openInfoBlock(block) {
@@ -4685,7 +4752,11 @@
         if (!button || !popover) return;
         popover.hidden = false;
         button.setAttribute("aria-expanded", "true");
+        const modalBackdrop = ensureBackdrop();
+        modalBackdrop.hidden = false;
+        document.body.classList.add("sidebar-info-modal-open");
         requestAnimationFrame(() => {
+          modalBackdrop.classList.add("visible");
           popover.classList.add("visible");
         });
       }
@@ -4698,6 +4769,14 @@
           popover.id = `carris-info-popover-${index + 1}`;
         }
         button.setAttribute("aria-controls", popover.id);
+        const closeBtn = popover.querySelector("[data-carris-info-close]");
+        if (closeBtn) {
+          closeBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            closeInfoBlock(block);
+          });
+        }
         button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -4721,6 +4800,38 @@
         if (event.key !== "Escape") return;
         infoBlocks.forEach(closeInfoBlock);
       });
+    })();
+  </script>
+  <script>
+    (function () {
+      function findScrollableParent(startEl) {
+        let node = startEl;
+        while (node && node !== document.body && node !== document.documentElement) {
+          const style = window.getComputedStyle(node);
+          const overflowY = style.overflowY;
+          const canScrollY =
+            (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+            (node.scrollHeight > node.clientHeight + 1);
+          if (canScrollY) return node;
+          node = node.parentElement;
+        }
+        return null;
+      }
+
+      document.addEventListener("wheel", (event) => {
+        if (event.defaultPrevented || event.ctrlKey) return;
+        const deltaY = Number(event.deltaY || 0);
+        if (!deltaY) return;
+        const scroller = findScrollableParent(event.target);
+        if (!scroller) return;
+        const atTop = scroller.scrollTop <= 0;
+        const atBottom = (scroller.scrollTop + scroller.clientHeight) >= (scroller.scrollHeight - 1);
+        const blockedUp = deltaY < 0 && atTop;
+        const blockedDown = deltaY > 0 && atBottom;
+        if (!blockedUp && !blockedDown) return;
+        window.scrollBy({ top: deltaY, behavior: "auto" });
+        event.preventDefault();
+      }, { passive: false });
     })();
   </script>
 </body>
