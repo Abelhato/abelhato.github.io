@@ -2630,9 +2630,13 @@
         const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
         const isGithubPages = /\.github\.io$/i.test(hostname);
         const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
+        const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
         if (isGithubPages || isMoverLisboa) {
-          const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
           if (normalizedFallback) bases.push(normalizedFallback);
+        }
+        // On any non-local host, also keep the public API as a fallback.
+        if (!isLoopback && normalizedFallback) {
+          bases.push(normalizedFallback);
         }
         // On static hosts (GitHub Pages/custom frontend domain), location.origin is the frontend,
         // not the API. Avoid trying it to prevent HTML/404 responses from masking API calls.
@@ -2727,13 +2731,22 @@
       async function fetchFromFleetBases(path, options = {}) {
         let lastError = null;
         let lastResponse = null;
+        const expectsJson = !/\/gtfs\/.+\.txt(?:\?|$)/i.test(String(path || ""));
         for (const base of FLEET_API_BASES) {
           let endpointError = null;
           for (let attempt = 0; attempt < FLEET_FETCH_RETRY_ATTEMPTS; attempt += 1) {
             try {
               const url = new URL(path, base).toString();
               const response = await fetchWithTimeout(url, options, FLEET_FETCH_TIMEOUT_MS);
-              if (response.ok) return response;
+              if (response.ok) {
+                const contentType = String(response.headers?.get?.("content-type") || "").toLowerCase();
+                // Static hosts often return HTML with 200 for unknown routes. Skip those and keep trying real backends.
+                if (expectsJson && contentType.includes("text/html")) {
+                  endpointError = new Error(`Unexpected HTML response from ${response.url}`);
+                  break;
+                }
+                return response;
+              }
               if (FLEET_RETRYABLE_HTTP_STATUSES.has(Number(response.status)) && attempt < (FLEET_FETCH_RETRY_ATTEMPTS - 1)) {
                 await delayWithAbort(retryDelayMs(attempt), options.signal);
                 continue;
