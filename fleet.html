@@ -2566,7 +2566,7 @@
       const FLEET_VEHICLES_PATH = "/frota/resumo-diario/veiculos";
       const FLEET_HISTORY_VEHICLES_PATH = "/frota/vehicles";
       const KNOWN_BACKEND_PORTS = [8002, 2026];
-      const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
+      const GITHUB_DEFAULT_BACKEND = "https://api.moverlisboa.com";
       const FLEET_MODEL_CSV_URL = new URL("frota.csv", location.href);
       function extractHashQuery(rawHash) {
         const raw = String(rawHash || "").replace(/^#/, "").replace(/^\?/, "").trim();
@@ -3780,6 +3780,16 @@
         return trimmed || "";
       }
 
+      function canonicalModelForVehicle(id, ...fallbackValues) {
+        const modelFromCatalog = normalizeModelLabel(fleetModelForId(id));
+        if (modelFromCatalog) return modelFromCatalog;
+        for (const value of fallbackValues) {
+          const normalized = normalizeModelLabel(value);
+          if (normalized) return normalized;
+        }
+        return "";
+      }
+
       function buildSeriesVehiclesFromPayloads(payload, historyPayload) {
         const combined = new Map();
 
@@ -3787,7 +3797,7 @@
           historyPayload.forEach(row => {
             const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
             if (!id) return;
-            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id));
+            const model = canonicalModelForVehicle(id, row?.modelo ?? row?.model ?? row?.vehicle_model);
             const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? null;
             const routes = Array.isArray(row?.last_routes) ? row.last_routes : (row?.last_route ? [row.last_route] : []);
             const plate = row?.plate ?? row?.placa ?? row?.chapa ?? "";
@@ -3807,7 +3817,11 @@
             const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
             if (!id) return;
             const entry = combined.get(String(id)) || { id, lastRoutes: [] };
-            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id)) || entry.model || "";
+            const model = canonicalModelForVehicle(
+              id,
+              row?.modelo ?? row?.model ?? row?.vehicle_model,
+              entry.model
+            );
             const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
             const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? entry.lastPing ?? null;
             const routes = Array.isArray(entry.lastRoutes) ? entry.lastRoutes.slice() : [];
@@ -3832,7 +3846,7 @@
           historyPayload.forEach(row => {
             const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
             if (!id) return;
-            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id));
+            const model = canonicalModelForVehicle(id, row?.modelo ?? row?.model ?? row?.vehicle_model);
             const category = normalizeModelLabel(row?.categoria ?? row?.category ?? fleetCategoryForId(id)) || "—";
             const type = normalizeTypeLabel(row?.tipo ?? row?.type ?? fleetTypeForId(id));
             const lastPing = row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim ?? null;
@@ -3854,7 +3868,11 @@
             const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
             if (!id) return;
             const entry = combined.get(String(id)) || { id, lastRoutes: [] };
-            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? fleetModelForId(id)) || entry.model || "";
+            const model = canonicalModelForVehicle(
+              id,
+              row?.modelo ?? row?.model ?? row?.vehicle_model,
+              entry.model
+            );
             const category = normalizeModelLabel(row?.categoria ?? row?.category ?? fleetCategoryForId(id)) || entry.category || "—";
             const type = normalizeTypeLabel(row?.tipo ?? row?.type ?? fleetTypeForId(id)) || entry.type || "";
             const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
@@ -4058,7 +4076,7 @@
           historyPayload.forEach(row => {
             const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
             if (!id) return;
-            const model = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? "");
+            const model = canonicalModelForVehicle(id, row?.modelo ?? row?.model ?? row?.vehicle_model);
             if (model) historyModelById.set(String(id), model);
           });
         }
@@ -4067,8 +4085,11 @@
           ? payload.map(row => {
               const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
               if (!id) return null;
-              const modelFromPayload = normalizeModelLabel(row?.modelo ?? row?.model ?? row?.vehicle_model ?? "");
-              const model = modelFromPayload || historyModelById.get(String(id)) || fleetModelForId(id);
+              const model = canonicalModelForVehicle(
+                id,
+                row?.modelo ?? row?.model ?? row?.vehicle_model,
+                historyModelById.get(String(id))
+              );
               const route = row?.linha ?? row?.line ?? row?.route_id ?? "";
               return {
                 id,
@@ -4247,13 +4268,11 @@
             .map(row => {
               const routes = Array.isArray(row?.last_routes) ? row.last_routes : (row?.last_route ? [row.last_route] : []);
               const routesHtml = routes.slice(0, 3).map(buildRoutePill).join(" ");
-              const modelFromPayload = row?.modelo ?? row?.model ?? row?.vehicle_model ?? null;
-              const fallbackModel = fleetModelForId(row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo);
               const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "—";
               const todayLastPing = todayLastPingById.get(String(id));
               return {
                 id,
-                model: modelFromPayload || fallbackModel || "",
+                model: canonicalModelForVehicle(id, row?.modelo ?? row?.model ?? row?.vehicle_model),
                 routesHtml,
                 first: row?.first_ping ?? row?.primeiro_ping ?? row?.timestamp_inicio,
                 last: todayLastPing ?? row?.last_ping ?? row?.ultimo_ping ?? row?.timestamp_fim
@@ -4378,7 +4397,7 @@
         historyVehiclesCache.forEach(entry => {
           const id = entry.id;
           if (!id) return;
-          const modelFromHistory = entry.model || fleetModelForId(id) || "";
+          const modelFromHistory = canonicalModelForVehicle(id, entry.model);
           const categoryFromHistory = entry.category || fleetCategoryForId(id) || "";
           combined.set(String(id), {
             id,
@@ -4400,7 +4419,7 @@
           const existing = combined.get(key) || { id, activity: [] };
           combined.set(key, {
             ...existing,
-            model: vehicle.model || existing.model || "",
+            model: canonicalModelForVehicle(id, vehicle.model, existing.model),
             type: vehicle.type || existing.type || "",
             category: vehicle.category || existing.category || "",
             plate: vehicle.plate || existing.plate || "",
@@ -4495,9 +4514,7 @@
 
         fleetVehiclesCache = (Array.isArray(payload) ? payload : []).map(row => {
           const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
-          const modelFromPayload = row?.modelo ?? row?.model ?? row?.vehicle_model ?? null;
-          const modelFallback = fleetModelForId(id);
-          const model = modelFromPayload || modelFallback || "";
+          const model = canonicalModelForVehicle(id, row?.modelo ?? row?.model ?? row?.vehicle_model);
           const type = row?.tipo ?? row?.type ?? "";
           const categoryFromPayload = row?.categoria ?? row?.category ?? null;
           const categoryFallback = fleetCategoryForId(id);
@@ -4517,7 +4534,10 @@
 
         historyVehiclesCache = (Array.isArray(historyPayload) ? historyPayload : []).map(row => ({
           id: row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "",
-          model: row?.modelo ?? row?.model ?? row?.vehicle_model ?? "",
+          model: canonicalModelForVehicle(
+            row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "",
+            row?.modelo ?? row?.model ?? row?.vehicle_model
+          ),
           type: row?.tipo ?? row?.type ?? "",
           category: row?.categoria ?? row?.category ?? "",
           plate: row?.plate ?? row?.placa ?? row?.chapa ?? "",
