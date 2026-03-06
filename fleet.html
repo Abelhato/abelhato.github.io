@@ -2634,7 +2634,11 @@
           const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
           if (normalizedFallback) bases.push(normalizedFallback);
         }
-        if (originOk && hostname) bases.push(location.origin);
+        // On static hosts (GitHub Pages/custom frontend domain), location.origin is the frontend,
+        // not the API. Avoid trying it to prevent HTML/404 responses from masking API calls.
+        if (originOk && hostname && !isGithubPages && !isMoverLisboa) {
+          bases.push(location.origin);
+        }
         if (isLoopback) {
           ["127.0.0.1", "localhost"].forEach(loopHost => {
             KNOWN_BACKEND_PORTS.forEach(port => {
