@@ -2566,7 +2566,10 @@
       const FLEET_VEHICLES_PATH = "/frota/resumo-diario/veiculos";
       const FLEET_HISTORY_VEHICLES_PATH = "/frota/vehicles";
       const KNOWN_BACKEND_PORTS = [8002, 2026];
-      const GITHUB_DEFAULT_BACKEND = "https://api.moverlisboa.com";
+      const DEFAULT_REMOTE_BACKENDS = [
+        "https://api.moverlisboa.com",
+        "https://4belhato.trade"
+      ];
       const FLEET_MODEL_CSV_URL = new URL("frota.csv", location.href);
       function extractHashQuery(rawHash) {
         const raw = String(rawHash || "").replace(/^#/, "").replace(/^\?/, "").trim();
@@ -2630,18 +2633,14 @@
         const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
         const isGithubPages = /\.github\.io$/i.test(hostname);
         const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
-        const normalizedFallback = normalizeBackendUrl(GITHUB_DEFAULT_BACKEND);
-        if (isGithubPages || isMoverLisboa) {
-          if (normalizedFallback) bases.push(normalizedFallback);
-        }
-        // On any non-local host, also keep the public API as a fallback.
-        if (!isLoopback && normalizedFallback) {
-          bases.push(normalizedFallback);
-        }
-        // On static hosts (GitHub Pages/custom frontend domain), location.origin is the frontend,
-        // not the API. Avoid trying it to prevent HTML/404 responses from masking API calls.
-        if (originOk && hostname && !isGithubPages && !isMoverLisboa) {
+        const fallbackBases = DEFAULT_REMOTE_BACKENDS
+          .map(normalizeBackendUrl)
+          .filter(Boolean);
+        if (originOk && hostname) {
           bases.push(location.origin);
+        }
+        if (isGithubPages || isMoverLisboa || !isLoopback) {
+          fallbackBases.forEach(base => bases.push(base));
         }
         if (isLoopback) {
           ["127.0.0.1", "localhost"].forEach(loopHost => {
