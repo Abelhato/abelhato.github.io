@@ -12,6 +12,6 @@ ID_Inicio,ID_Fim,Modelo,Tipo,Categoria,Energia
 2941,2997,Médio MAN (2941-2997),Autocarro,Médio,Gasóleo
 4600,4699,Articulado Mercedes (4601-4650),Autocarro,Articulado,Gasóleo
 4800,4899,Articulado Mercedes GNC (4801-4840),Autocarro,Articulado,Gás
-5000,5999,Standard Scania (5001-5075),Autocarro,Standard,Gás
+5000,5999,Standard Scania (5201-5275),Autocarro,Standard,Gás
 6000,6999,Standard Caetano (6001-6050),Autocarro,Standard,Elétrico
 301,310,Standard MAN ex-CarrisTur (301-310),Autocarro,Standard,Gasóleo
