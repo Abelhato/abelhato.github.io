@@ -726,6 +726,10 @@
       height: 240px;
     }
 
+    .fleet-series-activity-canvas {
+      height: 240px;
+    }
+
     .overlay-pill {
       display: inline-flex;
       align-items: center;
@@ -822,6 +826,14 @@
       width: 100%;
       max-width: 320px;
       justify-self: start;
+    }
+
+    .fleet-section[aria-label="Modelo em foco"] .fleet-series-controls {
+      grid-template-columns: minmax(320px, 520px) 1fr;
+    }
+
+    .fleet-section[aria-label="Modelo em foco"] .fleet-series-search {
+      max-width: 520px;
     }
 
     .fleet-select {
@@ -1481,6 +1493,14 @@
       justify-content: center;
     }
 
+    .fleet-table--series tbody tr.fleet-series-row--inactive-60d td {
+      background: rgba(239, 68, 68, 0.11);
+    }
+
+    .fleet-table--series tbody tr.fleet-series-row--inactive-60d:hover td {
+      background: rgba(239, 68, 68, 0.16);
+    }
+
     .fleet-table--routes th:last-child,
     .fleet-table--routes td:last-child {
       text-align: left;
@@ -1504,6 +1524,14 @@
       background: rgba(148, 163, 184, 0.15);
     }
 
+    body.theme-dark .fleet-table--series tbody tr.fleet-series-row--inactive-60d td {
+      background: rgba(239, 68, 68, 0.18);
+    }
+
+    body.theme-dark .fleet-table--series tbody tr.fleet-series-row--inactive-60d:hover td {
+      background: rgba(239, 68, 68, 0.24);
+    }
+
     @media (prefers-color-scheme: dark) {
       body.theme-auto .fleet-table--readable th {
         background: rgba(15, 23, 42, 0.9);
@@ -1516,6 +1544,14 @@
 
       body.theme-auto .fleet-table--readable tbody tr:hover td {
         background: rgba(148, 163, 184, 0.15);
+      }
+
+      body.theme-auto .fleet-table--series tbody tr.fleet-series-row--inactive-60d td {
+        background: rgba(239, 68, 68, 0.18);
+      }
+
+      body.theme-auto .fleet-table--series tbody tr.fleet-series-row--inactive-60d:hover td {
+        background: rgba(239, 68, 68, 0.24);
       }
     }
 
@@ -2297,7 +2333,7 @@
           <section class="fleet-section" aria-label="Tabela da modelo">
             <div class="fleet-section-header">
               <div>
-                <h2 class="fleet-series-table-title" id="fleet-series-table-title">📊 Modelo: — —</h2>
+                <h2 class="fleet-series-table-title" id="fleet-series-table-title">📊 Modelo: —  — — unidades - — ativas nos últimos 60 dias</h2>
               </div>
             </div>
             <div class="fleet-table-wrapper fleet-table-wrapper--tall" role="region" aria-label="Veículos do Modelo">
@@ -2331,6 +2367,18 @@
                 </tbody>
               </table>
             </div>
+            <article class="fleet-chart-card">
+              <div class="fleet-chart-header">
+                <div>
+                  <h3 id="fleet-series-activity-title">Atividade diária (últimos 60 dias)</h3>
+                </div>
+              </div>
+              <div class="fleet-chart-visual">
+                <div class="fleet-series-activity-canvas">
+                  <canvas id="fleet-series-activity-chart" aria-label="Veículos ativos por dia nos últimos 60 dias"></canvas>
+                </div>
+              </div>
+            </article>
           </section>
         </section>
         <section class="fleet-tab-panel" id="fleet-tab-typology" role="tabpanel" aria-labelledby="fleet-tab-typology-btn" tabindex="0">
@@ -2539,6 +2587,8 @@
       const typologyChartCanvas = document.getElementById('fleet-typology-chart');
       const seriesChartCanvas = document.getElementById('fleet-series-chart');
       const seriesRouteChartCanvas = document.getElementById('fleet-series-route-chart');
+      const seriesActivityChartCanvas = document.getElementById('fleet-series-activity-chart');
+      const seriesActivityTitle = document.getElementById('fleet-series-activity-title');
       const typologyDistributionChartCanvas = document.getElementById('fleet-typology-distribution-chart');
       const typologyModelChartCanvas = document.getElementById('fleet-typology-model-chart');
       const typologyRouteChartCanvas = document.getElementById('fleet-typology-route-chart');
@@ -2565,6 +2615,7 @@
       const typologySummary = document.getElementById('fleet-typology-summary');
       const FLEET_VEHICLES_PATH = "/frota/resumo-diario/veiculos";
       const FLEET_HISTORY_VEHICLES_PATH = "/frota/vehicles";
+      const HISTORY_DAILY_MODEL_ACTIVITY_PATH = "/historico/daily/model-activity";
       const KNOWN_BACKEND_PORTS = [8002, 2026];
       const DEFAULT_REMOTE_BACKENDS = [
         "https://api.moverlisboa.com",
@@ -2798,11 +2849,15 @@
         }
         throw lastError || new Error("Falha ao carregar gtfs/routes.txt");
       }
-      const FLEET_REFRESH_INTERVAL_MS = 60 * 1000;
+      const FLEET_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+      const SERIES_ACTIVE_WINDOW_DAYS = 60;
+      const SERIES_ACTIVE_WINDOW_SECONDS = SERIES_ACTIVE_WINDOW_DAYS * 24 * 60 * 60;
+      const SERIES_ACTIVITY_CACHE_TTL_MS = 10 * 60 * 1000;
       let fleetModelRanges = [];
       let typologyChart = null;
       let seriesChart = null;
       let seriesRouteChart = null;
+      let seriesActivityChart = null;
       let typologyDistributionChart = null;
       let typologyModelChart = null;
       let typologyRouteChart = null;
@@ -2817,7 +2872,9 @@
       let seriesInputCleared = false;
       let seriesJustSelectedAt = 0;
       let seriesSelectionCleared = false;
+      let seriesActivityRequestId = 0;
       const routeLabelById = new Map();
+      const seriesModelActivityCache = new Map();
       let routesCatalogLoaded = false;
       const STORAGE_PREFIX = "fleet-overview:";
 
@@ -3013,7 +3070,7 @@
         const zone = definirZona(label);
         const color = getZoneColor(zone);
         const bg = color || "#e2e8f0";
-        const fg = "#ffffff";
+        const fg = zone === "Bairro" ? "#0b1220" : "#ffffff";
         const border = color || "rgba(15, 23, 42, 0.12)";
         const title = zone || "Carreira";
         return { bg, fg, border, title };
@@ -3328,6 +3385,56 @@
         });
       }
 
+      function renderSeriesActivityChart(labels, values, energyLabel = "") {
+        if (!seriesActivityChartCanvas || !window.Chart) return;
+        const { axis, grid } = resolveChartColors();
+        const border = seriesEnergyBarColors([energyLabel])[0] || "#94a3b8";
+        const fill = toRgba(border, 0.45);
+        if (seriesActivityChart) {
+          seriesActivityChart.data.labels = labels;
+          seriesActivityChart.data.datasets[0].data = values;
+          seriesActivityChart.data.datasets[0].backgroundColor = fill;
+          seriesActivityChart.data.datasets[0].borderColor = border;
+          seriesActivityChart.options.scales.x.ticks.color = axis;
+          seriesActivityChart.options.scales.x.grid.color = grid;
+          seriesActivityChart.options.scales.y.ticks = integerTickOptions(axis);
+          seriesActivityChart.options.scales.y.grid.color = grid;
+          seriesActivityChart.update();
+          return;
+        }
+        seriesActivityChart = new Chart(seriesActivityChartCanvas.getContext("2d"), {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [{
+              label: "Veículos ativos",
+              data: values,
+              backgroundColor: fill,
+              borderColor: border,
+              borderWidth: 1.25,
+              borderRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                ticks: { color: axis, maxTicksLimit: 10 },
+                grid: { color: grid }
+              },
+              y: {
+                ticks: integerTickOptions(axis),
+                grid: { color: grid }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+
       function renderTypologyDistributionChart(labels, values) {
         if (!typologyDistributionChartCanvas || !window.Chart) return;
         const { axis } = resolveChartColors();
@@ -3614,6 +3721,32 @@
         return `há ${days} dias`;
       }
 
+      function apiDateKey(date) {
+        if (!(date instanceof Date)) return "";
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+
+      function recentDateKeys(days) {
+        const total = Math.max(1, Number(days) || 1);
+        const keys = [];
+        for (let offset = total - 1; offset >= 0; offset -= 1) {
+          const date = new Date();
+          date.setDate(date.getDate() - offset);
+          keys.push(apiDateKey(date));
+        }
+        return keys;
+      }
+
+      function compactDateLabel(isoDate) {
+        const text = String(isoDate || "");
+        const [year, month, day] = text.split("-");
+        if (!year || !month || !day) return text || "—";
+        return `${day}/${month}`;
+      }
+
       function readCache(key) {
         try {
           const raw = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
@@ -3855,6 +3988,106 @@
         return Array.from(combined.values());
       }
 
+      function buildModelByIdFromHistory(historyPayload) {
+        const historyModelById = new Map();
+        if (!Array.isArray(historyPayload)) return historyModelById;
+        historyPayload.forEach(row => {
+          const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
+          if (!id) return;
+          const model = canonicalModelForVehicle(id, row?.modelo ?? row?.model ?? row?.vehicle_model);
+          if (model) historyModelById.set(String(id), model);
+        });
+        return historyModelById;
+      }
+
+      async function fetchModelActivityWindow(modelLabel, dayStart, dayEnd) {
+        const normalizedModel = normalizeModelLabel(modelLabel);
+        if (!normalizedModel) return new Map();
+        const cacheKey = `${normalizedModel}|${dayStart}|${dayEnd}`;
+        const cached = seriesModelActivityCache.get(cacheKey);
+        if (cached && (Date.now() - cached.fetchedAt) < SERIES_ACTIVITY_CACHE_TTL_MS) {
+          return cached.byDay;
+        }
+        const params = new URLSearchParams({
+          day_start: dayStart,
+          day_end: dayEnd,
+          model: normalizedModel,
+          limit: "50000"
+        });
+        const response = await fetchFromFleetBases(`${HISTORY_DAILY_MODEL_ACTIVITY_PATH}?${params.toString()}`, { cache: "no-store" });
+        const rows = response.ok ? await response.json() : [];
+        const byDay = new Map();
+        (Array.isArray(rows) ? rows : []).forEach(row => {
+          const day = String(row?.day || "").trim();
+          if (!day) return;
+          const count = Number(row?.vehicles_active ?? row?.vehicles ?? 0);
+          byDay.set(day, Number.isFinite(count) ? count : 0);
+        });
+        seriesModelActivityCache.set(cacheKey, { fetchedAt: Date.now(), byDay });
+        return byDay;
+      }
+
+      async function updateSeriesActivityChart(_historyPayload, selectedModel, todayCount) {
+        const requestId = ++seriesActivityRequestId;
+        const normalizedModel = normalizeModelLabel(selectedModel);
+        if (!normalizedModel) {
+          if (seriesActivityTitle) seriesActivityTitle.textContent = "Atividade diária (últimos 60 dias)";
+          renderSeriesActivityChart(["—"], [0]);
+          return;
+        }
+        const dates = recentDateKeys(SERIES_ACTIVE_WINDOW_DAYS);
+        const dayStart = dates[0] || apiDateKey(new Date());
+        const dayEnd = dates[dates.length - 1] || apiDateKey(new Date());
+        let byDay = new Map();
+        try {
+          byDay = await fetchModelActivityWindow(selectedModel, dayStart, dayEnd);
+        } catch (err) {
+          console.warn("Falha ao carregar atividade diária agregada do modelo", err);
+        }
+        if (requestId !== seriesActivityRequestId) return;
+        const todayKey = apiDateKey(new Date());
+        const labels = dates.map(compactDateLabel);
+        const values = dates.map(dateKey => {
+          if (dateKey === todayKey && Number.isFinite(Number(todayCount))) return Number(todayCount);
+          return Number(byDay.get(dateKey) || 0);
+        });
+        const firstActiveIndex = values.findIndex(value => Number(value) > 0);
+        const startIndex = firstActiveIndex >= 0 ? firstActiveIndex : Math.max(values.length - 1, 0);
+        const visibleLabels = labels.slice(startIndex);
+        const visibleValues = values.slice(startIndex);
+        const visibleDays = visibleLabels.length || 1;
+        if (seriesActivityTitle) {
+          seriesActivityTitle.textContent = `Atividade diária de ${selectedModel} (últimos ${visibleDays} dias)`;
+        }
+        if (seriesActivityChartCanvas) {
+          seriesActivityChartCanvas.setAttribute("aria-label", `Veículos ativos por dia de ${selectedModel} nos últimos ${visibleDays} dias`);
+        }
+        renderSeriesActivityChart(visibleLabels, visibleValues, inferEnergyFromModelLabel(selectedModel));
+      }
+
+      function inferEnergyFromModelLabel(modelLabel) {
+        const normalizedModel = normalizeModelLabel(modelLabel);
+        if (!normalizedModel) return "";
+        const vehicles = buildSeriesVehiclesFromPayloads(lastFleetPayload, lastHistoryPayload)
+          .filter(vehicle => normalizeModelLabel(vehicle.model) === normalizedModel);
+        if (!vehicles.length) return "";
+        const counts = new Map();
+        vehicles.forEach(vehicle => {
+          const energy = normalizeEnergyLabel(fleetEnergyForId(vehicle.id));
+          if (!energy) return;
+          counts.set(energy, (counts.get(energy) || 0) + 1);
+        });
+        let selectedEnergy = "";
+        let bestCount = -1;
+        counts.forEach((count, energy) => {
+          if (count > bestCount) {
+            bestCount = count;
+            selectedEnergy = energy;
+          }
+        });
+        return selectedEnergy;
+      }
+
       function buildTypologyVehiclesFromPayloads(payload, historyPayload) {
         const combined = new Map();
 
@@ -4040,9 +4273,11 @@
           renderSelectedSeriesPill();
           if (seriesUnitsChip) seriesUnitsChip.textContent = "Unidades Totais: —";
           if (seriesRoutesChip) seriesRoutesChip.textContent = "Carreiras ativas: —";
-          if (seriesTableTitle) seriesTableTitle.textContent = "📊 Modelo: — —";
+          if (seriesTableTitle) seriesTableTitle.textContent = "📊 Modelo: —  — — unidades - — ativas nos últimos 60 dias";
           setTablePlaceholder(seriesTableBody, 4);
           renderSeriesRouteChart(["—"], [0]);
+          if (seriesActivityTitle) seriesActivityTitle.textContent = "Atividade diária (últimos 60 dias)";
+          renderSeriesActivityChart(["—"], [0]);
           if (seriesRoutePills) seriesRoutePills.innerHTML = "";
           return;
         }
@@ -4061,9 +4296,11 @@
           renderSelectedSeriesPill();
           if (seriesUnitsChip) seriesUnitsChip.textContent = "Unidades totais: —";
           if (seriesRoutesChip) seriesRoutesChip.textContent = "Carreiras ativas: —";
-          if (seriesTableTitle) seriesTableTitle.textContent = "📊 Modelo: — —";
+          if (seriesTableTitle) seriesTableTitle.textContent = "📊 Modelo: —  — — unidades - — ativas nos últimos 60 dias";
           setTablePlaceholder(seriesTableBody, 4);
           renderSeriesRouteChart(["—"], [0]);
+          if (seriesActivityTitle) seriesActivityTitle.textContent = "Atividade diária (últimos 60 dias)";
+          renderSeriesActivityChart(["—"], [0]);
           if (seriesRoutePills) seriesRoutePills.innerHTML = "";
           return;
         }
@@ -4086,16 +4323,14 @@
 
         const filtered = seriesVehicles.filter(vehicle => normalizeModelLabel(vehicle.model) === currentSeriesSelection);
         const unitsCount = filtered.length;
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const activeWindowStart = nowSeconds - SERIES_ACTIVE_WINDOW_SECONDS;
+        const activeUnits60Days = filtered.reduce((count, vehicle) => {
+          const ts = Number(vehicle?.lastPing);
+          return Number.isFinite(ts) && ts >= activeWindowStart ? count + 1 : count;
+        }, 0);
 
-        const historyModelById = new Map();
-        if (Array.isArray(historyPayload)) {
-          historyPayload.forEach(row => {
-            const id = row?.id_veiculo ?? row?.vehicle_id ?? row?.veiculo ?? "";
-            if (!id) return;
-            const model = canonicalModelForVehicle(id, row?.modelo ?? row?.model ?? row?.vehicle_model);
-            if (model) historyModelById.set(String(id), model);
-          });
-        }
+        const historyModelById = buildModelByIdFromHistory(historyPayload);
 
         const seriesVehiclesToday = Array.isArray(payload)
           ? payload.map(row => {
@@ -4144,7 +4379,11 @@
 
         if (seriesUnitsChip) seriesUnitsChip.textContent = `Unidades totais: ${unitsCount}`;
         if (seriesRoutesChip) seriesRoutesChip.textContent = `Carreiras ativas: ${routeCounts.size || 0}`;
-        if (seriesTableTitle) seriesTableTitle.textContent = `📊 Modelo: ${currentSeriesSelection} — ${unitsCount} unidades`;
+        if (seriesTableTitle) {
+          seriesTableTitle.textContent = `📊 Modelo: ${currentSeriesSelection}  — ${unitsCount} unidades - ${activeUnits60Days} ativas nos últimos ${SERIES_ACTIVE_WINDOW_DAYS} dias`;
+        }
+        updateSeriesActivityChart(historyPayload, currentSeriesSelection, filteredToday.length)
+          .catch(err => console.warn("Falha ao atualizar gráfico diário do modelo", err));
 
         if (!filtered.length) {
           setTablePlaceholder(seriesTableBody, 4);
@@ -4170,8 +4409,11 @@
             const routesHtml = uniqueRoutes.length
               ? uniqueRoutes.map(buildRoutePill).join(" ")
               : (vehicle.realtimeRoute ? buildRoutePill(vehicle.realtimeRoute) : "—");
+            const lastPingTs = Number(vehicle?.lastPing);
+            const isInactive60Days = !(Number.isFinite(lastPingTs) && lastPingTs >= activeWindowStart);
+            const rowClass = isInactive60Days ? ' class="fleet-series-row--inactive-60d"' : "";
             return `
-              <tr>
+              <tr${rowClass}>
                 <td>${formatVehicleLabel(vehicle.id)}</td>
                 <td>${formatTimeAgo(vehicle.lastPing)}</td>
                 <td>${routesHtml}</td>
@@ -4188,6 +4430,8 @@
         setTablePlaceholder(newEntriesTableBody, 5);
         renderTypologyChart(["A carregar…"], [1]);
         renderSeriesChart(["A carregar…"], [0], [""]);
+        renderSeriesActivityChart(["—"], [0]);
+        if (seriesActivityTitle) seriesActivityTitle.textContent = "Atividade diária (últimos 60 dias)";
 
         await Promise.all([loadFleetModelRanges(), loadRoutesCatalog()]);
         const today = new Date().toISOString().split("T")[0];
@@ -4304,6 +4548,17 @@
 
         updateSeriesTab(lastFleetPayload, lastHistoryPayload);
         updateTypologyTab(lastFleetPayload, lastHistoryPayload);
+      }
+
+      let fleetOverviewRefreshInFlight = false;
+      async function scheduleFleetOverviewRefresh() {
+        if (fleetOverviewRefreshInFlight) return;
+        fleetOverviewRefreshInFlight = true;
+        try {
+          await refreshFleetOverview();
+        } finally {
+          fleetOverviewRefreshInFlight = false;
+        }
       }
 
       let fleetVehiclesCache = [];
@@ -4751,8 +5006,9 @@
 
       bindVehicleSelection();
 
-      refreshFleetOverview();
+      scheduleFleetOverviewRefresh();
       refreshVehicleTab();
+      setInterval(scheduleFleetOverviewRefresh, FLEET_REFRESH_INTERVAL_MS);
 
       window.addEventListener("resize", () => {
         handleSeriesChartResize();
