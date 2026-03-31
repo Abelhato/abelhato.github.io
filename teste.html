@@ -2992,6 +2992,27 @@
     .stop-schedule__time--rt-slow {
       color: #f59e0b;
     }
+    .stop-schedule__row--rail {
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .stop-schedule__info--rail {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: calc(100% - 56px);
+    }
+    .stop-schedule__service {
+      font-size: 0.73rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
     .stop-schedule__eta {
       font-size: 0.76rem;
       color: var(--text-muted);
@@ -4068,6 +4089,10 @@
             <span class="operator-chip__title">Carris Metropolitana</span>
             <span class="operator-chip__meta">Mapa apenas</span>
           </button>
+          <button id="operator-tcb-btn" class="operator-chip" type="button" aria-pressed="false" data-operator="tcb">
+            <span class="operator-chip__title">TCB</span>
+            <span class="operator-chip__meta">Mapa apenas</span>
+          </button>
         </div>
       </div>
       <div class="sidebar-section hidden" id="variant-filter-group">
@@ -4345,7 +4370,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     const KNOWN_BACKEND_PORTS = [8002, 2026];
-    const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
+    const GITHUB_DEFAULT_BACKEND = "https://api.moverlisboa.com";
     const MODE_REALTIME = "realtime";
     const HISTORY_PAGE_URL = (() => {
       if (location.protocol === "file:" || location.origin === "null") {
@@ -4412,6 +4437,9 @@
     const VEHICLE_STALE_FORCE_MS = 12_000; // Force a refresh if we haven't applied new vehicles within this window.
     const VEHICLE_MAX_STALE_MS = 15_000; // If newest ping is older than this, try the next endpoint.
     const VEHICLE_CACHE_TTL_MS = 0; // disable vehicle cache to force fresh pulls each poll
+    const VEHICLE_FETCH_TIMEOUT_MS = 4500;
+    const CM_VEHICLE_FETCH_TIMEOUT_MS = 6500;
+    const VEHICLE_FETCH_RETRY_ATTEMPTS = 1;
     // Mimic Streamlit dashboard: on each poll, vehicles with a new ping slide for ~1s, otherwise stay still.
     const ANIMATION_MS = 1000;
     const ACTIVE_SECONDS = 300;
@@ -4436,6 +4464,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href).href;
     const STOP_CATALOG_URL = new URL("gtfs/stops.txt", location.href).href;
     const TRIPS_DATA_URL = new URL("gtfs/trips.txt", location.href).href;
+    const GTFS_STATIC_FEED_PATHS = Object.freeze({
+      routes: "routes.txt",
+      stops: "stops.txt",
+      trips: "trips.txt",
+      stopTimes: "stop_times.txt",
+      calendar: "calendar.txt",
+      calendarDates: "calendar_dates.txt",
+      shapes: "shapes.txt"
+    });
     const STOP_CATALOG_CSV = String.raw`stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,stop_timezone,wheelchair_boarding
 50101,50101,R. F. Lopes Graça / R. Prof. A. Sousa,,38.76968170,-9.17041900,,,0,,,
 50102,50102,Hosp. Forças Armadas,,38.76901720,-9.17502060,,,0,,,
@@ -6783,9 +6820,25 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const CATEGORY_FILTER_ALL = "__ALL_CATEGORIES__";
     const ROUTE_FILTER_ALL = "__ALL_ROUTES__";
     const VARIANT_FILTER_ALL = "__ALL_VARIANTS__";
+    const TCB_TERMINAL_FLUVIAL_GLOBAL_LABEL = "Terminal Fluvial (Circulação)";
+    const TCB_TERMINAL_FLUVIAL_GLOBAL_SHORT_NAMES = new Set(["1", "2", "14", "15", "71", "149", "150", "701", "702"]);
     const OPERATOR_CARRIS = "carris";
     const OPERATOR_CMET = "cmet";
+    const OPERATOR_TCB = "tcb";
+    const OPERATOR_CP = "cp";
+    const OPERATOR_METRO = "metro";
+    const OPERATOR_TTSL = "ttsl";
+    const OPERATOR_FERTAGUS = "fertagus";
     const OPERATOR_BOTH = "both";
+    const OPERATOR_ALL_THREE = "carris,cmet,tcb";
+    const OPERATOR_EXTERNAL_GTFS = new Set([OPERATOR_TCB, OPERATOR_CP, OPERATOR_METRO, OPERATOR_TTSL, OPERATOR_FERTAGUS]);
+    const STATIC_GTFS_OPERATORS = Object.freeze({
+      [OPERATOR_TCB]: { key: OPERATOR_TCB, label: "TCB", folder: "TCB", color: "#16a34a" },
+      [OPERATOR_CP]: { key: OPERATOR_CP, label: "CP", folder: "CP", color: "#1d4ed8" },
+      [OPERATOR_METRO]: { key: OPERATOR_METRO, label: "Metro de Lisboa", folder: "Metro", color: "#f59e0b" },
+      [OPERATOR_TTSL]: { key: OPERATOR_TTSL, label: "TTSL", folder: "TTSL", color: "#0ea5e9" },
+      [OPERATOR_FERTAGUS]: { key: OPERATOR_FERTAGUS, label: "Fertagus", folder: "Fertagus", color: "#dc2626" }
+    });
     const OPERATOR_STORAGE_KEY = "dashboard.operator";
     const ROUTE_GLOBAL_LABEL = "🌐 Rede Completa";
     const STANDARD_ROUTE_CATEGORIES = [
@@ -6807,6 +6860,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       Norte: "#39BA2E"
     };
     const STOP_MARKER_BORDER_COLOR = "#ffb84e";
+    const TRAIN_STOP_MARKER_BORDER_COLOR = "#374151";
     const STOP_MARKER_ARROW_COLOR = "#374151";
     const ZONE_ROUTE_BASES = {
       Centro: new Set([
@@ -6996,6 +7050,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const CM_SHAPE_ENDPOINTS = (shapeId) => dedupeList(
       (CM_BACKEND_BASES || []).map(base => `${base}/api/cm/shapes/${encodeURIComponent(String(shapeId || ""))}`)
     );
+    const TCB_VEHICLES_ENDPOINTS = dedupeList([
+      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/realtime`),
+      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/vehicles`),
+      "https://backend.tcbarreiro.pt/api/realtime?locale=en-US"
+    ]);
+    const TCB_STOPS_ENDPOINTS = dedupeList([
+      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/stops`),
+      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/bus-stops`),
+      "https://backend.tcbarreiro.pt/api/bus-stops?locale=pt-PT"
+    ]);
     const CHAPA_REFRESH_INTERVAL_MS = 5 * 60_000;
     const CHAPA_FETCH_TIMEOUT_MS = 6000;
     const FLEET_MODEL_CSV_URL = new URL("frota.csv", location.href);
@@ -7082,15 +7146,24 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let vehiclesLatestAppliedId = 0;
     let lastVehicleFetchHadError = false;
     let vehiclePollingConsecutiveErrors = 0;
+    let lastCarrisVehicles = [];
+    let lastCmetVehicles = [];
+    let lastTcbVehicles = [];
     const routeOptions = new Map(); // baseId -> { label: string, variants: Map<variantId, label>, categories: Set<string>, operators: Set<string> }
     const ROUTE_DETAILS = new Map(); // routeId -> { shortName, longName }
     const BASE_ROUTE_DETAILS = new Map(); // baseId -> { shortName, longName }
+    const ROUTE_BASE_BY_VARIANT = new Map(); // variantId -> baseId
     let routesCatalogLoaded = false;
     let cmetRoutesById = new Map();
     let cmetDirectionByRouteDir = new Map();
     let cmetPatternDirectionMeta = new Map();
     let cmetStopsCatalog = null;
+    let tcbStopsCatalog = null;
     let cmetStopsById = new Map();
+    const staticGtfsFeedCache = new Map();
+    const staticGtfsFeedInflight = new Map();
+    const staticGtfsRouteMetaById = new Map(); // "operator:route_id" -> route metadata
+    const staticGtfsRouteMetaLookup = new Map(); // normalized label/code -> route metadata
     const cmetVisibleStopsCache = new Map();
     let cmetArrivalsCache = new Map();
     let cmetPatternCache = new Map();
@@ -7201,6 +7274,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function preferredSearchOperator() {
+      if (currentOperator === OPERATOR_TCB) return OPERATOR_TCB;
       return currentOperator === OPERATOR_CMET ? OPERATOR_CMET : OPERATOR_CARRIS;
     }
 
@@ -7289,11 +7363,585 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       showAppError(`Erro de promessa: ${event.reason}`);
     });
 
+    function staticGtfsConfig(operator) {
+      const normalized = normalizeOperator(operator);
+      return STATIC_GTFS_OPERATORS[normalized] || null;
+    }
+
+    function isStaticGtfsOperator(operator) {
+      return Boolean(staticGtfsConfig(operator));
+    }
+
+    function scopedGtfsId(operator, rawId) {
+      const normalizedOperator = normalizeOperator(operator);
+      const raw = String(rawId || "").trim();
+      if (!normalizedOperator || !raw) return "";
+      return `${normalizedOperator}:${raw}`;
+    }
+
+    function scopedGtfsShapeId(operator, rawShapeId) {
+      const normalizedOperator = normalizeOperator(operator);
+      const raw = String(rawShapeId || "").trim();
+      if (!normalizedOperator || !raw) return "";
+      return `${normalizedOperator}:shape:${raw}`;
+    }
+
+    const CP_SHAPE_VARIANT_SEPARATOR = "::shape::";
+
+    function makeCpShapeVariantId(routeId, shapeId) {
+      const route = String(routeId || "").trim();
+      const shape = String(shapeId || "").trim();
+      if (!route || !shape) return route;
+      return `${route}${CP_SHAPE_VARIANT_SEPARATOR}${shape}`;
+    }
+
+    function parseCpShapeVariantId(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return null;
+      const idx = raw.indexOf(CP_SHAPE_VARIANT_SEPARATOR);
+      if (idx <= 0) return null;
+      const routeId = raw.slice(0, idx).trim();
+      const shapeId = raw.slice(idx + CP_SHAPE_VARIANT_SEPARATOR.length).trim();
+      if (!routeId || !shapeId) return null;
+      if (!routeId.startsWith(`${OPERATOR_CP}:`)) return null;
+      return { routeId, shapeId };
+    }
+
+    function baseRouteIdForStaticGtfsRoute(operator, routeId, shortName = "") {
+      const normalizedOperator = normalizeOperator(operator);
+      const route = String(routeId || "").trim();
+      const short = String(shortName || "").trim();
+      if (!route) return "";
+      if (normalizedOperator === OPERATOR_TCB && short) {
+        return normalizeRouteKey(scopedGtfsId(OPERATOR_TCB, short));
+      }
+      if (normalizedOperator === OPERATOR_FERTAGUS) {
+        return normalizeRouteKey(scopedGtfsId(OPERATOR_FERTAGUS, "linha"));
+      }
+      if (normalizedOperator === OPERATOR_CP && short) {
+        return normalizeRouteKey(scopedGtfsId(OPERATOR_CP, short));
+      }
+      return normalizeRouteKey(getBaseRouteKey(route));
+    }
+
+    function staticGtfsTerminalsForVariant(feed, routeId, { shapeId = "" } = {}) {
+      const route = String(routeId || "").trim();
+      const shape = String(shapeId || "").trim();
+      if (!feed || !route) return { start: "", end: "" };
+      const trips = Array.isArray(feed?.tripsByRouteId?.get?.(route)) ? feed.tripsByRouteId.get(route) : [];
+      const scopedTrips = shape
+        ? trips.filter((trip) => String(trip?.shapeId || "").trim() === shape)
+        : trips;
+      let bestRows = [];
+      for (const trip of scopedTrips) {
+        const tripId = String(trip?.tripId || "").trim();
+        if (!tripId) continue;
+        const rowsRaw = Array.isArray(feed?.stopTimesByTripId?.get?.(tripId)) ? feed.stopTimesByTripId.get(tripId) : [];
+        if (!rowsRaw.length) continue;
+        const rows = [...rowsRaw]
+          .filter((row) => normalizeStopSequence(row?.stop_sequence) != null)
+          .sort((a, b) => Number(normalizeStopSequence(a?.stop_sequence)) - Number(normalizeStopSequence(b?.stop_sequence)));
+        if (rows.length > bestRows.length) bestRows = rows;
+      }
+      if (!bestRows.length) return { start: "", end: "" };
+      const toStopName = (stopIdRaw) => {
+        const stopId = String(stopIdRaw || "").trim();
+        if (!stopId) return "";
+        const stop = feed?.stopsById?.get?.(stopId);
+        return String(stop?.stop_name || stopId).replace(/\s+/g, " ").trim();
+      };
+      const start = toStopName(bestRows[0]?.stop_id);
+      const end = toStopName(bestRows[bestRows.length - 1]?.stop_id);
+      return { start, end };
+    }
+
+    function staticGtfsVariantTerminalLabel(feed, { routeId, shapeId = "", shortName = "", longName = "", fallback = "" } = {}) {
+      const route = String(routeId || "").trim();
+      const shape = String(shapeId || "").trim();
+      const meta = feed?.routesById?.get?.(route) || null;
+      const line = String(shortName || meta?.shortName || "").trim()
+        || String(route).split(":").pop().trim()
+        || String(longName || fallback || route || "Linha").trim();
+      const terminals = staticGtfsTerminalsForVariant(feed, route, { shapeId: shape });
+      if (terminals.start && terminals.end) {
+        return `${line} - (${terminals.start}-${terminals.end})`;
+      }
+      return line;
+    }
+
+    function staticGtfsFileCandidates(operator, fileKey) {
+      const cfg = staticGtfsConfig(operator);
+      const fileName = GTFS_STATIC_FEED_PATHS[fileKey];
+      if (!cfg || !fileName) return [];
+      return dedupeList([
+        new URL(`gtfs/${cfg.folder}/${fileName}`, location.href).href,
+        new URL(`../gtfs/${cfg.folder}/${fileName}`, location.href).href
+      ]);
+    }
+
+    async function fetchTextFromCandidates(urls = []) {
+      const list = Array.isArray(urls) ? urls : [];
+      for (const url of list) {
+        if (!url) continue;
+        try {
+          const response = await fetch(url, { cache: "no-store" });
+          if (response.ok) return await response.text();
+        } catch (err) {}
+      }
+      return "";
+    }
+
+    function parseIntOrNull(value) {
+      const parsed = Number.parseInt(String(value), 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function serviceDateYmdCompact(date = new Date()) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}${m}${d}`;
+    }
+
+    function gtfsWeekdayField(date = new Date()) {
+      const day = date.getDay();
+      if (day === 0) return "sunday";
+      if (day === 1) return "monday";
+      if (day === 2) return "tuesday";
+      if (day === 3) return "wednesday";
+      if (day === 4) return "thursday";
+      if (day === 5) return "friday";
+      return "saturday";
+    }
+
+    function getCsvField(columns, idx) {
+      if (!Array.isArray(columns) || idx < 0 || idx >= columns.length) return "";
+      return String(columns[idx] || "").trim();
+    }
+
+    function normalizeRouteLookupKey(value) {
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function metroLineNameFromMeta(meta) {
+      const longName = String(meta?.longName || "").trim();
+      const shortName = String(meta?.shortName || "").trim();
+      const normalizeMetroToken = (value) => String(value || "")
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9]/g, "");
+      const tokenLong = normalizeMetroToken(longName);
+      const tokenShort = normalizeMetroToken(shortName);
+      const token = `${tokenShort}${tokenLong}`;
+      if (token.includes("VERMELH") || token.startsWith("VM")) return "Linha Vermelha";
+      if (token.includes("AZUL") || token.startsWith("AZ")) return "Linha Azul";
+      if (token.includes("AMAREL") || token.startsWith("AM")) return "Linha Amarela";
+      if (token.includes("VERDE") || token.startsWith("VD")) return "Linha Verde";
+      if (longName) return `Linha ${longName}`;
+      if (shortName) return `Linha ${shortName}`;
+      return "Linha Metro";
+    }
+
+    function staticRouteMetaForAny(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return null;
+      if (staticGtfsRouteMetaById.has(raw)) return staticGtfsRouteMetaById.get(raw) || null;
+      const key = normalizeRouteLookupKey(raw);
+      if (staticGtfsRouteMetaLookup.has(key)) return staticGtfsRouteMetaLookup.get(key) || null;
+      return null;
+    }
+
+    function metroRouteMetaForAny(value) {
+      const meta = staticRouteMetaForAny(value);
+      if (!meta) return null;
+      return normalizeOperator(meta.operator) === OPERATOR_METRO ? meta : null;
+    }
+
+    function displayRouteCode(label, routeId = "") {
+      const metroMeta = metroRouteMetaForAny(routeId) || metroRouteMetaForAny(label);
+      if (metroMeta) return metroLineNameFromMeta(metroMeta);
+      const staticMeta = staticRouteMetaForAny(routeId) || staticRouteMetaForAny(label);
+      if (normalizeOperator(staticMeta?.operator || "") === OPERATOR_TTSL) {
+        const short = String(staticMeta?.shortName || "").trim();
+        const long = String(staticMeta?.longName || "").trim();
+        return short || long || label || "—";
+      }
+      return parseRouteCodeParts(label).code || label || "—";
+    }
+
+    function mapStaticStopRowsToVisibleStops(feedRows = [], bounds = null, limit = GLOBAL_STOPS_LIMIT_MIN) {
+      const rows = Array.isArray(feedRows) ? feedRows : [];
+      const visible = [];
+      const maxRows = Math.max(1, Number(limit) || GLOBAL_STOPS_LIMIT_MIN);
+      for (const row of rows) {
+        const lat = Number(row?.stop_lat);
+        const lon = Number(row?.stop_lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        if (bounds && (
+          lat < bounds.minLat || lat > bounds.maxLat ||
+          lon < bounds.minLon || lon > bounds.maxLon
+        )) {
+          continue;
+        }
+        visible.push(row);
+        if (visible.length >= maxRows) break;
+      }
+      return visible;
+    }
+
+    async function loadStaticGtfsFeed(operator) {
+      const cfg = staticGtfsConfig(operator);
+      if (!cfg) return null;
+      const op = cfg.key;
+      if (staticGtfsFeedCache.has(op)) return staticGtfsFeedCache.get(op);
+      const inflight = staticGtfsFeedInflight.get(op);
+      if (inflight) return inflight;
+      const promise = (async () => {
+        const [routesText, stopsText, tripsText, stopTimesText, calendarText, calendarDatesText, shapesText] = await Promise.all([
+          fetchTextFromCandidates(staticGtfsFileCandidates(op, "routes")),
+          fetchTextFromCandidates(staticGtfsFileCandidates(op, "stops")),
+          fetchTextFromCandidates(staticGtfsFileCandidates(op, "trips")),
+          fetchTextFromCandidates(staticGtfsFileCandidates(op, "stopTimes")),
+          fetchTextFromCandidates(staticGtfsFileCandidates(op, "calendar")),
+          fetchTextFromCandidates(staticGtfsFileCandidates(op, "calendarDates")),
+          fetchTextFromCandidates(staticGtfsFileCandidates(op, "shapes"))
+        ]);
+
+        const routesById = new Map();
+        const routeIdsByRaw = new Map();
+        const stopsById = new Map();
+        const stopEntries = [];
+        const visibleStopRows = [];
+        const stopIdsByRaw = new Map();
+        const tripsById = new Map();
+        const tripIdsByRaw = new Map();
+        const tripsByRouteId = new Map();
+        const stopTimesByStopId = new Map();
+        const stopTimesByRouteId = new Map();
+        const stopTimesByTripId = new Map();
+        const stopRouteIdsByStopId = new Map();
+        const shapePointsById = new Map();
+        const calendarByServiceId = new Map();
+        const calendarDatesByServiceId = new Map();
+        const activeServicesCacheByDate = new Map();
+
+        {
+          const lines = String(routesText || "").replace(/\r/g, "\n").split("\n");
+          if (lines.length > 1) {
+            const header = splitCsvLine(lines[0]).map(col => col.replace(/^\ufeff/, "").trim().toLowerCase());
+            const idxRouteId = header.indexOf("route_id");
+            const idxShort = header.indexOf("route_short_name");
+            const idxLong = header.indexOf("route_long_name");
+            const idxColor = header.indexOf("route_color");
+            const idxTextColor = header.indexOf("route_text_color");
+            for (let i = 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (!line || !line.trim()) continue;
+              const cols = splitCsvLine(line);
+              const rawRouteId = getCsvField(cols, idxRouteId);
+              if (!rawRouteId) continue;
+              const routeId = scopedGtfsId(op, rawRouteId);
+              const route = {
+                routeId,
+                rawRouteId,
+                operator: op,
+                shortName: getCsvField(cols, idxShort),
+                longName: getCsvField(cols, idxLong),
+                color: normalizeHexColor(getCsvField(cols, idxColor)),
+                textColor: normalizeHexColor(getCsvField(cols, idxTextColor))
+              };
+              routesById.set(routeId, route);
+              routeIdsByRaw.set(rawRouteId, routeId);
+              staticGtfsRouteMetaById.set(routeId, route);
+              const lookupValues = [
+                rawRouteId,
+                route.shortName,
+                route.longName,
+                `${route.shortName} ${route.longName}`.trim(),
+                routeId
+              ].filter(Boolean);
+              lookupValues.forEach((value) => {
+                const key = normalizeRouteLookupKey(value);
+                if (!key) return;
+                if (!staticGtfsRouteMetaLookup.has(key)) {
+                  staticGtfsRouteMetaLookup.set(key, route);
+                }
+              });
+            }
+          }
+        }
+
+        {
+          const lines = String(stopsText || "").replace(/\r/g, "\n").split("\n");
+          if (lines.length > 1) {
+            const header = splitCsvLine(lines[0]).map(col => col.replace(/^\ufeff/, "").trim().toLowerCase());
+            const idxStopId = header.indexOf("stop_id");
+            const idxStopCode = header.indexOf("stop_code");
+            const idxStopName = header.indexOf("stop_name");
+            const idxLat = header.indexOf("stop_lat");
+            const idxLon = header.indexOf("stop_lon");
+            for (let i = 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (!line || !line.trim()) continue;
+              const cols = splitCsvLine(line);
+              const rawStopId = getCsvField(cols, idxStopId);
+              const stopName = getCsvField(cols, idxStopName);
+              if (!rawStopId || !stopName) continue;
+              const stopId = scopedGtfsId(op, rawStopId);
+              const stopCode = getCsvField(cols, idxStopCode) || rawStopId;
+              const stopLat = Number(getCsvField(cols, idxLat));
+              const stopLon = Number(getCsvField(cols, idxLon));
+              const stop = {
+                stop_id: stopId,
+                raw_stop_id: rawStopId,
+                stop_name: stopName,
+                stop_code: stopCode,
+                stop_lat: Number.isFinite(stopLat) ? stopLat : NaN,
+                stop_lon: Number.isFinite(stopLon) ? stopLon : NaN,
+                operator: op
+              };
+              stopsById.set(stopId, stop);
+              stopIdsByRaw.set(rawStopId, stopId);
+              visibleStopRows.push(stop);
+              stopEntries.push({
+                stopId,
+                stopName,
+                stopCode,
+                operator: op,
+                displayNumber: stopCode || rawStopId,
+                lat: Number.isFinite(stopLat) ? stopLat : null,
+                lon: Number.isFinite(stopLon) ? stopLon : null,
+                searchKey: `${stopName} ${stopCode} ${rawStopId}`.toLowerCase()
+              });
+            }
+          }
+        }
+
+        {
+          const lines = String(tripsText || "").replace(/\r/g, "\n").split("\n");
+          if (lines.length > 1) {
+            const header = splitCsvLine(lines[0]).map(col => col.replace(/^\ufeff/, "").trim().toLowerCase());
+            const idxRouteId = header.indexOf("route_id");
+            const idxTripId = header.indexOf("trip_id");
+            const idxServiceId = header.indexOf("service_id");
+            const idxDirectionId = header.indexOf("direction_id");
+            const idxShapeId = header.indexOf("shape_id");
+            const idxHeadsign = header.indexOf("trip_headsign");
+            for (let i = 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (!line || !line.trim()) continue;
+              const cols = splitCsvLine(line);
+              const rawTripId = getCsvField(cols, idxTripId);
+              const rawRouteId = getCsvField(cols, idxRouteId);
+              if (!rawTripId || !rawRouteId) continue;
+              const routeId = routeIdsByRaw.get(rawRouteId) || scopedGtfsId(op, rawRouteId);
+              const tripId = scopedGtfsId(op, rawTripId);
+              const serviceId = getCsvField(cols, idxServiceId);
+              const directionId = parseIntOrNull(getCsvField(cols, idxDirectionId));
+              const rawShapeId = getCsvField(cols, idxShapeId);
+              const shapeId = scopedGtfsShapeId(op, rawShapeId);
+              const headsign = getCsvField(cols, idxHeadsign);
+              const trip = { tripId, rawTripId, routeId, serviceId, directionId, shapeId, rawShapeId, headsign };
+              tripsById.set(tripId, trip);
+              tripIdsByRaw.set(rawTripId, tripId);
+              if (!tripsByRouteId.has(routeId)) tripsByRouteId.set(routeId, []);
+              tripsByRouteId.get(routeId).push(trip);
+            }
+          }
+        }
+
+        {
+          const lines = String(stopTimesText || "").replace(/\r/g, "\n").split("\n");
+          if (lines.length > 1) {
+            const header = splitCsvLine(lines[0]).map(col => col.replace(/^\ufeff/, "").trim().toLowerCase());
+            const idxTripId = header.indexOf("trip_id");
+            const idxArrival = header.indexOf("arrival_time");
+            const idxDeparture = header.indexOf("departure_time");
+            const idxStopId = header.indexOf("stop_id");
+            const idxStopSequence = header.indexOf("stop_sequence");
+            const idxShapeDist = header.indexOf("shape_dist_traveled");
+            for (let i = 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (!line || !line.trim()) continue;
+              const cols = splitCsvLine(line);
+              const rawTripId = getCsvField(cols, idxTripId);
+              const rawStopId = getCsvField(cols, idxStopId);
+              if (!rawTripId || !rawStopId) continue;
+              const tripId = tripIdsByRaw.get(rawTripId) || scopedGtfsId(op, rawTripId);
+              const stopId = stopIdsByRaw.get(rawStopId) || scopedGtfsId(op, rawStopId);
+              const tripMeta = tripsById.get(tripId) || null;
+              const routeId = tripMeta?.routeId || "";
+              const row = {
+                trip_id: tripId,
+                route_id: routeId,
+                service_id: String(tripMeta?.serviceId || "").trim(),
+                direction_id: tripMeta?.directionId ?? null,
+                shape_id: tripMeta?.shapeId || "",
+                headsign: String(tripMeta?.headsign || "").trim(),
+                arrival_time: getCsvField(cols, idxArrival),
+                departure_time: getCsvField(cols, idxDeparture),
+                stop_id: stopId,
+                stop_sequence: parseIntOrNull(getCsvField(cols, idxStopSequence)),
+                shape_dist_traveled: getCsvField(cols, idxShapeDist)
+              };
+              if (!stopTimesByTripId.has(tripId)) stopTimesByTripId.set(tripId, []);
+              stopTimesByTripId.get(tripId).push(row);
+              if (!stopTimesByStopId.has(stopId)) stopTimesByStopId.set(stopId, []);
+              stopTimesByStopId.get(stopId).push(row);
+              if (routeId) {
+                if (!stopTimesByRouteId.has(routeId)) stopTimesByRouteId.set(routeId, []);
+                stopTimesByRouteId.get(routeId).push(row);
+                if (!stopRouteIdsByStopId.has(stopId)) stopRouteIdsByStopId.set(stopId, new Set());
+                stopRouteIdsByStopId.get(stopId).add(routeId);
+              }
+            }
+          }
+        }
+
+        {
+          const lines = String(calendarText || "").replace(/\r/g, "\n").split("\n");
+          if (lines.length > 1) {
+            const header = splitCsvLine(lines[0]).map(col => col.replace(/^\ufeff/, "").trim().toLowerCase());
+            const idxServiceId = header.indexOf("service_id");
+            const idxStartDate = header.indexOf("start_date");
+            const idxEndDate = header.indexOf("end_date");
+            const idxMonday = header.indexOf("monday");
+            const idxTuesday = header.indexOf("tuesday");
+            const idxWednesday = header.indexOf("wednesday");
+            const idxThursday = header.indexOf("thursday");
+            const idxFriday = header.indexOf("friday");
+            const idxSaturday = header.indexOf("saturday");
+            const idxSunday = header.indexOf("sunday");
+            for (let i = 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (!line || !line.trim()) continue;
+              const cols = splitCsvLine(line);
+              const serviceId = getCsvField(cols, idxServiceId);
+              if (!serviceId) continue;
+              calendarByServiceId.set(serviceId, {
+                startDate: getCsvField(cols, idxStartDate),
+                endDate: getCsvField(cols, idxEndDate),
+                monday: getCsvField(cols, idxMonday) === "1",
+                tuesday: getCsvField(cols, idxTuesday) === "1",
+                wednesday: getCsvField(cols, idxWednesday) === "1",
+                thursday: getCsvField(cols, idxThursday) === "1",
+                friday: getCsvField(cols, idxFriday) === "1",
+                saturday: getCsvField(cols, idxSaturday) === "1",
+                sunday: getCsvField(cols, idxSunday) === "1"
+              });
+            }
+          }
+        }
+
+        {
+          const lines = String(calendarDatesText || "").replace(/\r/g, "\n").split("\n");
+          if (lines.length > 1) {
+            const header = splitCsvLine(lines[0]).map(col => col.replace(/^\ufeff/, "").trim().toLowerCase());
+            const idxServiceId = header.indexOf("service_id");
+            const idxDate = header.indexOf("date");
+            const idxExceptionType = header.indexOf("exception_type");
+            for (let i = 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (!line || !line.trim()) continue;
+              const cols = splitCsvLine(line);
+              const serviceId = getCsvField(cols, idxServiceId);
+              const date = getCsvField(cols, idxDate);
+              const exceptionType = getCsvField(cols, idxExceptionType);
+              if (!serviceId || !date || !exceptionType) continue;
+              if (!calendarDatesByServiceId.has(serviceId)) calendarDatesByServiceId.set(serviceId, new Map());
+              calendarDatesByServiceId.get(serviceId).set(date, exceptionType);
+            }
+          }
+        }
+
+        {
+          const lines = String(shapesText || "").replace(/\r/g, "\n").split("\n");
+          if (lines.length > 1) {
+            const header = splitCsvLine(lines[0]).map(col => col.replace(/^\ufeff/, "").trim().toLowerCase());
+            const idxShapeId = header.indexOf("shape_id");
+            const idxLat = header.indexOf("shape_pt_lat");
+            const idxLon = header.indexOf("shape_pt_lon");
+            const idxSeq = header.indexOf("shape_pt_sequence");
+            for (let i = 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (!line || !line.trim()) continue;
+              const cols = splitCsvLine(line);
+              const rawShapeId = getCsvField(cols, idxShapeId);
+              if (!rawShapeId) continue;
+              const shapeId = scopedGtfsShapeId(op, rawShapeId);
+              const lat = Number(getCsvField(cols, idxLat));
+              const lon = Number(getCsvField(cols, idxLon));
+              const seq = parseIntOrNull(getCsvField(cols, idxSeq)) ?? 0;
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+              if (!shapePointsById.has(shapeId)) shapePointsById.set(shapeId, []);
+              shapePointsById.get(shapeId).push({ lat, lon, seq });
+            }
+          }
+        }
+
+        shapePointsById.forEach((points, shapeId) => {
+          points.sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0));
+          const deduped = [];
+          let lastKey = "";
+          for (const pt of points) {
+            const key = `${Number(pt.lat).toFixed(6)}|${Number(pt.lon).toFixed(6)}`;
+            if (key === lastKey) continue;
+            deduped.push(pt);
+            lastKey = key;
+          }
+          shapePointsById.set(shapeId, deduped);
+        });
+
+        const terminalStopNameByTripId = new Map();
+        stopTimesByTripId.forEach((rows, tripId) => {
+          const ordered = [...rows]
+            .filter((row) => normalizeStopSequence(row?.stop_sequence) != null)
+            .sort((a, b) => Number(a.stop_sequence) - Number(b.stop_sequence));
+          const terminal = ordered.length ? ordered[ordered.length - 1] : null;
+          const terminalStopId = String(terminal?.stop_id || "").trim();
+          const terminalName = String(stopsById.get(terminalStopId)?.stop_name || "").trim();
+          if (terminalName) terminalStopNameByTripId.set(tripId, terminalName);
+        });
+
+        const feed = {
+          operator: op,
+          config: cfg,
+          routesById,
+          stopsById,
+          stopEntries,
+          visibleStopRows,
+          tripsById,
+          tripsByRouteId,
+          stopTimesByStopId,
+          stopTimesByRouteId,
+          stopTimesByTripId,
+          stopRouteIdsByStopId,
+          shapePointsById,
+          terminalStopNameByTripId,
+          calendarByServiceId,
+          calendarDatesByServiceId,
+          activeServicesCacheByDate
+        };
+        staticGtfsFeedCache.set(op, feed);
+        return feed;
+      })();
+      staticGtfsFeedInflight.set(op, promise);
+      try {
+        return await promise;
+      } finally {
+        if (staticGtfsFeedInflight.get(op) === promise) {
+          staticGtfsFeedInflight.delete(op);
+        }
+      }
+    }
+
     async function loadRoutesCatalog() {
       if (routesCatalogLoaded) return;
       routeOptions.clear();
       ROUTE_DETAILS.clear();
       BASE_ROUTE_DETAILS.clear();
+      ROUTE_BASE_BY_VARIANT.clear();
       routeLabelById.clear();
       routeLabelLookup.clear();
       observedCategories.clear();
@@ -7341,6 +7989,76 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             if (registerRoute(baseId, routeId, { shortName, longName, label: shortName || longName || routeId, operator: OPERATOR_CMET })) dirty = true;
           }
           await ensureCmetDirectionsCatalog();
+        }
+        {
+          const staticOperators = Object.keys(STATIC_GTFS_OPERATORS);
+          for (const operator of staticOperators) {
+            try {
+              const feed = await loadStaticGtfsFeed(operator);
+              const routes = Array.from(feed?.routesById?.values?.() || []);
+              for (const row of routes) {
+                const routeId = String(row?.routeId || "").trim();
+                if (!routeId) continue;
+                const shortName = String(row?.shortName || "").trim();
+                const longName = String(row?.longName || "").trim();
+                const normalizedOperator = normalizeOperator(operator);
+                const baseId = baseRouteIdForStaticGtfsRoute(normalizedOperator, routeId, shortName);
+                if (!baseId) continue;
+                ROUTE_BASE_BY_VARIANT.set(routeId, baseId);
+                const baseLabel = shortName || longName || routeId;
+
+                if (normalizedOperator === OPERATOR_CP) {
+                  const routeTrips = Array.isArray(feed?.tripsByRouteId?.get?.(routeId)) ? feed.tripsByRouteId.get(routeId) : [];
+                  const variantsByShape = new Map();
+                  for (const trip of routeTrips) {
+                    const shapeId = String(trip?.shapeId || "").trim();
+                    if (!shapeId) continue;
+                    const key = shapeId;
+                    if (variantsByShape.has(key)) continue;
+                    const directionId = normalizeDirectionId(trip?.directionId);
+                    const headsign = String(trip?.headsign || "").trim();
+                    variantsByShape.set(key, { shapeId, directionId, headsign });
+                  }
+                  if (variantsByShape.size) {
+                    for (const variant of variantsByShape.values()) {
+                      const variantId = makeCpShapeVariantId(routeId, variant.shapeId);
+                      ROUTE_BASE_BY_VARIANT.set(variantId, baseId);
+                      const label = staticGtfsVariantTerminalLabel(feed, {
+                        routeId,
+                        shapeId: variant.shapeId,
+                        shortName,
+                        longName,
+                        fallback: baseLabel
+                      });
+                      if (registerRoute(baseId, variantId, { shortName, longName, label, operator, category: "Outros Operadores" })) {
+                        dirty = true;
+                      }
+                    }
+                  } else {
+                    const label = staticGtfsVariantTerminalLabel(feed, { routeId, shortName, longName, fallback: baseLabel });
+                    if (registerRoute(baseId, routeId, { shortName, longName, label, operator, category: "Outros Operadores" })) {
+                      dirty = true;
+                    }
+                  }
+                  continue;
+                }
+
+                if (normalizedOperator === OPERATOR_FERTAGUS) {
+                  const label = staticGtfsVariantTerminalLabel(feed, { routeId, shortName, longName, fallback: baseLabel });
+                  if (registerRoute(baseId, routeId, { shortName, longName, label, operator, category: "Outros Operadores" })) {
+                    dirty = true;
+                  }
+                  continue;
+                }
+
+                if (registerRoute(baseId, routeId, { shortName, longName, label: baseLabel, operator, category: "Outros Operadores" })) {
+                  dirty = true;
+                }
+              }
+            } catch (err) {
+              console.warn(`Falha ao carregar rotas GTFS (${operator}):`, err);
+            }
+          }
         }
         routesCatalogLoaded = true;
         if (dirty) {
@@ -7522,6 +8240,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function getBaseRouteKey(value) {
       const normalized = normalizeRouteKey(value);
       if (!normalized) return "";
+      const mappedBase = ROUTE_BASE_BY_VARIANT.get(normalized);
+      if (mappedBase) return mappedBase;
+      const maybeScopedOperator = normalized.split(":")[0];
+      if (OPERATOR_EXTERNAL_GTFS && OPERATOR_EXTERNAL_GTFS.has(maybeScopedOperator)) {
+        // External GTFS route_ids may naturally contain underscores; keep full id.
+        return normalized;
+      }
       const [base] = normalized.split("_");
       return base || normalized;
     }
@@ -7573,6 +8298,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function formatRouteLabel(routeId, fallback = "") {
       const base = getBaseRouteKey(routeId);
+      const staticMeta = staticRouteMetaForAny(routeId) || staticRouteMetaForAny(base);
+      if (normalizeOperator(staticMeta?.operator || "") === OPERATOR_TTSL) {
+        const short = String(staticMeta?.shortName || "").trim();
+        const long = String(staticMeta?.longName || "").trim();
+        if (short && long) return `${short} ${long}`;
+        if (short || long) return short || long;
+      }
       // For the aggregated base route label, prefer the metadata for the `_0` variant when available.
       let metaVariantId = routeId;
       if (routeId && !routeId.includes("_") && base) {
@@ -7604,6 +8336,48 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function formatVariantLabel(routeId, fallback = "") {
       // Keep variant labels clean (no "(Var. X)" suffix); use the best known name for that variant id.
       return formatRouteLabel(routeId, fallback);
+    }
+
+    function routeShortNameForDisplay(routeId) {
+      const normalized = normalizeRouteKey(routeId);
+      const base = getBaseRouteKey(normalized);
+      const metaVariant = normalized ? ROUTE_DETAILS.get(normalized) : null;
+      const metaBase = base ? BASE_ROUTE_DETAILS.get(base) : null;
+      const preferred = String(metaVariant?.shortName || metaBase?.shortName || "").trim();
+      if (preferred) return preferred;
+      const rawBase = String(base || normalized || "").trim();
+      if (!rawBase) return "";
+      const unscoped = rawBase.includes(":") ? rawBase.split(":").pop() : rawBase;
+      return String(unscoped || "").replace(/_.*$/, "").trim();
+    }
+
+    function isTcbTerminalFluvialGlobalRoute(routeId) {
+      const base = getBaseRouteKey(routeId);
+      if (!base) return false;
+      const entry = routeOptions.get(base);
+      if (!(entry?.operators instanceof Set) || !entry.operators.has(OPERATOR_TCB)) return false;
+      const shortName = routeShortNameForDisplay(base).toUpperCase();
+      return TCB_TERMINAL_FLUVIAL_GLOBAL_SHORT_NAMES.has(shortName);
+    }
+
+    function metroDisplayLabelForRoute(routeId) {
+      const normalized = normalizeRouteKey(routeId);
+      if (!normalized) return "";
+      const base = getBaseRouteKey(normalized);
+      const meta = metroRouteMetaForAny(normalized) || metroRouteMetaForAny(base);
+      return meta ? metroLineNameFromMeta(meta) : "";
+    }
+
+    function resolveSelectedRouteLabel(routeId) {
+      const metroLabel = metroDisplayLabelForRoute(routeId);
+      if (metroLabel) return metroLabel;
+      const defaultLabel = resolvePublicRouteLabel(routeId) || String(routeId || "").trim();
+      if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) return defaultLabel;
+      if (!isTcbTerminalFluvialGlobalRoute(routeId)) return defaultLabel;
+      const shortName = routeShortNameForDisplay(routeId);
+      return shortName
+        ? `${shortName} ${TCB_TERMINAL_FLUVIAL_GLOBAL_LABEL}`
+        : TCB_TERMINAL_FLUVIAL_GLOBAL_LABEL;
     }
 
     function refreshRouteLabels() {
@@ -7920,14 +8694,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function syncRouteDependentPanelVisibility() {
       const isMulti = isMultiRouteSelection();
+      const isMapOnly = isEffectiveMapOnlyMode();
       bodyEl?.classList.toggle("dashboard-multi-route", isMulti);
       if (openFleetTableBtn) {
-        openFleetTableBtn.disabled = isMulti || !hasSingleRouteSelection();
+        openFleetTableBtn.disabled = isMapOnly || isMulti || !hasSingleRouteSelection();
       }
       if (openTripsTableBtn) {
-        openTripsTableBtn.disabled = isMulti || !hasSingleRouteSelection();
+        openTripsTableBtn.disabled = isMapOnly || isMulti || !hasSingleRouteSelection();
       }
-      if (isMulti) {
+      if (isMulti || isMapOnly) {
         closeChartOverlay();
         closeFleetTableOverlay();
         closeTripsTableOverlay();
@@ -7936,7 +8711,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function updateRouteChartHintVisibility() {
       bodyEl?.classList.toggle("operator-map-only", isEffectiveMapOnlyMode());
-      const showHint = hasSingleRouteSelection();
+      const showHint = hasSingleRouteSelection() && !isEffectiveMapOnlyMode();
       if (routeChartHint) routeChartHint.classList.toggle("hidden", !showHint);
       syncRouteDependentPanelVisibility();
     }
@@ -7945,7 +8720,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (!routeInput || !routePreview) return false;
       const targetRouteId = (routeId || "").trim();
       if (!targetRouteId) return false;
-      routeInput.value = routeLabelById.get(targetRouteId) || targetRouteId;
+      routeInput.value = resolveSelectedRouteLabel(targetRouteId) || routeLabelById.get(targetRouteId) || targetRouteId;
       routeInput.dataset.focusCleared = "false";
       handleRouteInputCommit();
       return true;
@@ -7958,10 +8733,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const entries = [];
       routeOptions.forEach((data, baseId) => {
         const label = data.label || baseId;
+        const metroLabel = metroDisplayLabelForRoute(baseId);
         const translated = baseId.includes("_") ? translateRoute(baseId) : label;
-        const { code, codeBase } = parseRouteCodeParts(translated || label);
+        const displayLabel = metroLabel || translated || label;
+        const { code, codeBase } = parseRouteCodeParts(displayLabel);
         const haystacks = [
           (label || "").toLowerCase(),
+          (metroLabel || "").toLowerCase(),
           (translated || "").toLowerCase(),
           (code || "").toLowerCase(),
           (codeBase || "").toLowerCase()
@@ -7970,7 +8748,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const match = haystacks.some(h => h.includes(normalized));
           if (!match) return;
         }
-        entries.push({ id: baseId, label: translated || label });
+        entries.push({ id: baseId, label: displayLabel, isMetro: Boolean(metroLabel) });
       });
       const collator = new Intl.Collator("pt-PT", { numeric: true, sensitivity: "base" });
       entries.sort((a, b) => {
@@ -8206,7 +8984,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         return;
       }
       const selectedId = singleSelectedRouteId();
-      const displayLabel = resolvePublicRouteLabel(selectedId);
+      const displayLabel = resolveSelectedRouteLabel(selectedId);
+      const metroLabel = metroDisplayLabelForRoute(selectedId);
+      if (metroLabel) {
+        const style = pillStyleForRoute(selectedId);
+        routeSelectedText.innerHTML = `<span class="route-pill route-pill--inline" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(metroLabel)}</span>`;
+        routeSelectedPill.classList.remove("hidden");
+        routeInputWrapper.classList.add("pill-visible");
+        return;
+      }
       const { code } = parseRouteCodeParts(displayLabel);
       const pillText = code || displayLabel || selectedId;
       const style = pillStyleForRoute(displayLabel);
@@ -10400,6 +11186,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function openChartOverlay(type) {
+      if (isEffectiveMapOnlyMode()) return;
       if (isMultiRouteSelection()) return;
       if (!chartOverlay || !trendTimeline.length) return;
       closeFleetTableOverlay();
@@ -10489,6 +11276,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function openFleetTableOverlay() {
       if (!fleetTableOverlay || !fleetTableRows) return;
+      if (isEffectiveMapOnlyMode()) return;
       if (isMultiRouteSelection()) return;
       const lineIds = resolveOverlayVariantIds();
       if (!lineIds.length) return;
@@ -10522,6 +11310,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function openTripsTableOverlay() {
       if (!tripsTableOverlay || !tripsTableRows) return;
+      if (isEffectiveMapOnlyMode()) return;
       if (isMultiRouteSelection()) return;
       const lineId = (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) ? selectedVariant : selectedRoute;
       if (!lineId || lineId === ROUTE_FILTER_ALL) return;
@@ -10990,13 +11779,19 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function buildRouteContext() {
       const activeRouteId = hasSingleRouteSelection() ? singleSelectedRouteId() : selectedRoute;
-      const baseLabel = resolvePublicRouteLabel(activeRouteId) || "Carreira";
+      const baseLabel = resolveSelectedRouteLabel(activeRouteId) || "Carreira";
       let displayLabel = baseLabel;
       let routeIdForPill = activeRouteId;
       if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) {
         const variantEntry = routeOptions.get(activeRouteId)?.variants?.get(selectedVariant);
         displayLabel = variantEntry || formatRouteLabel(selectedVariant, baseLabel) || baseLabel;
         routeIdForPill = selectedVariant || activeRouteId;
+      }
+      const metroLabel = metroDisplayLabelForRoute(routeIdForPill) || metroDisplayLabelForRoute(activeRouteId);
+      if (metroLabel) {
+        const style = pillStyleForRoute(activeRouteId || routeIdForPill || displayLabel);
+        const html = `<span class="route-pill route-pill--inline" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(metroLabel)}</span>`;
+        return { text: metroLabel, html };
       }
       const { code } = parseRouteCodeParts(displayLabel || routeIdForPill);
       if (!code) return { text: displayLabel, html: null };
@@ -11182,7 +11977,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         routeInput.value = `${selectedRouteSet.size} carreiras selecionadas`;
       } else {
         const selectedId = singleSelectedRouteId();
-        routeInput.value = routeLabelById.get(selectedId) || selectedId;
+        routeInput.value = resolveSelectedRouteLabel(selectedId) || selectedId;
       }
     }
 
@@ -11237,8 +12032,14 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       list.forEach(v => {
         const variantId = normalizeOptionKey(v.routeId || v.routeLabel);
         if (!variantId) return;
-        const baseId = getBaseRouteKey(variantId);
+        const vehicleOperator = normalizeOperator(v?.operator || "");
+        const tcbScopedShort = (vehicleOperator === OPERATOR_TCB && v?.linha)
+          ? scopedGtfsId(OPERATOR_TCB, String(v.linha).trim())
+          : "";
+        const mappedBase = ROUTE_BASE_BY_VARIANT.get(variantId);
+        const baseId = normalizeRouteKey(mappedBase || tcbScopedShort || getBaseRouteKey(variantId));
         if (!baseId) return;
+        ROUTE_BASE_BY_VARIANT.set(variantId, baseId);
         const routeCategory = v.categoryResolved || v.category;
         if (registerRoute(baseId, variantId, { label: v.routeLabel, category: routeCategory })) dirty = true;
       });
@@ -11729,9 +12530,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return null;
     }
 
-    function normalizeDirectionForDisplay(directionId) {
+    function normalizeDirectionForDisplay(routeId, directionId) {
       if (!(directionId === 0 || directionId === 1)) return directionId;
-      // Requested: destinations are switched; invert mapping.
+      // Keep the historical 0/1 inversion only for CMET mappings.
+      if (!routeBelongsToOperator(routeId, OPERATOR_CMET)) return directionId;
       return directionId === 0 ? 1 : 0;
     }
 
@@ -11749,7 +12551,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         || null;
       const pair = splitRouteDestinations(meta?.longName || "");
       if (!pair) return "Sentido: —";
-      const idx = normalizeDirectionForDisplay(directionId) === 0 ? 0 : 1;
+      const idx = normalizeDirectionForDisplay(routeId, directionId) === 0 ? 0 : 1;
       const dest = pair[idx];
       const text = (dest || "").trim();
       return `Sentido: ${text || "—"}`;
@@ -11770,7 +12572,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function vehicleHasMatchedTripId(vehicle) {
-      if (String(vehicle?.operator || "").trim() === OPERATOR_CMET || (effectiveHasCmetOperator() && !effectiveHasCarrisOperator())) return true;
+      if (
+        String(vehicle?.operator || "").trim() === OPERATOR_CMET ||
+        String(vehicle?.operator || "").trim() === OPERATOR_TCB ||
+        (effectiveHasCmetOperator() && !effectiveHasCarrisOperator())
+      ) return true;
       const directTripId =
         vehicle?.tripId ??
         vehicle?.trip_id ??
@@ -11798,6 +12604,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const icon = pickVehicleIcon(cat);
       if (!vehicleHasMatchedTripId(vehicle)) {
         return { icon, color: VEHICLE_NO_TRIP_COLOR };
+      }
+      if (normalizeOperator(vehicle?.operator || "") === OPERATOR_TCB) {
+        return { icon, color: "#16a34a" };
       }
       if (normalizeOperator(vehicle?.operator || "") === OPERATOR_CMET) {
         const routeKey = normalizeOptionKey(vehicle?.routeId || vehicle?.linha || "");
@@ -12162,14 +12971,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const lat = Number(s?.stop_lat);
           const lon = Number(s?.stop_lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-          const stopBorderColor = s?._overlayArrowHidden ? STOP_MARKER_BORDER_COLOR : (s?.color || STOP_MARKER_BORDER_COLOR);
-          const arrowColor = s?._overlayArrowHidden ? "transparent" : STOP_MARKER_ARROW_COLOR;
+          const keepArrowVisible = isCarrisOrCmetOperatorValue(s?.operator || "");
+          const hideArrow = Boolean(s?._overlayArrowHidden) && !keepArrowVisible;
+          const stopBorderColor = hideArrow ? STOP_MARKER_BORDER_COLOR : (s?.color || STOP_MARKER_BORDER_COLOR);
+          const arrowColor = hideArrow ? "transparent" : STOP_MARKER_ARROW_COLOR;
           const payloadAngle = Number(s?.direction_angle);
           const neighborAngle = Number(routeNeighborAngles[idx]);
           const fallbackAngle = Number.isFinite(payloadAngle)
             ? payloadAngle
             : (Number.isFinite(neighborAngle) ? neighborAngle : 0);
-          const alignedAngle = s?._overlayArrowHidden
+          const alignedAngle = hideArrow
             ? fallbackAngle
             : closestSegmentAngleForPoint(
                 lat,
@@ -12797,6 +13608,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         this._globalStopsIconOpacity = 0.92;
 
         const empty = { type: "FeatureCollection", features: [] };
+        const stopSizeScaleExpr = ["to-number", ["coalesce", ["get", "size_scale"], 1], 1];
         if (!this.map.getSource(this.overlaySourceId)) {
           this.map.addSource(this.overlaySourceId, { type: "geojson", data: empty });
         }
@@ -12859,8 +13671,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               "icon-rotate": ["-", 90, ["coalesce", ["get", "direction_angle"], 0]],
               "icon-rotation-alignment": "map",
               "icon-anchor": "center",
-              // Offset the triangle slightly forward (in icon pixels). Note: this offset is in screen space,
-              // so keep it subtle; the corrected rotation handles the direction.
+              // Offset the triangle slightly forward so direction remains legible over stop circles.
               "icon-offset": [0, -1.7]
             },
             paint: {
@@ -12895,7 +13706,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             filter: ["==", ["get", "kind"], "global_stop"],
             layout: {
               "icon-image": ["coalesce", ["get", "icon"], "stop-pie-default"],
-              "icon-size": ["interpolate", ["linear"], ["zoom"], 10.5, 0.3, 11.5, 0.55, 12.5, 0.85, 15, 1.05],
+              "icon-size": ["*", ["interpolate", ["linear"], ["zoom"], 10.5, 0.3, 11.5, 0.55, 12.5, 0.85, 15, 1.05], stopSizeScaleExpr],
               "icon-allow-overlap": true,
               "icon-ignore-placement": true,
               "icon-anchor": "center"
@@ -12913,7 +13724,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             filter: ["==", ["get", "kind"], "global_stop"],
             layout: {
               "icon-image": "stop-triangle",
-              "icon-size": 0.52,
+              "icon-size": ["*", 0.52, stopSizeScaleExpr],
               "icon-allow-overlap": true,
               "icon-ignore-placement": true,
               // Same convention as route stops: degrees from East (0=E, 90=N) -> rotate by (90 - angle)
@@ -12944,6 +13755,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             }
           }, "route-stop-triangles");
         }
+        // Keep directional triangles rendered above stop circles.
+        try { this.map.moveLayer("route-stops"); } catch (e) {}
+        try { this.map.moveLayer("route-stop-triangles"); } catch (e) {}
         // Route labels above stops are rendered via DOM markers for richer pill styling; keep this layer disabled.
         if (this.map.getLayer("global-stops-routes")) {
           try { this.map.removeLayer("global-stops-routes"); } catch (e) {}
@@ -13018,6 +13832,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           stopTilesAvailability = false;
           return false;
         }
+        const stopSizeScaleExpr = ["to-number", ["get", "size_scale"], 1];
         // Only enable tile source when availability is confirmed true; otherwise, rely on GeoJSON flow.
         if (stopTilesAvailability === null) {
           prewarmStopTilesAvailability()
@@ -13063,7 +13878,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               "source-layer": STOP_TILE_LAYER_NAME,
               layout: {
                 "icon-image": ["coalesce", ["get", "icon"], "stop-pie-default"],
-                "icon-size": ["interpolate", ["linear"], ["zoom"], 10.5, 0.3, 11.5, 0.55, 12.5, 0.85, 15, 1.05],
+                "icon-size": ["*", ["interpolate", ["linear"], ["zoom"], 10.5, 0.3, 11.5, 0.55, 12.5, 0.85, 15, 1.05], stopSizeScaleExpr],
                 "icon-allow-overlap": true,
                 "icon-ignore-placement": true,
                 "icon-anchor": "center",
@@ -13082,7 +13897,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               "source-layer": STOP_TILE_LAYER_NAME,
               layout: {
                 "icon-image": "stop-triangle",
-                "icon-size": 0.52,
+                "icon-size": ["*", 0.52, stopSizeScaleExpr],
                 "icon-allow-overlap": true,
                 "icon-ignore-placement": true,
                 "icon-rotate": ["-", 90, ["coalesce", ["get", "direction_angle"], 0]],
@@ -13177,15 +13992,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const lat = Number(s?.stop_lat);
           const lon = Number(s?.stop_lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-	          const stopBorderColor = s?._overlayArrowHidden ? STOP_MARKER_BORDER_COLOR : (s?.color || STOP_MARKER_BORDER_COLOR);
-	          const stopArrowColor = s?._overlayArrowHidden ? "transparent" : STOP_MARKER_ARROW_COLOR;
-	          const stopId = s?.stop_id || "";
+          const keepArrowVisible = isCarrisOrCmetOperatorValue(s?.operator || "");
+          const hideArrow = Boolean(s?._overlayArrowHidden) && !keepArrowVisible;
+          const stopBorderColor = hideArrow ? STOP_MARKER_BORDER_COLOR : (s?.color || STOP_MARKER_BORDER_COLOR);
+          const stopArrowColor = hideArrow ? "transparent" : STOP_MARKER_ARROW_COLOR;
+          const stopId = s?.stop_id || "";
           const payloadAngle = Number(s?.direction_angle);
           const neighborAngle = Number(routeNeighborAngles[idx]);
           const fallbackAngle = Number.isFinite(payloadAngle)
             ? payloadAngle
             : (Number.isFinite(neighborAngle) ? neighborAngle : 0);
-          const alignedAngle = s?._overlayArrowHidden
+          const alignedAngle = hideArrow
             ? fallbackAngle
             : closestSegmentAngleForPoint(
                 lat,
@@ -13193,7 +14010,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
                 selectShapeSegmentsForStop(segmentIndex, s),
                 fallbackAngle
               );
-	          features.push({
+          features.push({
             type: "Feature",
             properties: {
               kind: "stop",
@@ -13203,6 +14020,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               stop_id: stopId,
               stop_name: s?.stop_name || "",
               operator: s?.operator || null,
+              size_scale: 1,
               direction_angle: alignedAngle
             },
             geometry: { type: "Point", coordinates: [lon, lat] }
@@ -13353,22 +14171,29 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           if (stopId && routes.length) {
             stopRoutesCache.set(stopRoutesCacheKey(stopId, s?.operator || OPERATOR_CARRIS), dedupeRouteLabels(routes));
           }
-          const finalColors = [STOP_MARKER_BORDER_COLOR];
+          const operator = s?.operator || "";
+          const isMetroStop = isMetroOperatorValue(operator);
+          const isTrainStop = isTrainStopOperatorValue(operator);
+          const primaryColor = isTrainStop
+            ? TRAIN_STOP_MARKER_BORDER_COLOR
+            : (isMetroStop ? primaryStopColorFromRoutes(routes) : STOP_MARKER_BORDER_COLOR);
+          const finalColors = [primaryColor];
           const comboKey = finalColors.length ? finalColors.join("|") : "default";
           if (!comboColors.has(comboKey)) comboColors.set(comboKey, finalColors);
-          const primaryColor = STOP_MARKER_BORDER_COLOR;
-          const hasReliableAngle = Number.isFinite(angleRaw);
-          const arrowColor = Number.isFinite(angleRaw)
+          const showArrow = shouldShowStopDirectionArrow(operator);
+          const arrowColor = showArrow && (Number.isFinite(angleRaw) || Number.isFinite(local))
             ? STOP_MARKER_ARROW_COLOR
-            : (String(s?.operator || OPERATOR_CARRIS) === OPERATOR_CARRIS ? STOP_MARKER_ARROW_COLOR : "transparent");
+            : "transparent";
           features.push({
             type: "Feature",
             properties: {
               kind: "global_stop",
               stop_id: stopId,
               stop_name: s?.stop_name || "",
-              operator: s?.operator || null,
+              operator: operator || null,
               direction_angle: Number.isFinite(angle) ? angle : 0,
+              is_train_stop: isTrainStop ? 1 : 0,
+              size_scale: isTrainStop ? 1.35 : (isMetroStop ? 1.15 : 1),
               routes,
               routes_label: routesLabel,
               colors: finalColors,
@@ -13844,7 +14669,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         }
         const ambiguousDirections = dirSet.has(0) && dirSet.has(1);
         const routeKey = normalizeOptionKey(pick?.routeId || items[0]?.routeId || "");
-        const shouldHideArrow = ambiguousDirections && !isCircularTripsRoute(routeKey);
+        const normalizedStopOperator = normalizeOperator(pick?.operator || items[0]?.operator || "");
+        const isCarrisOrCmetStop = hasCarrisOperator(normalizedStopOperator) || hasCmetOperator(normalizedStopOperator);
+        const shouldHideArrow = isCarrisOrCmetStop
+          ? false
+          : (ambiguousDirections && !isCircularTripsRoute(routeKey));
         out.push({
           ...pick,
           _overlayArrowHidden: shouldHideArrow
@@ -14360,7 +15189,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (!routes || routes.length === 0 || !container) return;
         const displayRoutes = routes;
         const pillsHtml = displayRoutes.map(routeLabel => {
-          const { code } = parseRouteCodeParts(routeLabel);
+          const code = displayRouteCode(routeLabel, resolveBaseIdFromLabel(routeLabel) || routeLabel);
           const style = pillStyleForRoute(routeLabel);
           const bg = style?.bg || "#444";
           const fg = style?.fg || "#fff";
@@ -14427,7 +15256,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (selectedIds.length === 1) {
         if (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL) return [normalizeOptionKey(selectedVariant)];
         // "Todas as variantes": render every variant that currently has active vehicles.
-        return activeVariantIdsForSelectedRoute(selectedIds[0]);
+        const activeVariants = activeVariantIdsForSelectedRoute(selectedIds[0]);
+        return activeVariants;
       }
       const out = new Set();
       selectedIds.forEach((routeId) => {
@@ -14502,8 +15332,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         return variantLabel || selectedVariant || selectedRoute;
       }
       if (selectedRoute && selectedRoute !== ROUTE_FILTER_ALL) {
-        const entry = routeOptions.get(selectedRoute);
-        return entry?.label || selectedRoute;
+        return resolveSelectedRouteLabel(selectedRoute) || selectedRoute;
       }
       return null;
     }
@@ -14975,8 +15804,24 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function routeBelongsToCmet(routeId) {
+      return routeBelongsToOperator(routeId, OPERATOR_CMET);
+    }
+
+    function routeBelongsToOperator(routeId, operator) {
+      const op = normalizeOperator(operator);
       const normalized = normalizeOptionKey(routeId);
       const base = getBaseRouteKey(normalized);
+      const entry = routeOptions.get(base) || routeOptions.get(normalized);
+      if (entry?.operators instanceof Set && entry.operators.has(op)) return true;
+      if (op === OPERATOR_CARRIS && entry?.operators instanceof Set) {
+        if (!entry.operators.size || entry.operators.has(OPERATOR_BOTH)) return true;
+      }
+      if (op === OPERATOR_CP && normalized.startsWith(`${OPERATOR_CP}:`)) return true;
+      if (op === OPERATOR_METRO && normalized.startsWith(`${OPERATOR_METRO}:`)) return true;
+      if (op === OPERATOR_TTSL && normalized.startsWith(`${OPERATOR_TTSL}:`)) return true;
+      if (op === OPERATOR_FERTAGUS && normalized.startsWith(`${OPERATOR_FERTAGUS}:`)) return true;
+      if (op === OPERATOR_TCB && normalized.startsWith(`${OPERATOR_TCB}:`)) return true;
+      if (op !== OPERATOR_CMET) return false;
       if (cmetRoutesById.has(normalized) || cmetRoutesById.has(base)) return true;
       for (const candidate of cmetRoutesById.values()) {
         const candidateId = String(candidate?.id || "").trim();
@@ -14992,6 +15837,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return false;
     }
 
+    function routeBelongsToStaticGtfs(routeId) {
+      return Array.from(OPERATOR_EXTERNAL_GTFS).some(operator => routeBelongsToOperator(routeId, operator));
+    }
+
     function selectionUsesOnlyCmetRoutes(routeIds = selectedRouteIds()) {
       const ids = normalizeOverlayIds(routeIds);
       if (!ids.length) return false;
@@ -15001,7 +15850,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function selectionUsesOnlyCarrisRoutes(routeIds = selectedRouteIds()) {
       const ids = normalizeOverlayIds(routeIds);
       if (!ids.length) return false;
-      return ids.every((id) => !routeBelongsToCmet(id));
+      return ids.every((id) => routeBelongsToOperator(id, OPERATOR_CARRIS));
     }
 
     function selectionHasCmetRoutes(routeIds = selectedRouteIds()) {
@@ -15010,9 +15859,21 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return ids.some(routeBelongsToCmet);
     }
 
+    function selectionHasTcbRoutes(routeIds = selectedRouteIds()) {
+      const ids = normalizeOverlayIds(routeIds);
+      if (!ids.length) return false;
+      return ids.some((id) => routeBelongsToOperator(id, OPERATOR_TCB));
+    }
+
+    function selectionHasCarrisRoutes(routeIds = selectedRouteIds()) {
+      const ids = normalizeOverlayIds(routeIds);
+      if (!ids.length) return false;
+      return ids.some((id) => routeBelongsToOperator(id, OPERATOR_CARRIS));
+    }
+
     function effectiveHasCarrisOperator() {
       if (!hasRouteSelection()) return hasCarrisOperator();
-      return !selectionUsesOnlyCmetRoutes();
+      return selectionHasCarrisRoutes();
     }
 
     function effectiveHasCmetOperator() {
@@ -15020,20 +15881,27 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return selectionHasCmetRoutes();
     }
 
+    function effectiveHasTcbOperator() {
+      if (!hasRouteSelection()) return hasTcbOperator();
+      return selectionHasTcbRoutes();
+    }
+
     function isEffectiveMapOnlyMode() {
       if (!hasRouteSelection()) return isMapOnlyOperatorMode();
-      return selectionUsesOnlyCmetRoutes();
+      return selectionHasCmetRoutes() || selectionHasTcbRoutes() || !effectiveHasCarrisOperator();
     }
 
     function splitOverlayRouteIdsByOperator(routeIds = []) {
       const ids = normalizeOverlayIds(routeIds);
       const carris = [];
       const cmet = [];
+      const externalGtfs = [];
       ids.forEach((id) => {
         if (routeBelongsToCmet(id)) cmet.push(id);
+        else if (routeBelongsToStaticGtfs(id)) externalGtfs.push(id);
         else carris.push(id);
       });
-      return { carris, cmet };
+      return { carris, cmet, externalGtfs };
     }
 
     function mergeRouteOverlayPayloads(payloads = [], routeIds = []) {
@@ -15074,8 +15942,152 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return { routeIds: normalizeOverlayIds(routeIds), shapes, stops };
     }
 
+    async function fetchStaticGtfsRouteOverlayPayload(routeIds = []) {
+      const ids = normalizeOverlayIds(routeIds);
+      const shapes = [];
+      const stops = [];
+      const seenShape = new Set();
+      const seenStop = new Set();
+      for (const routeIdRaw of ids) {
+        const routeVariantId = String(routeIdRaw || "").trim();
+        if (!routeVariantId) continue;
+        const cpShapeVariant = parseCpShapeVariantId(routeVariantId);
+        const routeId = cpShapeVariant?.routeId || routeVariantId;
+        const shapeFilterId = cpShapeVariant?.shapeId || "";
+        const routeOperator = routeId.split(":")[0];
+        const feed = await loadStaticGtfsFeed(routeOperator).catch(() => null);
+        if (!feed) continue;
+        const routeMeta = feed.routesById.get(routeId) || null;
+        const allRouteTrips = Array.isArray(feed.tripsByRouteId.get(routeId)) ? feed.tripsByRouteId.get(routeId) : [];
+        const routeTrips = shapeFilterId
+          ? allRouteTrips.filter((trip) => String(trip?.shapeId || "").trim() === shapeFilterId)
+          : allRouteTrips;
+        const routeColor = routeOperator === OPERATOR_TCB
+          ? (staticGtfsConfig(routeOperator)?.color || "#16a34a")
+          : (normalizeHexColor(routeMeta?.color) || staticGtfsConfig(routeOperator)?.color || "#64748b");
+        const shapeCandidates = new Map();
+        for (const trip of routeTrips) {
+          const shapeId = String(trip?.shapeId || "").trim();
+          if (!shapeId) continue;
+          if (!feed.shapePointsById.has(shapeId)) continue;
+          const directionId = normalizeDirectionId(trip?.directionId);
+          const key = `${directionId ?? "x"}|${shapeId}`;
+          if (!shapeCandidates.has(key)) {
+            shapeCandidates.set(key, { shapeId, directionId });
+          }
+        }
+        shapeCandidates.forEach(({ shapeId, directionId }) => {
+          const points = Array.isArray(feed.shapePointsById.get(shapeId)) ? feed.shapePointsById.get(shapeId) : [];
+          if (points.length < 2) return;
+          const shapeKey = `${routeId}|${directionId ?? "x"}|${shapeId}`;
+          if (seenShape.has(shapeKey)) return;
+          seenShape.add(shapeKey);
+          shapes.push({
+            routeId,
+            directionId,
+            color: routeColor,
+            geojson: {
+              type: "FeatureCollection",
+              features: [{
+                type: "Feature",
+                properties: { route_id: routeId, direction_id: directionId, operator: routeOperator },
+                geometry: {
+                  type: "LineString",
+                  coordinates: points.map(pt => [Number(pt.lon), Number(pt.lat)])
+                }
+              }]
+            }
+          });
+        });
+
+        // Fallback when feed has no shapes.txt (or no shape linked): synthesize polylines from stop sequences.
+        if (!shapeCandidates.size || !Array.from(shapeCandidates.values()).some(({ shapeId }) => (feed.shapePointsById.get(shapeId) || []).length >= 2)) {
+          const routeRows = Array.isArray(feed.stopTimesByRouteId.get(routeId)) ? feed.stopTimesByRouteId.get(routeId) : [];
+          const byDirTrip = new Map();
+          for (const row of routeRows) {
+            const directionId = normalizeDirectionId(row?.direction_id);
+            const tripId = String(row?.trip_id || "").trim();
+            const stopId = String(row?.stop_id || "").trim();
+            const stopSequence = normalizeStopSequence(row?.stop_sequence);
+            if (!tripId || !stopId || stopSequence == null) continue;
+            const key = `${directionId ?? "x"}|${tripId}`;
+            if (!byDirTrip.has(key)) byDirTrip.set(key, []);
+            byDirTrip.get(key).push({ stopId, stopSequence, directionId });
+          }
+          const bestTripByDirection = new Map();
+          byDirTrip.forEach((rows, key) => {
+            const [dirKey] = key.split("|");
+            const existing = bestTripByDirection.get(dirKey);
+            if (!existing || rows.length > existing.length) {
+              bestTripByDirection.set(dirKey, rows);
+            }
+          });
+          bestTripByDirection.forEach((rows, dirKey) => {
+            const directionId = dirKey === "x" ? null : normalizeDirectionId(dirKey);
+            const ordered = [...rows].sort((a, b) => Number(a.stopSequence) - Number(b.stopSequence));
+            const coords = ordered
+              .map((entry) => feed.stopsById.get(entry.stopId))
+              .map((stop) => [Number(stop?.stop_lon), Number(stop?.stop_lat)])
+              .filter(([lon, lat]) => Number.isFinite(lat) && Number.isFinite(lon));
+            if (coords.length < 2) return;
+            const shapeKey = `${routeId}|${directionId ?? "x"}|synthetic`;
+            if (seenShape.has(shapeKey)) return;
+            seenShape.add(shapeKey);
+            shapes.push({
+              routeId,
+              directionId,
+              color: routeColor,
+              geojson: {
+                type: "FeatureCollection",
+                features: [{
+                  type: "Feature",
+                  properties: { route_id: routeId, direction_id: directionId, operator: routeOperator, synthetic: true },
+                  geometry: {
+                    type: "LineString",
+                    coordinates: coords
+                  }
+                }]
+              }
+            });
+          });
+        }
+
+        const tripIdsInSelection = new Set(routeTrips.map((trip) => String(trip?.tripId || "").trim()).filter(Boolean));
+        const baseRouteStopTimes = Array.isArray(feed.stopTimesByRouteId.get(routeId)) ? feed.stopTimesByRouteId.get(routeId) : [];
+        const routeStopTimes = shapeFilterId
+          ? baseRouteStopTimes.filter((row) => tripIdsInSelection.has(String(row?.trip_id || "").trim()))
+          : baseRouteStopTimes;
+        for (const row of routeStopTimes) {
+          const stopId = String(row?.stop_id || "").trim();
+          const directionId = normalizeDirectionId(row?.direction_id);
+          const stopMeta = feed.stopsById.get(stopId);
+          const lat = Number(stopMeta?.stop_lat);
+          const lon = Number(stopMeta?.stop_lon);
+          if (!stopId || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+          const key = `${routeId}|${directionId ?? "x"}|${stopId}`;
+          if (seenStop.has(key)) continue;
+          seenStop.add(key);
+          const routeLabel = resolvePublicRouteLabel(routeId) || routeMeta?.shortName || routeMeta?.longName || routeId;
+          stops.push({
+            stop_id: stopId,
+            stop_name: String(stopMeta?.stop_name || stopId),
+            stop_lat: lat,
+            stop_lon: lon,
+            operator: routeOperator,
+            routeId,
+            directionId,
+            color: routeColor,
+            routes: [routeLabel],
+            direction_angle: null,
+            is_terminal: false
+          });
+        }
+      }
+      return { routeIds: ids, shapes, stops };
+    }
+
     async function fetchMixedRouteOverlayPayload(routeIds = [], options = {}) {
-      const { carris, cmet } = splitOverlayRouteIdsByOperator(routeIds);
+      const { carris, cmet, externalGtfs } = splitOverlayRouteIdsByOperator(routeIds);
       const payloads = [];
       if (carris.length) {
         const carrisPayload = await fetchRouteOverlayPayload(carris, options);
@@ -15084,6 +16096,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (cmet.length) {
         const cmetPayload = await fetchCmetRouteOverlayPayload(cmet);
         if (cmetPayload) payloads.push(cmetPayload);
+      }
+      if (externalGtfs.length) {
+        const staticPayload = await fetchStaticGtfsRouteOverlayPayload(externalGtfs);
+        if (staticPayload) payloads.push(staticPayload);
       }
       return mergeRouteOverlayPayloads(payloads, routeIds);
     }
@@ -15098,8 +16114,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const controller = new AbortController();
       routeOverlayPrefetchAbortController = controller;
       try {
-        const { carris, cmet } = splitOverlayRouteIdsByOperator(unseen);
-        if (carris.length && cmet.length) {
+        const { carris, cmet, externalGtfs } = splitOverlayRouteIdsByOperator(unseen);
+        if ((carris.length && cmet.length) || externalGtfs.length) {
           await fetchMixedRouteOverlayPayload(unseen, { signal: controller.signal });
         } else if (cmet.length) {
           await fetchCmetRouteOverlayPayload(unseen);
@@ -15137,9 +16153,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       cancelRouteOverlayPrefetch();
       const ids = normalizeOverlayIds(resolveOverlayVariantIds());
       const wantKey = ids.length ? JSON.stringify(ids) : null;
-      const { carris: carrisIds, cmet: cmetIds } = splitOverlayRouteIdsByOperator(ids);
+      const { carris: carrisIds, cmet: cmetIds, externalGtfs: externalGtfsIds } = splitOverlayRouteIdsByOperator(ids);
 
-      if (cmetIds.length && !carrisIds.length) {
+      if (cmetIds.length && !carrisIds.length && !externalGtfsIds.length) {
         if (!wantKey) {
           currentOverlayKey = null;
           currentOverlayFitKey = null;
@@ -15174,7 +16190,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       overlayInflight = (async () => {
         try {
           if (adapter.ready instanceof Promise) await adapter.ready;
-          const payload = (carrisIds.length && cmetIds.length)
+          const payload = ((carrisIds.length && cmetIds.length) || externalGtfsIds.length)
             ? await fetchMixedRouteOverlayPayload(ids, { forceNetwork: force })
             : await fetchRouteOverlayPayload(ids, {
                 forceNetwork: force,
@@ -15212,6 +16228,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       cmetStopsById = new Map(rows.map(stop => [String(stop?.id || "").trim(), stop]).filter(([id]) => id));
       cmetVisibleStopsCache.clear();
       return cmetStopsCatalog;
+    }
+
+    async function ensureTcbStopsCatalog() {
+      if (Array.isArray(tcbStopsCatalog)) return tcbStopsCatalog;
+      const payload = await fetchFromEndpoints(TCB_STOPS_ENDPOINTS, {}, { timeoutMs: 20000, cacheKey: "tcb-stops" });
+      const rows = Array.isArray(payload)
+        ? payload
+        : (Array.isArray(payload?.results) ? payload.results : (Array.isArray(payload?.stops) ? payload.stops : []));
+      tcbStopsCatalog = rows;
+      return tcbStopsCatalog;
     }
 
     async function getVisibleCmetStops(bounds, limit, { cacheSuffix = "default" } = {}) {
@@ -15257,6 +16283,36 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return dedupeRouteLabels(routeIds
         .map(routeId => resolvePublicRouteLabel(routeId) || formatRouteLabel(routeId, routeId) || String(routeId || "").trim())
         .filter(Boolean));
+    }
+
+    async function getVisibleStaticGtfsStops(bounds, limit = GLOBAL_STOPS_LIMIT_MIN) {
+      if (!bounds) return [];
+      const safeLimit = Math.max(1, Number(limit) || GLOBAL_STOPS_LIMIT_MIN);
+      const out = [];
+      for (const operator of Object.keys(STATIC_GTFS_OPERATORS)) {
+        try {
+          const feed = await loadStaticGtfsFeed(operator);
+          const visibleRows = mapStaticStopRowsToVisibleStops(feed?.visibleStopRows || [], bounds, safeLimit);
+          for (const row of visibleRows) {
+            const stopId = String(row?.stop_id || "").trim();
+            const routeIds = Array.from(feed?.stopRouteIdsByStopId?.get?.(stopId) || []);
+            const routeLabels = dedupeRouteLabels(routeIds.map(routeId => resolvePublicRouteLabel(routeId) || routeId).filter(Boolean));
+            out.push({
+              stop_id: stopId,
+              stop_name: String(row?.stop_name || stopId || "Paragem"),
+              stop_lat: Number(row?.stop_lat),
+              stop_lon: Number(row?.stop_lon),
+              operator,
+              routes: routeLabels,
+              direction_angle: null,
+              is_terminal: false
+            });
+          }
+        } catch (err) {
+          console.warn(`Falha ao carregar paragens GTFS (${operator}):`, err);
+        }
+      }
+      return out;
     }
 
     async function fetchCmetPattern(patternId) {
@@ -15449,6 +16505,18 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             const stops = await ensureCmetStopsCatalog();
             const stop = cmetStopsById.get(key) || stops.find(entry => String(entry?.id || "").trim() === key);
             const routes = dedupeRouteLabels(cmetRouteLabelsForStop(stop));
+            stopRoutesCache.set(cacheKey, routes);
+            return routes;
+          }
+          if (isStaticGtfsOperator(stopOperator)) {
+            await loadRoutesCatalog();
+            const feed = await loadStaticGtfsFeed(stopOperator);
+            const routeIds = Array.from(feed?.stopRouteIdsByStopId?.get?.(key) || []);
+            const routes = dedupeRouteLabels(
+              routeIds
+                .map(routeId => resolvePublicRouteLabel(routeId) || routeId)
+                .filter(Boolean)
+            );
             stopRoutesCache.set(cacheKey, routes);
             return routes;
           }
@@ -15876,13 +16944,29 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const { stopId, stopName, target, routes, schedule } = activeStopPopup;
       if (!stopId || !target || !schedule) return;
       const routeList = Array.isArray(routes) ? routes : [];
-      applyStopPopupContent(target, {
-        stopName,
-        stopId,
-        loading: false,
-        routes: routeList,
-        schedule
-      });
+      if (!isMobileViewport()) {
+        const popupRoot = popupContentRootElement(target);
+        const scheduleEl = popupRoot?.querySelector?.(".stop-schedule");
+        if (scheduleEl) {
+          scheduleEl.innerHTML = renderStopSchedule(schedule);
+        } else {
+          applyStopPopupContent(target, {
+            stopName,
+            stopId,
+            loading: false,
+            routes: routeList,
+            schedule
+          });
+        }
+      } else {
+        applyStopPopupContent(target, {
+          stopName,
+          stopId,
+          loading: false,
+          routes: routeList,
+          schedule
+        });
+      }
       if (isMobileViewport()) {
         showMobileStopCard({ stopName, stopId, schedule, routes: routeList });
       }
@@ -15929,6 +17013,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hh = String(Math.max(0, hours)).padStart(2, "0");
       const mm = String(Math.max(0, mins)).padStart(2, "0");
       return `${hh}:${mm}`;
+    }
+
+    function formatClockFromEpochMs(epochMs) {
+      const ts = Number(epochMs);
+      if (!Number.isFinite(ts)) return "—";
+      const date = new Date(ts);
+      const h = date.getHours();
+      const m = date.getMinutes();
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return "—";
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     }
 
     function getNowSeconds() {
@@ -16018,11 +17112,26 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         .map(value => normalizeRouteKey(value))
         .filter(Boolean);
       const filterSet = new Set(normalizedFilters);
-      const hasVariantFilter = normalizedFilters.some(value => String(value).includes("_"));
+      const cpShapeRouteSet = new Set(
+        normalizedFilters
+          .map((value) => parseCpShapeVariantId(value)?.routeId || "")
+          .filter(Boolean)
+      );
+      const hasVariantFilter = normalizedFilters.some((value) => {
+        if (String(value).includes("_")) return true;
+        if (parseCpShapeVariantId(value)) return true;
+        const base = getBaseRouteKey(value);
+        return Boolean(base && base !== value);
+      });
       const filterBaseSet = hasVariantFilter
         ? new Set(
             normalizedFilters
-              .filter(value => !String(value).includes("_"))
+              .filter((value) => {
+                if (String(value).includes("_")) return false;
+                if (parseCpShapeVariantId(value)) return false;
+                const base = getBaseRouteKey(value);
+                return !base || base === value;
+              })
               .map(value => getBaseRouteKey(value))
               .filter(Boolean)
           )
@@ -16032,6 +17141,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const routeId = normalizeRouteKey(routeIdRaw);
         const routeBase = routeBaseFromAny(routeBaseRaw || routeId);
         if (routeId && filterSet.has(routeId)) return true;
+        if (routeId && cpShapeRouteSet.has(routeId)) return true;
         if (!hasVariantFilter) {
           return Boolean(
             (routeId && filterBaseSet.has(routeId)) ||
@@ -16048,6 +17158,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const byKey = new Map();
       for (const st of Array.isArray(stopTimes) ? stopTimes : []) {
         const tripId = st?.trip_id ?? st?.tripId ?? st?.tripID;
+        const tripKey = normalizeTripId(tripId);
         const rawTime = st?.departure_time ?? st?.arrival_time ?? st?.departureTime ?? st?.arrivalTime;
         const seconds = timeToSeconds(rawTime);
         if (!Number.isFinite(seconds)) continue;
@@ -16056,14 +17167,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const routeBase = routeId ? getBaseRouteKey(routeId) : "";
         if (!matchesRouteFilter(routeId, routeBase)) continue;
         const directionId = normalizeDirectionId(st?.direction_id ?? st?.directionId ?? st?.direction);
-        const key = `route:${routeId || "?"}|${directionId ?? "x"}|${seconds}`;
+        const tripDisambiguator = directionId == null ? `|trip:${tripKey || "?"}` : "";
+        const key = `route:${routeId || "?"}|${directionId ?? "x"}|${seconds}${tripDisambiguator}`;
         const existing = byKey.get(key);
         if (existing) {
           existing.count += 1;
-          if (tripId) existing.tripIds.add(String(tripId));
+          if (tripKey) existing.tripIds.add(tripKey);
         } else {
           byKey.set(key, {
-            tripIds: new Set(tripId ? [String(tripId)] : []),
+            tripIds: new Set(tripKey ? [tripKey] : []),
             seconds,
             rawTime,
             routeId,
@@ -16829,16 +17941,73 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return String(row?.route_id ?? row?.routeId ?? row?.line_id ?? row?.lineId ?? "").trim();
     }
 
+    function resolveStaticTripHeadsign(feed, row = {}) {
+      const direct = String(row?.headsign || "").trim();
+      if (direct) return direct;
+      const tripId = String(row?.trip_id || "").trim();
+      if (!tripId) return "";
+      const tripMeta = feed?.tripsById?.get?.(tripId);
+      const metaHeadsign = String(tripMeta?.headsign || "").trim();
+      if (metaHeadsign) return metaHeadsign;
+      const terminal = String(feed?.terminalStopNameByTripId?.get?.(tripId) || "").trim();
+      if (terminal) return terminal;
+      return "";
+    }
+
+    function activeStaticServicesForDate(feed, date = new Date()) {
+      const calendarByServiceId = feed?.calendarByServiceId;
+      const calendarDatesByServiceId = feed?.calendarDatesByServiceId;
+      const cache = feed?.activeServicesCacheByDate;
+      const dateKey = serviceDateYmdCompact(date);
+      if (cache instanceof Map && cache.has(dateKey)) {
+        return cache.get(dateKey);
+      }
+      const weekdayField = gtfsWeekdayField(date);
+      const active = new Set();
+      const hasCalendar = calendarByServiceId instanceof Map && calendarByServiceId.size > 0;
+      if (hasCalendar) {
+        calendarByServiceId.forEach((entry, serviceId) => {
+          const startDate = String(entry?.startDate || "");
+          const endDate = String(entry?.endDate || "");
+          if (startDate && dateKey < startDate) return;
+          if (endDate && dateKey > endDate) return;
+          if (entry?.[weekdayField]) active.add(serviceId);
+        });
+      }
+      if (calendarDatesByServiceId instanceof Map && calendarDatesByServiceId.size > 0) {
+        calendarDatesByServiceId.forEach((datesMap, serviceId) => {
+          const exceptionType = String(datesMap?.get?.(dateKey) || "");
+          if (exceptionType === "1") active.add(serviceId);
+          if (exceptionType === "2") active.delete(serviceId);
+        });
+      }
+      const result = (!hasCalendar && !(calendarDatesByServiceId instanceof Map && calendarDatesByServiceId.size))
+        ? null
+        : active;
+      if (cache instanceof Map) cache.set(dateKey, result);
+      return result;
+    }
+
     async function requestStopSchedule(stopId, options = {}) {
       const contextKey = options.contextKey ?? buildScheduleContextKey();
       const key = (stopId == null) ? "" : String(stopId);
       if (!key) return { status: "idle", contextKey };
-      const stopOperator = normalizeOperator(options.operator || activeStopPopup?.operator || "");
-      const useCmetScheduleSource = stopOperator === OPERATOR_CMET || (effectiveHasCmetOperator() && (
-        currentOperator === OPERATOR_CMET ||
-        selectionUsesOnlyCmetRoutes() ||
-        !hasRouteSelection()
-      ));
+      const rawStopOperator = String(options.operator ?? activeStopPopup?.operator ?? "").trim();
+      const hasExplicitStopOperator = rawStopOperator.length > 0;
+      const stopOperator = hasExplicitStopOperator ? normalizeOperator(rawStopOperator) : null;
+      const allowImplicitCmetSource =
+        !hasExplicitStopOperator &&
+        effectiveHasCmetOperator() &&
+        (
+          currentOperator === OPERATOR_CMET ||
+          selectionUsesOnlyCmetRoutes() ||
+          (!hasRouteSelection() && !effectiveHasCarrisOperator())
+        );
+      const useCmetScheduleSource = stopOperator === OPERATOR_CMET || allowImplicitCmetSource;
+      const implicitStaticOperator = !hasExplicitStopOperator && isStaticGtfsOperator(currentOperator)
+        ? normalizeOperator(currentOperator)
+        : null;
+      const staticScheduleOperator = isStaticGtfsOperator(stopOperator) ? stopOperator : implicitStaticOperator;
       if (useCmetScheduleSource) {
         try {
           let cmetStopLookupId = key;
@@ -16936,7 +18105,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
                   etaMinutes,
                   etaTargetTs: targetMs,
                   seconds: Math.floor(targetMs / 1000),
-                  clock: String(row?.estimated_arrival || row?.observed_arrival || row?.scheduled_arrival || "—")
+                  clock: formatClockFromEpochMs(targetMs)
                 };
                 const existing = realtimeByKey.get(dedupeKey);
                 if (!existing || Number(candidate.etaTargetTs) < Number(existing.etaTargetTs)) {
@@ -16954,7 +18123,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
                   etaMinutes,
                   etaTargetTs: targetMs,
                   seconds: schedTs,
-                  clock: String(row?.scheduled_arrival || "—")
+                  clock: formatClockFromEpochMs(targetMs)
                 };
                 const existing = scheduledByKey.get(dedupeKey);
                 if (!existing || Number(candidate.etaTargetTs) < Number(existing.etaTargetTs)) {
@@ -16991,6 +18160,57 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             value
           });
           return value;
+        }
+      }
+      if (staticScheduleOperator) {
+        try {
+          await loadRoutesCatalog();
+          const feed = await loadStaticGtfsFeed(staticScheduleOperator);
+          const allStopTimes = Array.isArray(feed?.stopTimesByStopId?.get?.(key))
+            ? feed.stopTimesByStopId.get(key)
+            : [];
+          const activeServices = activeStaticServicesForDate(feed, new Date());
+          const stopTimes = (activeServices instanceof Set)
+            ? allStopTimes.filter((row) => {
+                const serviceId = String(row?.service_id || "").trim();
+                if (!serviceId) return true;
+                return activeServices.has(serviceId);
+              })
+            : allStopTimes;
+          const nowSeconds = getNowSeconds();
+          const routeFilter = resolveRouteFilter();
+          const upcoming = computeUpcomingDepartures(stopTimes, routeFilter, nowSeconds, STOP_SCHEDULE_LIMIT);
+          const departures = upcoming.map(item => {
+            let headsign = "";
+            const tripIds = Array.isArray(item?.tripIds) ? item.tripIds : [];
+            for (const tripId of tripIds) {
+              const first = Array.isArray(feed?.stopTimesByTripId?.get?.(tripId))
+                ? feed.stopTimesByTripId.get(tripId)[0]
+                : null;
+              const candidate = resolveStaticTripHeadsign(feed, first || { trip_id: tripId });
+              if (candidate) {
+                headsign = candidate;
+                break;
+              }
+            }
+            return {
+              ...item,
+              source: "scheduled",
+              headsign,
+              clock: formatSecondsToClock(item.seconds),
+              etaMinutes: Math.max(0, Math.round((item.seconds - nowSeconds) / 60)),
+              etaTargetTs: epochMsForServiceSeconds(item.seconds)
+            };
+          });
+          return {
+            status: departures.length ? "success" : "empty",
+            departures,
+            realtimeDepartures: [],
+            contextKey
+          };
+        } catch (err) {
+          console.warn(`Falha ao carregar horários ${staticScheduleOperator}:`, err);
+          return { status: "error", contextKey };
         }
       }
       const requestId = ++stopScheduleRequestSeq;
@@ -17129,6 +18349,19 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function pillStyleForRoute(label) {
+      const staticMeta = staticRouteMetaForAny(label);
+      if (staticMeta) {
+        const staticOperator = normalizeOperator(staticMeta?.operator || "");
+        const bg = staticOperator === OPERATOR_TCB
+          ? "#16a34a"
+          : (normalizeHexColor(staticMeta.color) || "#64748b");
+        const fg = readableTextColor(bg, "#ffffff");
+        const border = bg;
+        const title = normalizeOperator(staticMeta?.operator) === OPERATOR_METRO
+          ? metroLineNameFromMeta(staticMeta)
+          : (staticMeta.longName || staticMeta.shortName || "Linha");
+        return { bg, fg, border, title, zone: null };
+      }
       const cmetPalette = cmetRoutePalette(label);
       if (cmetPalette?.bg) {
         return { bg: cmetPalette.bg, fg: cmetPalette.fg, border: cmetPalette.border, title: cmetPalette.title, zone: null };
@@ -17150,6 +18383,27 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return definirCategoria(text);
     }
 
+    function isMetroOperatorValue(operator) {
+      return normalizeOperator(operator) === OPERATOR_METRO;
+    }
+
+    function isTrainStopOperatorValue(operator) {
+      const normalized = normalizeOperator(operator);
+      return normalized === OPERATOR_CP || normalized === OPERATOR_FERTAGUS;
+    }
+
+    function isCarrisOrCmetOperatorValue(operator) {
+      const normalized = normalizeOperator(operator || "");
+      return hasCarrisOperator(normalized) || hasCmetOperator(normalized);
+    }
+
+    function primaryStopColorFromRoutes(routes = []) {
+      const first = Array.isArray(routes) ? routes.find(Boolean) : null;
+      if (!first) return STOP_MARKER_BORDER_COLOR;
+      const style = pillStyleForRoute(first);
+      return normalizeHexColor(style?.bg) || STOP_MARKER_BORDER_COLOR;
+    }
+
     function routePillsHtml(routes) {
       const list = dedupeRouteLabels(Array.isArray(routes) ? routes : []);
       if (!list.length) {
@@ -17164,7 +18418,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const label = (routeLabelRaw == null) ? "" : String(routeLabelRaw).trim();
         if (!label) return "";
         const style = pillStyleForRoute(label);
-        const routeCode = parseRouteCodeParts(label).code || label;
+        const routeCode = displayRouteCode(label, resolveBaseIdFromLabel(label) || label);
         const safeLabel = escapeHtml(label);
         const safeTitle = escapeHtml(style.title || label);
         const baseId = getBaseRouteKey(resolveBaseIdFromLabel(label) || label);
@@ -17179,11 +18433,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const diffMs = targetTs - Date.now();
         if (diffMs <= 15_000) return "Agora";
         const mins = Math.ceil(diffMs / 60_000);
-        if (mins < 60) return `${mins} min`;
+        if (mins < 60) {
+          const clockLabel = escapeHtml(clock || "—");
+          return `${mins} min [${clockLabel}]`;
+        }
       }
       if (!Number.isFinite(etaMinutes)) return escapeHtml(clock || "—");
       if (etaMinutes <= 0) return "Agora";
-      if (etaMinutes < 60) return `${etaMinutes} min`;
+      if (etaMinutes < 60) {
+        const clockLabel = escapeHtml(clock || "—");
+        return `${etaMinutes} min [${clockLabel}]`;
+      }
       return escapeHtml(clock || "—");
     }
 
@@ -17205,19 +18465,50 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           dep.clock || dep.rawTime || formatSecondsToClock(dep.seconds),
           dep.etaTargetTs
         );
-        const displayLabel = resolvePublicRouteLabel(dep.routeId || dep.routeLabel || "") || dep.routeId || dep.routeLabel || "";
+        const depRouteId = String(
+          dep.routeId ??
+          dep.route_id ??
+          dep.line_id ??
+          dep.lineId ??
+          dep.route ??
+          dep.linha ??
+          ""
+        ).trim();
+        const displayLabel = resolvePublicRouteLabel(depRouteId || dep.routeLabel || "")
+          || dep.routeLabel
+          || depRouteId
+          || "—";
         const style = pillStyleForRoute(displayLabel);
-        const routeCode = parseRouteCodeParts(displayLabel).code || displayLabel || "—";
-        const showVehicleCue = hasRouteSelection();
-        const cueColor = routeDirectionColor(dep.routeId || dep.routeLabel || displayLabel, dep.directionId) || style.bg;
+        const routeCode = displayRouteCode(displayLabel, depRouteId || displayLabel) || displayLabel;
+        const isMetroDeparture = Boolean(
+          metroRouteMetaForAny(depRouteId) ||
+          metroRouteMetaForAny(displayLabel) ||
+          isMetroOperatorValue(dep?.operator || "")
+        );
+        const isTrainDeparture = Boolean(
+          isTrainStopOperatorValue(dep?.operator || "") ||
+          routeBelongsToOperator(depRouteId, OPERATOR_CP) ||
+          routeBelongsToOperator(depRouteId, OPERATOR_FERTAGUS)
+        );
+        const isMarineDeparture = Boolean(
+          normalizeOperator(dep?.operator || "") === OPERATOR_TTSL ||
+          routeBelongsToOperator(depRouteId, OPERATOR_TTSL)
+        );
+        const isNonBusDeparture = isTrainDeparture || isMarineDeparture;
+        const departureOperator = normalizeOperator(dep?.operator || activeStopPopup?.operator || "");
+        const isCarrisOrCmetDeparture = departureOperator === OPERATOR_CARRIS || departureOperator === OPERATOR_CMET;
+        const showVehicleCue = !isNonBusDeparture && (!isCarrisOrCmetDeparture || hasRouteSelection());
+        const cueColor = routeDirectionColor(depRouteId || dep.routeLabel || displayLabel, dep.directionId) || style.bg;
         const cueIconSrc = stopCueIconSrc(displayLabel);
-        const vehicleCue = showVehicleCue
+        const vehicleCue = (showVehicleCue && !isMetroDeparture)
           ? `<span class="stop-schedule__vehicle-cue" style="--veh-cue-color:${cueColor};--veh-cue-icon:url('${cueIconSrc}')" aria-hidden="true"><span class="stop-schedule__vehicle-cue-core"><span class="stop-schedule__vehicle-cue-icon"></span></span></span>`
           : "";
-        const pill = `<span class="route-pill pill--tiny" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(routeCode)}</span>`;
+        const pill = (isMetroDeparture || isNonBusDeparture)
+          ? ""
+          : `<span class="route-pill pill--tiny" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(routeCode)}</span>`;
         const dirLabel = dep?.headsign
           ? `Sentido: ${String(dep.headsign).trim()}`
-          : directionDisplayLabel(dep.routeId || dep.routeLabel || "", dep.directionId);
+          : directionDisplayLabel(depRouteId || dep.routeLabel || "", dep.directionId);
         const dirText = dirLabel ? dirLabel.replace(/^\s*Sentido:\s*/i, "").trim() : "";
         const source = String(dep?.source || "scheduled");
         const realtimeStatus = String(dep?.realtimeStatus || "live");
@@ -17226,6 +18517,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const timeClass = isRealtime
           ? (realtimeStatus === "slow" ? "stop-schedule__time stop-schedule__time--rt-slow" : "stop-schedule__time stop-schedule__time--rt-live")
           : "stop-schedule__time";
+        if (isNonBusDeparture) {
+          const serviceHtml = `<span class="stop-schedule__service">${escapeHtml(routeCode || displayLabel || "—")}</span>`;
+          return `<div class="stop-schedule__row stop-schedule__row--rail"><div class="stop-schedule__info stop-schedule__info--rail">${serviceHtml}${dirHtml}</div><span class="${timeClass}">${escapeHtml(etaLabel)}</span></div>`;
+        }
         return `<div class="stop-schedule__row"><div class="stop-schedule__info">${vehicleCue}${pill}${dirHtml}</div><span class="${timeClass}">${escapeHtml(etaLabel)}</span></div>`;
       };
       return `<div class="stop-schedule__list">`
@@ -17356,6 +18651,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           wireStopPopupPills(el);
         } catch (e) {}
       }
+    }
+
+    function popupContentRootElement(target) {
+      if (!target) return null;
+      return (
+        target?.getPopup?.()?.getElement?.() ||
+        target?.getElement?.() ||
+        target?._contentNode ||
+        null
+      );
     }
 
     async function hydrateStopPopup(target, { stopId, stopName, operator } = {}) {
@@ -17633,10 +18938,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const seen = new Set();
       const entries = [];
       const rawOperator = String(operator || "").trim().toLowerCase();
-      const normalizedOperator =
-        rawOperator === "cmet" || rawOperator === "carris-metropolitana" || rawOperator === "metropolitana"
-          ? "cmet"
-          : "carris";
+      const normalizedOperator = (() => {
+        if (!rawOperator) return "carris";
+        if (rawOperator === "cmet" || rawOperator === "carris-metropolitana" || rawOperator === "metropolitana") return "cmet";
+        if (rawOperator === "tcb" || rawOperator === "transportes coletivos do barreiro" || rawOperator === "barreiro") return "tcb";
+        if (rawOperator === "cp" || rawOperator === "comboios" || rawOperator === "train" || rawOperator === "cp trains") return "cp";
+        if (rawOperator === "metro" || rawOperator === "metro de lisboa" || rawOperator === "metrolisboa") return "metro";
+        if (rawOperator === "ttsl" || rawOperator === "boats" || rawOperator === "barcos") return "ttsl";
+        if (rawOperator === "fertagus" || rawOperator === "ferta" || rawOperator === "fertagus trains") return "fertagus";
+        return "carris";
+      })();
       for (const rawLine of lines) {
         if (!rawLine) continue;
         const cols = parseCsvLine(rawLine);
@@ -17696,6 +19007,49 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return entries;
     }
 
+    function buildTcbStopCatalogEntries(rows) {
+      const list = Array.isArray(rows) ? rows : [];
+      const seen = new Set();
+      const entries = [];
+      for (const row of list) {
+        const stopId = String(
+          row?.id ??
+          row?.stop_id ??
+          row?.stopId ??
+          row?.code ??
+          row?.stop_code ??
+          ""
+        ).trim();
+        const stopName = String(
+          row?.name ??
+          row?.stop_name ??
+          row?.description ??
+          row?.title ??
+          stopId
+        ).trim();
+        if (!stopId || !stopName) continue;
+        const key = `${OPERATOR_TCB}|${stopId}|${stopName}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const stopCode = String(row?.stop_code ?? row?.code ?? stopId).trim() || stopId;
+        const lat = Number(row?.lat ?? row?.latitude ?? row?.stop_lat);
+        const lon = Number(row?.lon ?? row?.lng ?? row?.longitude ?? row?.stop_lon);
+        entries.push({
+          stopId,
+          stopName,
+          stopCode,
+          operator: OPERATOR_TCB,
+          displayNumber: stopCode || stopId,
+          lat: Number.isFinite(lat) ? lat : null,
+          lon: Number.isFinite(lon) ? lon : null,
+          searchKey: `${stopName} ${stopCode} ${stopId}`.toLowerCase()
+        });
+      }
+      const collator = new Intl.Collator("pt-PT", { sensitivity: "base" });
+      entries.sort((a, b) => collator.compare(a.stopName, b.stopName));
+      return entries;
+    }
+
     function mergeStopCatalogEntries(...groups) {
       const merged = [];
       const seen = new Set();
@@ -17741,7 +19095,24 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         } catch (err) {
           console.warn("Falha ao carregar catálogo de paragens CM:", err);
         }
-        stopCatalogEntries = mergeStopCatalogEntries(carrisEntries, cmetEntries);
+        let tcbEntries = [];
+        try {
+          const tcbStops = await ensureTcbStopsCatalog();
+          tcbEntries = buildTcbStopCatalogEntries(tcbStops);
+        } catch (err) {
+          console.warn("Falha ao carregar catálogo de paragens TCB:", err);
+        }
+        const staticEntries = [];
+        for (const operator of Object.keys(STATIC_GTFS_OPERATORS)) {
+          try {
+            const feed = await loadStaticGtfsFeed(operator);
+            const entries = Array.isArray(feed?.stopEntries) ? feed.stopEntries : [];
+            staticEntries.push(...entries);
+          } catch (err) {
+            console.warn(`Falha ao carregar catálogo de paragens (${operator}):`, err);
+          }
+        }
+        stopCatalogEntries = mergeStopCatalogEntries(carrisEntries, cmetEntries, tcbEntries, staticEntries);
         return stopCatalogEntries;
       })();
       return stopCatalogPromise;
@@ -17887,39 +19258,105 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let initialHashSpec = null;
     let hashPassthroughParams = new URLSearchParams();
 
+    function operatorToggleSet(value) {
+      const raw = String(value || "").trim().toLowerCase();
+      const normalized = raw.replace(/\s+/g, "");
+      const out = new Set();
+      const addToken = (token) => {
+        const t = String(token || "").trim().toLowerCase();
+        if (!t) return;
+        if (t === OPERATOR_CARRIS || t === "carrispt") out.add(OPERATOR_CARRIS);
+        else if (t === OPERATOR_CMET || t === "carris-metropolitana" || t === "metropolitana") out.add(OPERATOR_CMET);
+        else if (t === OPERATOR_TCB || t === "transportescoletivosdobarreiro" || t === "barreiro") out.add(OPERATOR_TCB);
+      };
+      if (normalized === OPERATOR_BOTH || normalized === "both" || normalized === "carris,cmet" || normalized === "cmet,carris") {
+        out.add(OPERATOR_CARRIS);
+        out.add(OPERATOR_CMET);
+        return out;
+      }
+      if (normalized === OPERATOR_ALL_THREE || normalized === "all" || normalized === "carris,cmet,tcb" || normalized === "cmet,carris,tcb") {
+        out.add(OPERATOR_CARRIS);
+        out.add(OPERATOR_CMET);
+        out.add(OPERATOR_TCB);
+        return out;
+      }
+      if (raw.includes(",")) {
+        raw.split(",").forEach(addToken);
+        if (out.size) return out;
+      }
+      addToken(raw);
+      return out;
+    }
+
     function normalizeOperator(value) {
       const raw = String(value || "").trim().toLowerCase();
-      if (raw === OPERATOR_BOTH || raw === "all" || raw === "both" || raw === "carris,cmet" || raw === "cmet,carris") return OPERATOR_BOTH;
-      if (raw === OPERATOR_CMET || raw === "carris-metropolitana" || raw === "metropolitana") return OPERATOR_CMET;
+      if (raw === OPERATOR_CP || raw === "comboios" || raw === "train" || raw === "cp trains") return OPERATOR_CP;
+      if (raw === OPERATOR_METRO || raw === "metro de lisboa" || raw === "metrolisboa") return OPERATOR_METRO;
+      if (raw === OPERATOR_TTSL || raw === "boats" || raw === "barcos") return OPERATOR_TTSL;
+      if (raw === OPERATOR_FERTAGUS || raw === "ferta" || raw === "fertagus trains") return OPERATOR_FERTAGUS;
+      const set = operatorToggleSet(raw);
+      if (set.has(OPERATOR_CARRIS) && set.has(OPERATOR_CMET) && set.has(OPERATOR_TCB)) return OPERATOR_ALL_THREE;
+      if (set.has(OPERATOR_CARRIS) && set.has(OPERATOR_CMET)) return OPERATOR_BOTH;
+      if (set.has(OPERATOR_CARRIS) && set.has(OPERATOR_TCB)) return "carris,tcb";
+      if (set.has(OPERATOR_CMET) && set.has(OPERATOR_TCB)) return "cmet,tcb";
+      if (set.has(OPERATOR_TCB)) return OPERATOR_TCB;
+      if (set.has(OPERATOR_CMET)) return OPERATOR_CMET;
+      if (set.has(OPERATOR_CARRIS)) return OPERATOR_CARRIS;
       return OPERATOR_CARRIS;
     }
 
     function hasCarrisOperator(operator = currentOperator) {
-      const normalized = normalizeOperator(operator);
-      return normalized === OPERATOR_CARRIS || normalized === OPERATOR_BOTH;
+      return operatorToggleSet(operator).has(OPERATOR_CARRIS);
     }
 
     function hasCmetOperator(operator = currentOperator) {
-      const normalized = normalizeOperator(operator);
-      return normalized === OPERATOR_CMET || normalized === OPERATOR_BOTH;
+      return operatorToggleSet(operator).has(OPERATOR_CMET);
+    }
+
+    function hasTcbOperator(operator = currentOperator) {
+      return operatorToggleSet(operator).has(OPERATOR_TCB);
+    }
+
+    function shouldShowStopDirectionArrow(operator) {
+      const normalized = normalizeOperator(operator || "");
+      if (!normalized) return true;
+      if (hasCarrisOperator(normalized) || hasCmetOperator(normalized)) {
+        return true;
+      }
+      if (isStaticGtfsOperator(normalized)) {
+        return hasRouteSelection();
+      }
+      if (hasTcbOperator(normalized)) {
+        return hasRouteSelection();
+      }
+      return true;
     }
 
     function isMapOnlyOperatorMode(operator = currentOperator) {
-      return hasCmetOperator(operator);
+      return hasCmetOperator(operator) || hasTcbOperator(operator);
     }
 
     function operatorDisplayName(operator = currentOperator) {
       const normalized = normalizeOperator(operator);
-      if (normalized === OPERATOR_BOTH) return "Carris + Carris Metropolitana";
-      if (normalized === OPERATOR_CMET) return "Carris Metropolitana";
-      return "Carris";
+      if (normalized === OPERATOR_CP) return "CP";
+      if (normalized === OPERATOR_METRO) return "Metro de Lisboa";
+      if (normalized === OPERATOR_TTSL) return "TTSL";
+      if (normalized === OPERATOR_FERTAGUS) return "Fertagus";
+      const labels = [];
+      if (hasCarrisOperator(normalized)) labels.push("Carris");
+      if (hasCmetOperator(normalized)) labels.push("Carris Metropolitana");
+      if (hasTcbOperator(normalized)) labels.push("TCB");
+      return labels.length ? labels.join(" + ") : "Carris";
     }
 
     function readInitialOperator() {
       const hashValue = normalizeOperator(hashPassthroughParams.get("operator"));
-      if (hashPassthroughParams.has("operator")) return hashValue;
+      if (hashPassthroughParams.has("operator")) {
+        return (isStaticGtfsOperator(hashValue) && hashValue !== OPERATOR_TCB) ? OPERATOR_CARRIS : hashValue;
+      }
       try {
-        return normalizeOperator(window.localStorage?.getItem(OPERATOR_STORAGE_KEY));
+        const stored = normalizeOperator(window.localStorage?.getItem(OPERATOR_STORAGE_KEY));
+        return (isStaticGtfsOperator(stored) && stored !== OPERATOR_TCB) ? OPERATOR_CARRIS : stored;
       } catch (err) {
         return OPERATOR_CARRIS;
       }
@@ -17928,16 +19365,23 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function syncOperatorUi() {
       operatorButtons.forEach((button) => {
         const operator = normalizeOperator(button.dataset.operator);
-        const isActive = operator === OPERATOR_CARRIS ? hasCarrisOperator() : hasCmetOperator();
+        const isActive = operator === OPERATOR_CARRIS
+          ? hasCarrisOperator()
+          : (operator === OPERATOR_CMET ? hasCmetOperator() : hasTcbOperator());
         button.classList.toggle("is-active", isActive);
         button.setAttribute("aria-pressed", String(isActive));
       });
       if (operatorHelp) {
-        operatorHelp.textContent = currentOperator === OPERATOR_BOTH
-          ? "Carris e Carris Metropolitana ativos: mapa combinado apenas. KPIs, tabelas e gráficos ficam desligados."
-          : (currentOperator === OPERATOR_CMET
-            ? "Carris Metropolitana ativo: modo mapa apenas. KPIs, tabelas e gráficos ficam desligados."
-            : "Carris ativo: visualização completa atual.");
+        const carrisActive = hasCarrisOperator();
+        const cmetActive = hasCmetOperator();
+        const tcbActive = hasTcbOperator();
+        if (carrisActive && !cmetActive && !tcbActive) {
+          operatorHelp.textContent = "Carris ativo: visualização completa atual. CP/Metro/TTSL/Fertagus continuam ativos no GTFS.";
+        } else if (carrisActive) {
+          operatorHelp.textContent = `${operatorDisplayName()} ativos: mapa combinado apenas. KPIs, tabelas e gráficos ficam desligados. CP/Metro/TTSL/Fertagus continuam ativos no GTFS.`;
+        } else {
+          operatorHelp.textContent = `${operatorDisplayName()} ativo: modo mapa apenas. KPIs, tabelas e gráficos ficam desligados.`;
+        }
       }
       bodyEl?.classList.toggle("operator-map-only", isEffectiveMapOnlyMode());
     }
@@ -17968,6 +19412,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         renderSelectedRoutePill();
         updateFloatingContext();
       }
+      renderVehicles().catch(() => {});
+      refreshActiveStopSchedule();
       if (isEffectiveMapOnlyMode()) {
         carrisFeedStaleAlertActive = false;
         setKpiFeedAlertBadge("");
@@ -18365,22 +19811,28 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     ) {
       const routeHtml = (routeEntries || [])
         .filter(({ id }) => !excludeSelected || !selectedRouteSet.has(String(id || "").trim()))
-        .map(({ id, label }) => {
-        const displayLabel = label || id;
-        const style = pillStyleForRoute(displayLabel);
-        const { code } = parseRouteCodeParts(displayLabel);
-        const pillText = code || displayLabel || id;
-        const regex = code ? new RegExp(`^${escapeRegex(code)}\\s*`, "i") : null;
-        const restLabel = regex ? (displayLabel.replace(regex, "").trim() || displayLabel) : displayLabel;
-        const safeLabel = escapeHtml(restLabel);
+        .map(({ id, label, isMetro }) => {
+        const metroLabel = isMetro ? (label || metroDisplayLabelForRoute(id)) : "";
+        const displayLabel = metroLabel || label || id;
+        const style = pillStyleForRoute(metroLabel ? id : displayLabel);
         const safeId = escapeHtml(id);
+        const safeLabel = metroLabel ? "" : (() => {
+          const { code } = parseRouteCodeParts(displayLabel);
+          const regex = code ? new RegExp(`^${escapeRegex(code)}\\s*`, "i") : null;
+          const restLabel = regex ? (displayLabel.replace(regex, "").trim() || displayLabel) : displayLabel;
+          return escapeHtml(restLabel);
+        })();
+        const pillText = metroLabel || (() => {
+          const { code } = parseRouteCodeParts(displayLabel);
+          return code || displayLabel || id;
+        })();
         const pill = `<span class="route-pill" aria-hidden="true" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(pillText)}</span>`;
         const canAdd = showAddActions && !selectedRouteSet.has(String(id || "").trim());
         const addAction = canAdd
           ? `<span class="preview-actions"><button class="preview-add" type="button" data-route-add="${safeId}" aria-label="Adicionar ${escapeHtml(displayLabel)}">+</button></span>`
           : "";
         return `<div class="preview-item" role="option" data-route-id="${safeId}">
-          <span class="preview-label">${pill} ${safeLabel}</span>${addAction}
+          <span class="preview-label">${safeLabel ? `${pill} ${safeLabel}` : pill}</span>${addAction}
         </div>`;
       }).join("");
       const stopHtml = (stopEntries || []).map(stopPreviewItemMarkup).join("");
@@ -18484,7 +19936,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         floatingRouteInput.value = "";
       } else {
         const selectedId = singleSelectedRouteId();
-        floatingRouteInput.value = routeLabelById.get(selectedId) || resolvePublicRouteLabel(selectedId) || "";
+        floatingRouteInput.value = resolveSelectedRouteLabel(selectedId) || "";
       }
       renderFloatingRoutePreview(floatingRouteInput.value || "");
       try { floatingRouteInput.focus({ preventScroll: true }); } catch (e) { floatingRouteInput.focus(); }
@@ -18682,11 +20134,18 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           if (stopId && routes.length) {
             stopRoutesCache.set(stopRoutesCacheKey(stopId, s?.operator || OPERATOR_CARRIS), dedupeRouteLabels(routes));
           }
-          const primaryColor = STOP_MARKER_BORDER_COLOR;
+          const operator = s?.operator || "";
+          const isMetroStop = isMetroOperatorValue(operator);
+          const isTrainStop = isTrainStopOperatorValue(operator);
+          const primaryColor = isTrainStop
+            ? TRAIN_STOP_MARKER_BORDER_COLOR
+            : (isMetroStop ? primaryStopColorFromRoutes(routes) : STOP_MARKER_BORDER_COLOR);
           const angleRaw = Number(s?.direction_angle);
-          const arrowColor = Number.isFinite(angleRaw)
+          const showArrow = shouldShowStopDirectionArrow(operator);
+          const arrowColor = showArrow && (Number.isFinite(angleRaw) || Number.isFinite(fallbackAngles[idx]))
             ? STOP_MARKER_ARROW_COLOR
-            : (String(s?.operator || OPERATOR_CARRIS) === OPERATOR_CARRIS ? STOP_MARKER_ARROW_COLOR : "transparent");
+            : "transparent";
+          const sizeCss = isTrainStop ? "32px" : (isMetroStop ? "30px" : "24px");
           const key = stopKeyForStop(s);
           if (!key) continue;
           nextKeys.add(key);
@@ -18701,7 +20160,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           const existing = renderedStopsMap.get(key);
 
           if (!existing) {
-            const iconHtml = `<div class="stop-marker stop--hidden" style="--stop-border:${primaryColor}; --stop-arrow:${arrowColor}; --stop-ang:${angCss}; background:#ffffff"><span class="stop-arrow"></span></div>`;
+          const iconHtml = `<div class="stop-marker stop--hidden" style="--stop-size:${sizeCss}; --stop-border:${primaryColor}; --stop-fill:#ffffff; --stop-arrow:${arrowColor}; --stop-ang:${angCss}; background:#ffffff"><span class="stop-arrow"></span></div>`;
             const icon = L.divIcon({ html: iconHtml, className: "stop-fade", iconSize: [1, 1], iconAnchor: [0, 0] });
             const marker = L.marker([lat, lon], { icon });
             marker.__stopId = stopId;
@@ -18746,11 +20205,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             existing.lon = lon;
           }
           existing.marker.__stopId = stopId;
+          const el = existing.marker.getElement?.();
+          const inner = el?.querySelector?.(".stop-marker");
+          if (inner) {
+            inner.style.setProperty("--stop-size", sizeCss);
+            inner.style.setProperty("--stop-border", primaryColor);
+            inner.style.setProperty("--stop-arrow", arrowColor);
+          }
 
           const nextAngle = Number.isFinite(angleDeg) ? angleDeg : 0;
           if (existing.angleDeg !== nextAngle) {
-            const el = existing.marker.getElement?.();
-            const inner = el?.querySelector?.(".stop-marker");
             if (inner) inner.style.setProperty("--stop-ang", `${nextAngle}deg`);
             existing.angleDeg = nextAngle;
           }
@@ -18790,6 +20254,63 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     async function refreshGlobalStops(force = false) {
       if (!adapter) return;
       if (document.hidden) return;
+      if (isStaticGtfsOperator(currentOperator)) {
+        if (hasRouteSelection()) {
+          if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer, 0);
+          if (adapter instanceof MapLibreAdapter) {
+            adapter.setGlobalStops({ stops: [] });
+            clearMapLibreStopLabels();
+          }
+          globalStopsKey = null;
+          lastRenderedGlobalStopsKey = null;
+          return;
+        }
+        const b = adapterBounds();
+        const z = adapterZoom();
+        if (!b || !Number.isFinite(z) || z < STOPS_MIN_ZOOM) {
+          if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer, 0);
+          if (adapter instanceof MapLibreAdapter) {
+            adapter.setGlobalStops({ stops: [] });
+            clearMapLibreStopLabels();
+          }
+          return;
+        }
+        try {
+          await loadRoutesCatalog();
+          const feed = await loadStaticGtfsFeed(currentOperator);
+          const effLimit = dynamicGlobalStopsLimit(z);
+          const roundedBounds = roundBoundsForStops(b, GLOBAL_STOPS_KEY_PRECISION);
+          const key = JSON.stringify({
+            ...(roundedBounds || {}),
+            z: Math.round(z * 10) / 10,
+            limit: effLimit,
+            operator: normalizeOperator(currentOperator)
+          });
+          globalStopsKey = key;
+          if (!force && lastRenderedGlobalStopsKey === key) return;
+          const visibleRows = mapStaticStopRowsToVisibleStops(feed?.visibleStopRows || [], b, effLimit);
+          const visibleStops = visibleRows.map((row) => {
+            const stopId = String(row?.stop_id || "").trim();
+            const routeIds = Array.from(feed?.stopRouteIdsByStopId?.get?.(stopId) || []);
+            const routeLabels = dedupeRouteLabels(routeIds.map(routeId => resolvePublicRouteLabel(routeId) || routeId).filter(Boolean));
+            return {
+              stop_id: stopId,
+              stop_name: String(row?.stop_name || stopId || "Paragem"),
+              stop_lat: Number(row?.stop_lat),
+              stop_lon: Number(row?.stop_lon),
+              operator: normalizeOperator(currentOperator),
+              routes: routeLabels,
+              direction_angle: null,
+              is_terminal: false
+            };
+          });
+          renderGlobalStops({ stops: visibleStops });
+          lastRenderedGlobalStopsKey = key;
+        } catch (err) {
+          console.warn(`Falha ao carregar paragens ${operatorDisplayName(currentOperator)}:`, err);
+        }
+        return;
+      }
       if (currentOperator === OPERATOR_CMET) {
         if (hasRouteSelection()) {
           if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer, 0);
@@ -18824,7 +20345,18 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           globalStopsKey = key;
           if (!force && lastRenderedGlobalStopsKey === key) return;
           const visibleStops = await getVisibleCmetStops(b, effLimit, { cacheSuffix: OPERATOR_CMET });
-          renderGlobalStops({ stops: visibleStops });
+          const staticStops = await getVisibleStaticGtfsStops(b, Math.max(120, Math.round(effLimit * 0.9)));
+          const mergedStops = [...visibleStops, ...staticStops];
+          const seenStopIds = new Set();
+          const dedupedStops = mergedStops.filter((stop) => {
+            const sid = String(stop?.stop_id || "").trim();
+            const op = normalizeOperator(stop?.operator || "");
+            const keyId = `${op}:${sid}`;
+            if (!sid || seenStopIds.has(keyId)) return false;
+            seenStopIds.add(keyId);
+            return true;
+          });
+          renderGlobalStops({ stops: dedupedStops });
           lastRenderedGlobalStopsKey = key;
         } catch (err) {
           console.warn("Falha ao carregar paragens CM:", err);
@@ -18936,6 +20468,25 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             console.warn("Falha ao juntar paragens CM no modo combinado:", err);
           }
         }
+        try {
+          const staticVisibleStops = await getVisibleStaticGtfsStops(
+            b,
+            Math.max(120, Math.round(effLimit * 0.9))
+          );
+          const seenStopKeys = new Set(
+            (Array.isArray(stops) ? stops : [])
+              .map((stop) => `${normalizeOperator(stop?.operator || OPERATOR_CARRIS)}:${String(stop?.stop_id || "").trim()}`)
+              .filter(Boolean)
+          );
+          staticVisibleStops.forEach((stop) => {
+            const keyId = `${normalizeOperator(stop?.operator || "")}:${String(stop?.stop_id || "").trim()}`;
+            if (!keyId || seenStopKeys.has(keyId)) return;
+            seenStopKeys.add(keyId);
+            stops.push(stop);
+          });
+        } catch (err) {
+          console.warn("Falha ao juntar paragens GTFS estáticas:", err);
+        }
         const data = { stops };
         globalStopsCache.set(key, { ts: Date.now(), payload: data });
         renderGlobalStops(data);
@@ -18973,6 +20524,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function filterVehicles(list) {
       return list.filter(v => {
+        const vehicleOperator = normalizeOperator(v?.operator || OPERATOR_CARRIS);
+        if (vehicleOperator === OPERATOR_CMET && !effectiveHasCmetOperator()) return false;
+        if (vehicleOperator === OPERATOR_TCB && !effectiveHasTcbOperator()) return false;
+        if (vehicleOperator === OPERATOR_CARRIS && !effectiveHasCarrisOperator()) return false;
         if (selectedCategory !== CATEGORY_FILTER_ALL) {
           const resolved = v.categoryResolved || v.category || "";
           if (resolved !== selectedCategory) return false;
@@ -19076,10 +20631,48 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function normalizeVehicles(data, operator = currentOperator) {
        let list = [];
        if (Array.isArray(data)) list = data;
+       else if (normalizeOperator(operator) === OPERATOR_TCB) {
+         list = Array.isArray(data?.results?.vehicles)
+           ? data.results.vehicles
+           : (Array.isArray(data?.vehicles)
+             ? data.vehicles
+             : (Array.isArray(data?.results?.data) ? data.results.data : []));
+       }
        else if (data?.features) list = data.features;
        else if (data?.entity) list = data.entity;
 
        const normalized = list.map((item, idx) => {
+          if (normalizeOperator(operator) === OPERATOR_TCB && item && typeof item === "object") {
+            const pos = item.position || {};
+            const rawRouteId = String(item.route_id || "").trim();
+            const routeId = scopedGtfsId(OPERATOR_TCB, rawRouteId) || rawRouteId;
+            const routeShortName = String(item.route_short_name || "").trim();
+            const routeLongName = String(item.route_long_name || "").trim();
+            const tripId = String(item.trip_id || "").trim();
+            const directionIdRaw = item.direction_id ?? pos.direction ?? null;
+            const parsedDirectionId = Number.parseInt(String(directionIdRaw), 10);
+            const lat = Number(item.lat ?? item.latitude ?? pos.latitude ?? pos.lat);
+            const lon = Number(item.lon ?? item.longitude ?? pos.longitude ?? pos.lng ?? pos.lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+            return {
+              id: item.id ?? item.vehicle_id ?? item.vehicleId ?? `tcb-${idx}`,
+              operator: OPERATOR_TCB,
+              lat,
+              lon,
+              routeId,
+              tripId,
+              currentStopSequence: null,
+              stopId: "",
+              currentStatus: normalizeVehicleCurrentStatus("IN_TRANSIT_TO"),
+              linha: routeShortName || routeId || "",
+              directionId: Number.isFinite(parsedDirectionId) ? parsedDirectionId : null,
+              bearing: pos.bearing ?? pos.heading ?? 0,
+              speed: 0,
+              ts: normalizeTimestampMs(item.arrival_time_iso || item.departure_time_iso || Date.now()),
+              headsign: routeLongName,
+              routeLabel: routeLongName || routeShortName || resolvePublicRouteLabel(routeId) || routeId || "",
+            };
+          }
           if (normalizeOperator(operator) === OPERATOR_CMET && item && typeof item === "object" && item.id && item.route_id) {
             const routeId = String(item.route_id ?? "").trim();
             const patternId = String(item.pattern_id ?? "").trim();
@@ -19299,21 +20892,74 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         let vehicles = [];
         const carrisActive = effectiveHasCarrisOperator();
         const cmetActive = effectiveHasCmetOperator();
-        if (carrisActive && cmetActive) {
-          const [carrisPayload, cmetPayload] = await Promise.all([
-            fetchFromEndpoints(VEHICLE_ENDPOINTS, {}, { signal, timeoutMs: 5000 }),
-            fetchFromEndpoints(CM_VEHICLES_ENDPOINTS, {}, { signal, timeoutMs: 10000 })
-          ]);
-          vehicles = [
-            ...normalizeVehicles(carrisPayload, OPERATOR_CARRIS),
-            ...normalizeVehicles(cmetPayload, OPERATOR_CMET)
-          ];
-        } else if (cmetActive) {
-          const payload = await fetchFromEndpoints(CM_VEHICLES_ENDPOINTS, {}, { signal, timeoutMs: 10000 });
-          vehicles = normalizeVehicles(payload, OPERATOR_CMET);
+        const tcbActive = effectiveHasTcbOperator();
+        if (!carrisActive && !cmetActive && !tcbActive) {
+          await applyResult([], "offline");
+          lastVehicleFetchHadError = false;
+          clearAppError();
+          return [];
         } else {
-          const payload = await fetchFromEndpoints(VEHICLE_ENDPOINTS, {}, { signal, timeoutMs: 5000 });
-          vehicles = normalizeVehicles(payload, OPERATOR_CARRIS);
+          const seedVehicles = [
+            ...(carrisActive && Array.isArray(lastCarrisVehicles) ? lastCarrisVehicles : []),
+            ...(cmetActive && Array.isArray(lastCmetVehicles) ? lastCmetVehicles : []),
+            ...(tcbActive && Array.isArray(lastTcbVehicles) ? lastTcbVehicles : [])
+          ];
+          if (seedVehicles.length) {
+            await applyResult(seedVehicles, "fetching", true);
+          }
+          const sources = [];
+          if (carrisActive) {
+            sources.push({
+              key: OPERATOR_CARRIS,
+              request: () => fetchFromEndpoints(VEHICLE_ENDPOINTS, {}, {
+                signal,
+                timeoutMs: VEHICLE_FETCH_TIMEOUT_MS,
+                retryAttempts: VEHICLE_FETCH_RETRY_ATTEMPTS
+              })
+            });
+          }
+          if (cmetActive) {
+            sources.push({
+              key: OPERATOR_CMET,
+              request: () => fetchFromEndpoints(CM_VEHICLES_ENDPOINTS, {}, {
+                signal,
+                timeoutMs: CM_VEHICLE_FETCH_TIMEOUT_MS,
+                retryAttempts: VEHICLE_FETCH_RETRY_ATTEMPTS
+              })
+            });
+          }
+          if (tcbActive) {
+            sources.push({
+              key: OPERATOR_TCB,
+              request: () => fetchFromEndpoints(TCB_VEHICLES_ENDPOINTS, {}, {
+                signal,
+                timeoutMs: 12000,
+                retryAttempts: VEHICLE_FETCH_RETRY_ATTEMPTS
+              })
+            });
+          }
+          const results = await Promise.allSettled(sources.map(source => source.request()));
+          let failedSources = 0;
+          let firstError = null;
+          const merged = [];
+          for (let i = 0; i < sources.length; i += 1) {
+            const source = sources[i];
+            const result = results[i];
+            if (result?.status === "fulfilled") {
+              const normalizedList = normalizeVehicles(result.value, source.key);
+              if (source.key === OPERATOR_CARRIS) lastCarrisVehicles = normalizedList;
+              if (source.key === OPERATOR_CMET) lastCmetVehicles = normalizedList;
+              if (source.key === OPERATOR_TCB) lastTcbVehicles = normalizedList;
+              merged.push(...normalizedList);
+            } else {
+              failedSources += 1;
+              firstError = firstError || result?.reason;
+            }
+          }
+          vehicles = merged;
+          if (!vehicles.length && failedSources >= sources.length) {
+            throw firstError || new Error(`Falha ao obter veículos de ${operatorDisplayName()}`);
+          }
         }
         const applied = await applyResult(vehicles, "online");
         lastVehicleFetchHadError = false;
@@ -19325,7 +20971,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         lastVehicleFetchHadError = true;
         console.warn("Falha ao obter veículos:", err);
         carrisFeedStaleAlertActive = false;
-        if (effectiveHasCarrisOperator() && !effectiveHasCmetOperator() && isCarrisUpstreamDownError(err)) {
+        if (effectiveHasCarrisOperator() && !effectiveHasCmetOperator() && !effectiveHasTcbOperator() && isCarrisUpstreamDownError(err)) {
           showAppError("API da Carris indisponível neste momento. A tentar novamente automaticamente.");
         } else {
           showAppError(`Falha ao obter veículos ${operatorDisplayName()}: ${err?.message || err}`);
@@ -19470,16 +21116,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     operatorButtons.forEach((button) => {
       button.addEventListener("click", () => {
         const clickedOperator = normalizeOperator(button.dataset.operator);
-        const carrisActive = hasCarrisOperator();
-        const cmetActive = hasCmetOperator();
-        let nextOperator = currentOperator;
-        if (clickedOperator === OPERATOR_CARRIS) {
-          if (carrisActive && !cmetActive) return;
-          nextOperator = carrisActive ? OPERATOR_CMET : (cmetActive ? OPERATOR_BOTH : OPERATOR_CARRIS);
+        const active = new Set();
+        if (hasCarrisOperator()) active.add(OPERATOR_CARRIS);
+        if (hasCmetOperator()) active.add(OPERATOR_CMET);
+        if (hasTcbOperator()) active.add(OPERATOR_TCB);
+        if (active.has(clickedOperator)) {
+          if (active.size === 1) return;
+          active.delete(clickedOperator);
         } else {
-          if (cmetActive && !carrisActive) return;
-          nextOperator = cmetActive ? OPERATOR_CARRIS : (carrisActive ? OPERATOR_BOTH : OPERATOR_CMET);
+          active.add(clickedOperator);
         }
+        const nextOperator = normalizeOperator(Array.from(active).join(","));
         if (nextOperator === currentOperator) return;
         applyOperator(nextOperator, { clearSelection: true }).catch((err) => {
           console.warn("Falha ao trocar operador:", err);
@@ -19548,6 +21195,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const popoverBlocks = Array.from(document.querySelectorAll("[data-sidebar-popover-block]"));
       if (!popoverBlocks.length) return;
       let infoBackdrop = null;
+      const blockPopoverMap = new WeakMap();
+
+      function getPopoverForBlock(block) {
+        return blockPopoverMap.get(block) || block.querySelector("[data-sidebar-popover-panel]");
+      }
 
       function ensureInfoBackdrop() {
         if (infoBackdrop) return infoBackdrop;
@@ -19563,7 +21215,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
       function syncInfoModalBodyState() {
         const anyInfoOpen = popoverBlocks.some((block) => {
-          const popover = block.querySelector("[data-sidebar-popover-panel]");
+          const popover = getPopoverForBlock(block);
           return Boolean(popover && popover.classList.contains("sidebar-info-popover") && !popover.hidden);
         });
         document.body.classList.toggle("sidebar-info-modal-open", anyInfoOpen);
@@ -19588,7 +21240,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
       function closePopoverBlock(block) {
         const button = block.querySelector("[data-sidebar-popover-btn]");
-        const popover = block.querySelector("[data-sidebar-popover-panel]");
+        const popover = getPopoverForBlock(block);
         if (!button || !popover) return;
         popover.hidden = true;
         popover.classList.remove("visible");
@@ -19604,14 +21256,14 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
       function positionSidebarInfoPopover(block) {
         const button = block.querySelector("[data-sidebar-popover-btn]");
-        const popover = block.querySelector("[data-sidebar-popover-panel]");
+        const popover = getPopoverForBlock(block);
         if (!button || !popover || !popover.classList.contains("sidebar-info-popover")) return;
         ensureInfoCloseButton(popover, block);
       }
 
       function openPopoverBlock(block) {
         const button = block.querySelector("[data-sidebar-popover-btn]");
-        const popover = block.querySelector("[data-sidebar-popover-panel]");
+        const popover = getPopoverForBlock(block);
         if (!button || !popover) return;
         popover.hidden = false;
         button.setAttribute("aria-expanded", "true");
@@ -19635,6 +21287,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const button = block.querySelector("[data-sidebar-popover-btn]");
         const popover = block.querySelector("[data-sidebar-popover-panel]");
         if (!button || !popover) return;
+        blockPopoverMap.set(block, popover);
+        if (popover.classList.contains("sidebar-info-popover") && popover.parentElement !== document.body) {
+          document.body.appendChild(popover);
+        }
         if (!popover.id) {
           popover.id = `sidebar-popover-${index + 1}`;
         }
@@ -19651,9 +21307,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       document.addEventListener("mousedown", (event) => {
         popoverBlocks.forEach((block) => {
           const button = block.querySelector("[data-sidebar-popover-btn]");
-          const popover = block.querySelector("[data-sidebar-popover-panel]");
+          const popover = getPopoverForBlock(block);
           if (!button || !popover || popover.hidden) return;
-          if (block.contains(event.target) || button.contains(event.target)) return;
+          if (block.contains(event.target) || popover.contains(event.target) || button.contains(event.target)) return;
           closePopoverBlock(block);
         });
       });
