@@ -13942,10 +13942,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       }
       const isCmetVehicle = normalizedOperator === OPERATOR_CMET;
       const dirId = getDirectionId(v);
+      const popupDirectionRouteId = normalizeRouteKey(
+        v?.routeId ||
+        rawRouteId ||
+        v?.linha ||
+        canonicalRouteId ||
+        ""
+      );
       const genericHeadsign = String(v?.headsign || "").trim();
       const dirLabel = genericHeadsign
         ? `Sentido: ${genericHeadsign}`
-        : directionDisplayLabel(canonicalRouteId || v?.linha || "", dirId);
+        : directionDisplayLabel(popupDirectionRouteId || canonicalRouteId || v?.linha || "", dirId);
       const routeCode = displayRouteCode(label, canonicalRouteId || label) || label;
       const zoneInfo = resolveRouteZone(label);
       const realtimeRouteColor = normalizeHexColor(v?.routeColor || v?.route_color || v?.route?.color || "");
@@ -14474,8 +14481,14 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function normalizeDirectionForDisplay(routeId, directionId) {
       if (!(directionId === 0 || directionId === 1)) return directionId;
-      // Keep the historical 0/1 inversion only for CMET mappings.
-      if (!routeBelongsToOperator(routeId, OPERATOR_CMET)) return directionId;
+      // Carris and CMET destination pairs in the loaded route metadata are ordered
+      // opposite to the direction_id used in live vehicle payloads.
+      if (
+        !routeBelongsToOperator(routeId, OPERATOR_CMET) &&
+        !routeBelongsToOperator(routeId, OPERATOR_CARRIS)
+      ) {
+        return directionId;
+      }
       return directionId === 0 ? 1 : 0;
     }
 
