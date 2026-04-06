@@ -7577,8 +7577,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       ...(LOCAL_BACKENDS || []).map(base => `${base}/api/mobicascais/realtime`),
       ...(LOCAL_BACKENDS || []).map(base => `${base}/api/mobicascais/vehicles`)
     ]);
+    const CP_BACKEND_BASES = (() => {
+      const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
+      return dedupeList([
+        ...(LOCAL_BACKENDS || []),
+        ...(normalizedFallback ? [normalizedFallback] : [])
+      ]);
+    })();
     const CP_VEHICLES_ENDPOINTS = dedupeList([
-      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/cp/vehicles`)
+      ...(CP_BACKEND_BASES || []).map(base => `${base}/api/cp/vehicles`)
     ]);
     const CP_COMBOIOS_STATIONS_ENDPOINTS = dedupeList([
       "https://comboios.live/api/stations"
@@ -8780,6 +8787,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           activeServicesCacheByDate
         };
         staticGtfsFeedCache.set(op, feed);
+        refreshDecoratedVehiclesForOperator(op);
         return feed;
       })();
       staticGtfsFeedInflight.set(op, promise);
@@ -14353,6 +14361,34 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return (Array.isArray(list) ? list : []).map((vehicle) => decorateVehicle(vehicle, routeDecorationCache));
     }
 
+    function refreshDecoratedVehiclesForOperator(operator) {
+      const normalizedOperator = normalizeOperator(operator);
+      if (!normalizedOperator) return;
+      const routeDecorationCache = new Map();
+      let changed = false;
+
+      if (normalizedOperator === OPERATOR_CP && Array.isArray(lastCpVehicles) && lastCpVehicles.length) {
+        lastCpVehicles = lastCpVehicles.map((vehicle) => decorateVehicle(vehicle, routeDecorationCache));
+        changed = true;
+      }
+
+      if (Array.isArray(lastVehicles) && lastVehicles.length) {
+        let touched = false;
+        lastVehicles = lastVehicles.map((vehicle) => {
+          if (normalizeOperator(vehicle?.operator || "") !== normalizedOperator) return vehicle;
+          touched = true;
+          return decorateVehicle(vehicle, routeDecorationCache);
+        });
+        changed = changed || touched;
+      }
+
+      if (!changed) return;
+      if (shouldUpdateRouteOptionsFromVehicles(lastVehicles, { isFallback: true })) {
+        updateRouteOptionsFromVehicles(lastVehicles);
+      }
+      renderVehicles().catch(() => {});
+    }
+
     function featureToVehicle(feature, index) {
       if (!feature || feature.type !== "Feature") return null;
       const geom = feature.geometry;
@@ -14890,6 +14926,18 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       ctx.globalAlpha = 0.55;
       ctx.drawImage(baseCanvas, 0, 0);
       return canvas;
+    }
+
+    function vehicleStateOpacity(state, nextState) {
+      const operator = normalizeOperator(state?.data?.operator || "");
+      if (operator === OPERATOR_CP) {
+        if (nextState === "inactive") return 0.35;
+        if (nextState === "stale") return 0.6;
+        return 1;
+      }
+      if (nextState === "inactive") return 0;
+      if (nextState === "stale") return 0.55;
+      return 1;
     }
 
     // --- LEAFLET ADAPTER ---
@@ -15601,7 +15649,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (!state?.feature) return false;
         const nextState = this.vehicleStateFromTsSec(state.serverTsSec);
         const spriteMode = nextState === "stale" ? "stale" : "active";
-        const stateAlpha = nextState === "inactive" ? 0 : (nextState === "stale" ? 0.55 : 1);
+        const stateAlpha = vehicleStateOpacity(state, nextState);
         let changed = false;
         if (state.visualState !== nextState) {
           state.visualState = nextState;
@@ -23342,7 +23390,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       cmetArrivalsCache.clear();
       cmetPatternCache.clear();
       cmetShapeCache.clear();
-      if (clearSelection) {
+      const shouldClearIncompatibleCpFilters = normalized === OPERATOR_CP && (
+        selectedCategory !== CATEGORY_FILTER_ALL ||
+        (hasRouteSelection() && !selectionHasCpRoutes())
+      );
+      if (clearSelection || shouldClearIncompatibleCpFilters) {
         selectedRouteSet.clear();
         selectedVariant = VARIANT_FILTER_ALL;
         selectedCategory = CATEGORY_FILTER_ALL;
