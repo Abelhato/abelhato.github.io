@@ -21693,8 +21693,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       if (normalizedOperator === OPERATOR_MOBICASCAIS) return effectiveHasMobiCascaisOperator();
       if (normalizedOperator === OPERATOR_CP) return effectiveHasCpOperator();
       if (normalizedOperator === OPERATOR_TTSL) return effectiveHasTtslOperator();
-      if (normalizedOperator === OPERATOR_METRO) return hasMetroOperator();
-      if (normalizedOperator === OPERATOR_FERTAGUS) return hasFertagusOperator();
+      if (normalizedOperator === OPERATOR_METRO) return true;
+      if (normalizedOperator === OPERATOR_FERTAGUS) return true;
       return effectiveHasCarrisOperator();
     }
 
