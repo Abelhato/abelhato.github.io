@@ -5581,7 +5581,9 @@
         const { zone, color } = resolveRouteZone(label);
         const cat = definirCategoria(label);
         const bg = color || pillBgForCategory(cat);
-        const fg = color ? "#ffffff" : "#0b1220";
+        const fg = color
+          ? (zone === "Bairro" ? "#0b1220" : "#ffffff")
+          : "#0b1220";
         const border = color || "rgba(15, 23, 42, 0.12)";
         const title = zone || cat || "Carreira";
         return { bg, fg, border, title, zone };

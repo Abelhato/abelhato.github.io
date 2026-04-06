@@ -2899,7 +2899,10 @@
       function pillStyleForRoute(label) {
         const zone = defineRouteZone(label);
         const zoneColor = zone ? ZONE_COLOR_BY_NAME[zone] : null;
-        if (zoneColor) return { bg: zoneColor, fg: "#ffffff", border: zoneColor, zone };
+        if (zoneColor) {
+          const fg = zone === "Bairro" ? "#0b1220" : "#ffffff";
+          return { bg: zoneColor, fg, border: zoneColor, zone };
+        }
         const code = parseRouteCodeParts(label).code.toUpperCase();
         if (code.endsWith("E")) return { bg: "#ffe6a8", fg: "#6b4600", border: "#e6c779", zone: null };
         if (/^20\d$/.test(code)) return { bg: "#dbeafe", fg: "#0b3a75", border: "#9fc5ff", zone: null };

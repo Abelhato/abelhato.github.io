@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
   <title>Dashboard Lisboa</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="/frontend/favicon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" crossorigin="">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -4451,7 +4451,7 @@
           <div class="operator-group operator-group--featured">
             <button id="operator-carris-btn" class="operator-chip operator-chip--wide is-active" type="button" aria-pressed="true" data-operator="carris">
               <span class="operator-chip__logo">
-                <img src="logos/Carris.svg?v=20260405b" alt="Carris">
+                <img src="/frontend/logos/Carris.svg?v=20260405b" alt="Carris">
               </span>
               <span class="operator-chip__content">
                 <span class="operator-chip__meta">Dashboard Completo</span>
@@ -4463,32 +4463,32 @@
             <div class="operator-grid operator-grid--realtime">
               <button id="operator-cmet-btn" class="operator-chip" type="button" aria-pressed="false" data-operator="cmet" aria-label="Carris Metropolitana">
                 <span class="operator-chip__logo">
-                  <img src="logos/carris metroplitana.svg?v=20260405" alt="Carris Metropolitana">
+                  <img src="/frontend/logos/carris metroplitana.svg?v=20260405" alt="Carris Metropolitana">
                 </span>
               </button>
               <button id="operator-tcb-btn" class="operator-chip" type="button" aria-pressed="false" data-operator="tcb" aria-label="TCB">
                 <span class="operator-chip__logo">
-                  <img src="logos/tcb.png?v=20260405" alt="TCB">
+                  <img src="/frontend/logos/tcb.png?v=20260405" alt="TCB">
                 </span>
               </button>
               <button id="operator-mobicascais-btn" class="operator-chip" type="button" aria-pressed="false" data-operator="mobicascais" aria-label="MobiCascais">
                 <span class="operator-chip__logo">
-                  <img src="logos/mobicascais.png?v=20260405" alt="MobiCascais">
+                  <img src="/frontend/logos/mobicascais.png?v=20260405" alt="MobiCascais">
                 </span>
               </button>
               <button id="operator-metro-btn" class="operator-chip is-active" type="button" aria-pressed="true" data-operator="metro" aria-label="Metro de Lisboa (sempre ativo)" disabled>
                 <span class="operator-chip__logo">
-                  <img src="logos/Metro.svg?v=20260405" alt="Metro de Lisboa">
+                  <img src="/frontend/logos/Metro.svg?v=20260405" alt="Metro de Lisboa">
                 </span>
               </button>
               <button id="operator-cp-btn" class="operator-chip" type="button" aria-pressed="false" data-operator="cp" aria-label="CP">
                 <span class="operator-chip__logo">
-                  <img src="logos/CP.svg?v=20260405" alt="CP">
+                  <img src="/frontend/logos/CP.svg?v=20260405" alt="CP">
                 </span>
               </button>
               <button id="operator-ttsl-btn" class="operator-chip" type="button" aria-pressed="false" data-operator="ttsl" aria-label="TTSL">
                 <span class="operator-chip__logo">
-                  <img src="logos/TTSL.png?v=20260405" alt="TTSL">
+                  <img src="/frontend/logos/TTSL.png?v=20260405" alt="TTSL">
                 </span>
               </button>
             </div>
@@ -4498,7 +4498,7 @@
             <div class="operator-grid operator-grid--static">
               <button id="operator-fertagus-btn" class="operator-chip operator-chip--wide is-active" type="button" aria-pressed="true" data-operator="fertagus" aria-label="Fertagus (sempre ativo)" disabled>
                 <span class="operator-chip__logo">
-                  <img src="logos/Fertagus.svg?v=20260405" alt="Fertagus">
+                  <img src="/frontend/logos/Fertagus.svg?v=20260405" alt="Fertagus">
                 </span>
               </button>
             </div>
@@ -4800,7 +4800,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     const KNOWN_BACKEND_PORTS = [8002, 2026];
-    const GITHUB_DEFAULT_BACKEND = "https://api.moverlisboa.com";
+    const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
     const MODE_REALTIME = "realtime";
     const HISTORY_PAGE_URL = (() => {
       if (location.protocol === "file:" || location.origin === "null") {
@@ -7415,10 +7415,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	      return null;
 	    }
 
-    function isHostedStaticDashboardOrigin(hostname = "") {
+    function isGithubPagesDashboardOrigin(hostname = "") {
       const value = String(hostname || "").trim().toLowerCase();
       if (!value) return false;
-      return /\.github\.io$/i.test(value) || /(^|\.)moverlisboa\.com$/i.test(value);
+      return /\.github\.io$/i.test(value);
+    }
+
+    function isMoverLisboaDashboardOrigin(hostname = "") {
+      const value = String(hostname || "").trim().toLowerCase();
+      if (!value) return false;
+      return /(^|\.)moverlisboa\.com$/i.test(value);
     }
 
     function resolveBackendBases() {
@@ -7430,11 +7436,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-      const isHostedStaticOrigin = isHostedStaticDashboardOrigin(hostname);
+      const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
+      const isMoverLisboaOrigin = isMoverLisboaDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
 
-      // On GitHub Pages / moverlisboa.com static hosting, prefer the FastAPI backend origin first.
-      if (isHostedStaticOrigin && normalizedFallback) {
+      // On GitHub Pages, prefer the dedicated FastAPI backend origin first.
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
 
@@ -7451,7 +7458,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           });
         });
       }
-      if (isHostedStaticOrigin && normalizedFallback) {
+      if (isMoverLisboaOrigin && normalizedFallback) {
+        bases.push(normalizedFallback);
+      }
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       return dedupeList(bases);
@@ -7484,9 +7494,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-      const isHostedStaticOrigin = isHostedStaticDashboardOrigin(hostname);
+      const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
+      const isMoverLisboaOrigin = isMoverLisboaDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
-      if (isHostedStaticOrigin && normalizedFallback) {
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       if (originOk && hostname) {
@@ -7499,14 +7510,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           });
         });
       }
-      if (isHostedStaticOrigin && normalizedFallback) {
+      if (isMoverLisboaOrigin && normalizedFallback) {
+        bases.push(normalizedFallback);
+      }
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       return dedupeList(bases);
     })();
-    const HOSTED_STATIC_BACKEND_ONLY = (() => {
+    const GITHUB_PAGES_BACKEND_FIRST = (() => {
       if (typeof location === "undefined") return false;
-      return isHostedStaticDashboardOrigin(location.hostname);
+      return isGithubPagesDashboardOrigin(location.hostname);
     })();
     // Vehicle positions: prefer worker feed first; local API remains fallback.
     const VEHICLE_ENDPOINTS = (() => {
@@ -7515,7 +7529,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         "https://rt.jdcp.workers.dev/",
         "https://rt.jdcp.workers.dev/api/vehicle-positions"
       ];
-      return dedupeList(HOSTED_STATIC_BACKEND_ONLY
+      return dedupeList(GITHUB_PAGES_BACKEND_FIRST
         ? [...backendEndpoints, ...workerEndpoints]
         : [...workerEndpoints, ...backendEndpoints]);
     })();
