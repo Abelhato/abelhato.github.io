@@ -7415,6 +7415,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	      return null;
 	    }
 
+    function isHostedStaticDashboardOrigin(hostname = "") {
+      const value = String(hostname || "").trim().toLowerCase();
+      if (!value) return false;
+      return /\.github\.io$/i.test(value) || /(^|\.)moverlisboa\.com$/i.test(value);
+    }
+
     function resolveBackendBases() {
       const bases = [];
       const override = urlParams.get("backend") || urlParams.get("api_base");
@@ -7424,12 +7430,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-      const isGithubPages = /\.github\.io$/i.test(hostname);
-      const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
+      const isHostedStaticOrigin = isHostedStaticDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
 
       // On GitHub Pages / moverlisboa.com static hosting, prefer the FastAPI backend origin first.
-      if ((isGithubPages || isMoverLisboa) && normalizedFallback) {
+      if (isHostedStaticOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
 
@@ -7446,7 +7451,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           });
         });
       }
-      if ((isGithubPages || isMoverLisboa) && normalizedFallback) {
+      if (isHostedStaticOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       return dedupeList(bases);
@@ -7479,10 +7484,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-      const isGithubPages = /\.github\.io$/i.test(hostname);
-      const isMoverLisboa = /(^|\.)moverlisboa\.com$/i.test(hostname);
+      const isHostedStaticOrigin = isHostedStaticDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
-      if ((isGithubPages || isMoverLisboa) && normalizedFallback) {
+      if (isHostedStaticOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       if (originOk && hostname) {
@@ -7495,17 +7499,26 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           });
         });
       }
-      if ((isGithubPages || isMoverLisboa) && normalizedFallback) {
+      if (isHostedStaticOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       return dedupeList(bases);
     })();
+    const HOSTED_STATIC_BACKEND_ONLY = (() => {
+      if (typeof location === "undefined") return false;
+      return isHostedStaticDashboardOrigin(location.hostname);
+    })();
     // Vehicle positions: prefer worker feed first; local API remains fallback.
-    const VEHICLE_ENDPOINTS = dedupeList([
-      "https://rt.jdcp.workers.dev/",
-      "https://rt.jdcp.workers.dev/api/vehicle-positions",
-      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/vehicle-positions`)
-    ]);
+    const VEHICLE_ENDPOINTS = (() => {
+      const backendEndpoints = (LOCAL_BACKENDS || []).map(base => `${base}/api/vehicle-positions`);
+      const workerEndpoints = [
+        "https://rt.jdcp.workers.dev/",
+        "https://rt.jdcp.workers.dev/api/vehicle-positions"
+      ];
+      return dedupeList(HOSTED_STATIC_BACKEND_ONLY
+        ? [...backendEndpoints, ...workerEndpoints]
+        : [...workerEndpoints, ...backendEndpoints]);
+    })();
     const CHARTS_CACHE_TTL_MS = 60_000;
     const CHARTS_MIN_INTERVAL_MS = 35_000;
     const CHARTS_REFRESH_INTERVAL_MS = 45_000;
