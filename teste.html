@@ -7415,10 +7415,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	      return null;
 	    }
 
-    function isHostedStaticDashboardOrigin(hostname = "") {
+    function isGithubPagesDashboardOrigin(hostname = "") {
       const value = String(hostname || "").trim().toLowerCase();
       if (!value) return false;
-      return /\.github\.io$/i.test(value) || /(^|\.)moverlisboa\.com$/i.test(value);
+      return /\.github\.io$/i.test(value);
     }
 
     function resolveBackendBases() {
@@ -7430,11 +7430,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-      const isHostedStaticOrigin = isHostedStaticDashboardOrigin(hostname);
+      const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
 
-      // On GitHub Pages / moverlisboa.com static hosting, prefer the FastAPI backend origin first.
-      if (isHostedStaticOrigin && normalizedFallback) {
+      // On GitHub Pages, prefer the dedicated FastAPI backend origin first.
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
 
@@ -7451,7 +7451,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           });
         });
       }
-      if (isHostedStaticOrigin && normalizedFallback) {
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       return dedupeList(bases);
@@ -7484,9 +7484,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const hostname = originOk ? location.hostname : "";
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-      const isHostedStaticOrigin = isHostedStaticDashboardOrigin(hostname);
+      const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
-      if (isHostedStaticOrigin && normalizedFallback) {
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       if (originOk && hostname) {
@@ -7499,14 +7499,14 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           });
         });
       }
-      if (isHostedStaticOrigin && normalizedFallback) {
+      if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
       }
       return dedupeList(bases);
     })();
-    const HOSTED_STATIC_BACKEND_ONLY = (() => {
+    const GITHUB_PAGES_BACKEND_FIRST = (() => {
       if (typeof location === "undefined") return false;
-      return isHostedStaticDashboardOrigin(location.hostname);
+      return isGithubPagesDashboardOrigin(location.hostname);
     })();
     // Vehicle positions: prefer worker feed first; local API remains fallback.
     const VEHICLE_ENDPOINTS = (() => {
@@ -7515,7 +7515,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         "https://rt.jdcp.workers.dev/",
         "https://rt.jdcp.workers.dev/api/vehicle-positions"
       ];
-      return dedupeList(HOSTED_STATIC_BACKEND_ONLY
+      return dedupeList(GITHUB_PAGES_BACKEND_FIRST
         ? [...backendEndpoints, ...workerEndpoints]
         : [...workerEndpoints, ...backendEndpoints]);
     })();
@@ -12823,6 +12823,31 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       );
     }
 
+    function describeEndpointError(url, err) {
+      const target = String(url || "").trim();
+      const message = String(err?.message || err || "").trim();
+      const status = Number(err?.status);
+      const parts = [];
+      if (Number.isFinite(status) && status > 0) {
+        parts.push(`HTTP ${status}`);
+      } else if (message) {
+        parts.push(message);
+      } else {
+        parts.push("erro de rede");
+      }
+      try {
+        const targetUrl = new URL(target, location.href);
+        const isCrossOrigin = targetUrl.origin !== location.origin;
+        const looksLikeGenericFetchFailure =
+          !Number.isFinite(status) &&
+          /failed to fetch|networkerror|load failed/i.test(message || "");
+        if (isCrossOrigin && looksLikeGenericFetchFailure) {
+          parts.push(`possivel CORS/rede entre ${location.origin} e ${targetUrl.origin}`);
+        }
+      } catch (parseErr) {}
+      return parts.join(" | ");
+    }
+
     function createAbortError() {
       const err = new Error("Aborted");
       err.name = "AbortError";
@@ -12993,7 +13018,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           }
           lastError = endpointError;
           if (endpointError && !isAbortLikeError(endpointError)) {
-            console.warn("Falha ao contactar endpoint", url, endpointError);
+            console.warn(`Falha ao contactar endpoint: ${describeEndpointError(url, endpointError)}`, url, endpointError);
           }
         }
         throw lastError || new Error("Todos os endpoints falharam");
