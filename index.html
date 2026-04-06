@@ -9019,12 +9019,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const base = getBaseRouteKey(routeId);
       if (!base) return;
       const existing = BASE_ROUTE_DETAILS.get(base) || {};
+      const isPreferredBaseVariant = String(routeId).trim() === `${base}_0`;
       let updated = false;
-      if (shortClean && !existing.shortName) {
+      if (shortClean && (isPreferredBaseVariant || !existing.shortName)) {
         existing.shortName = shortClean;
         updated = true;
       }
-      if (longClean && !existing.longName) {
+      if (longClean && (isPreferredBaseVariant || !existing.longName)) {
         existing.longName = longClean;
         updated = true;
       }
@@ -9320,12 +9321,29 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (short && long) return `${short} ${long}`;
         if (short || long) return short || long;
       }
-      // For the aggregated base route label, prefer the metadata for the `_0` variant when available.
+      // For aggregated Carris routes, always prefer the first variant id ending in `_0`.
       let metaVariantId = routeId;
-      if (routeId && !routeId.includes("_") && base) {
+      if (base && !String(routeId || "").includes("_")) {
         const preferred = `${base}_0`;
         if (ROUTE_DETAILS.has(preferred)) {
           metaVariantId = preferred;
+        } else {
+          const matchingVariantIds = Array.from(ROUTE_DETAILS.keys())
+            .filter((candidateId) => {
+              const normalizedCandidate = normalizeRouteKey(candidateId);
+              return normalizedCandidate.startsWith(`${base}_`);
+            })
+            .sort((a, b) => {
+              const aSuffix = Number.parseInt(String(a).split("_").pop(), 10);
+              const bSuffix = Number.parseInt(String(b).split("_").pop(), 10);
+              const safeA = Number.isFinite(aSuffix) ? aSuffix : Number.MAX_SAFE_INTEGER;
+              const safeB = Number.isFinite(bSuffix) ? bSuffix : Number.MAX_SAFE_INTEGER;
+              if (safeA !== safeB) return safeA - safeB;
+              return String(a).localeCompare(String(b), "pt-PT", { numeric: true, sensitivity: "base" });
+            });
+          if (matchingVariantIds.length) {
+            metaVariantId = matchingVariantIds[0];
+          }
         }
       }
       const metaVariant = metaVariantId ? ROUTE_DETAILS.get(metaVariantId) : null;
@@ -10096,6 +10114,29 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return dedupeRouteLabels(routeList).filter((label) => !isMalformedStopMiniPillLabel(label));
     }
 
+    function stopMiniPillStyleRef(routeLabel, routeId = "", operator = "") {
+      const rawLabel = normalizeRouteKey(routeLabel);
+      const normalizedOperator = normalizeOperator(operator || "");
+      const plainPublicCarrisLabel = Boolean(
+        rawLabel &&
+        !rawLabel.includes("_") &&
+        !rawLabel.includes(":") &&
+        /^\d{1,4}[A-Z]?$/i.test(rawLabel)
+      );
+      if (plainPublicCarrisLabel && (!normalizedOperator || normalizedOperator === OPERATOR_CARRIS)) {
+        return rawLabel;
+      }
+      const resolvedRouteId = normalizeRouteKey(routeId || resolveBaseIdFromLabel(routeLabel, { preferredOperator: operator }) || routeLabel);
+      const code = displayRouteCode(routeLabel, resolvedRouteId || routeLabel) || rawLabel;
+      if (
+        normalizedOperator === OPERATOR_CARRIS ||
+        routeBelongsToOperator(resolvedRouteId, OPERATOR_CARRIS)
+      ) {
+        return code || routeLabel;
+      }
+      return resolvedRouteId || code || routeLabel;
+    }
+
     function buildStopPreviewPillsHtml(routes) {
       const deduped = sanitizeStopMiniPillRouteLabels(routes);
       if (!deduped.length) return "";
@@ -10106,9 +10147,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       });
       const limited = ordered.slice(0, 13);
       return limited.map(routeLabel => {
-        const style = pillStyleForRoute(routeLabel);
         const routeId = resolveBaseIdFromLabel(routeLabel) || routeLabel;
         const code = displayRouteCode(routeLabel, routeId) || routeLabel;
+        const style = pillStyleForRoute(stopMiniPillStyleRef(routeLabel, routeId));
         const title = style?.title || routeLabel;
         return `<span class="preview-stop-route-pill" title="${escapeHtml(title)}" style="--pill-bg:${style.bg};--pill-fg:${style.fg};--pill-border:${style.border}">${escapeHtml(code)}</span>`;
       }).join("");
@@ -13426,7 +13467,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const normalized = normalizeRouteKey(routeId);
       const base = getBaseRouteKey(normalized);
       const metaVariant = normalized ? ROUTE_DETAILS.get(normalized) : null;
-      const metaBase = base ? (BASE_ROUTE_DETAILS.get(base) || ROUTE_DETAILS.get(`${base}_0`)) : null;
+      const metaBase = base ? (ROUTE_DETAILS.get(`${base}_0`) || BASE_ROUTE_DETAILS.get(base)) : null;
       return {
         shortName: String(metaVariant?.shortName || metaBase?.shortName || "").trim(),
         longName: String(metaVariant?.longName || metaBase?.longName || "").trim()
@@ -13553,6 +13594,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       });
       byVariant.forEach((v, variantId) => {
         const vehicleOperator = normalizeOperator(v?.operator || "");
+        const resolvedBaseFromLabel = resolveBaseIdFromLabel(
+          v?.routeLabel || v?.linha || variantId,
+          { preferredOperator: vehicleOperator }
+        ) || "";
         const tcbScopedShort = (vehicleOperator === OPERATOR_TCB && v?.linha)
           ? scopedGtfsId(OPERATOR_TCB, String(v.linha).trim())
           : "";
@@ -13560,7 +13605,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           ? scopedGtfsId(OPERATOR_MOBICASCAIS, String(v.linha).trim())
           : "";
         const mappedBase = ROUTE_BASE_BY_VARIANT.get(variantId);
-        const baseId = normalizeRouteKey(mappedBase || tcbScopedShort || mobiScopedShort || getBaseRouteKey(variantId));
+        const baseId = normalizeRouteKey(
+          mappedBase
+          || resolvedBaseFromLabel
+          || tcbScopedShort
+          || mobiScopedShort
+          || getBaseRouteKey(variantId)
+        );
         if (isPlaceholderRouteToken(baseId)) return;
         if (!baseId) return;
         ROUTE_BASE_BY_VARIANT.set(variantId, baseId);
@@ -13702,7 +13753,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const raw = normalizeRouteKey(routeIdOrName);
       const resolvedLabel = raw.includes("_") ? (resolvePublicRouteLabel(raw) || raw) : raw;
       const { code, codeBase } = careerCodeFromLabel(resolvedLabel);
-      if (code.match(/^2\d{2}$/)) return "Rede Madrugada";
+      if (codeBase.match(/^2\d{2}$/)) return "Rede Madrugada";
       if (code.endsWith("E")) return "Elétricos";
       if (code.endsWith("B")) return "Carreiras de Bairro";
       return "Autocarros Diurnos";
@@ -13711,8 +13762,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function definirZona(routeIdOrName) {
       const { code, codeBase } = parseRouteCodeParts(routeIdOrName);
       if (!code && !codeBase) return null;
-      if (code.endsWith("B")) return "Bairro";
       if (ZONE_ROUTE_BASES.Madrugada.has(codeBase)) return "Madrugada";
+      if (code.endsWith("B")) return "Bairro";
       for (const [zone, routes] of Object.entries(ZONE_ROUTE_BASES)) {
         if (routes.has(code) || routes.has(codeBase)) return zone;
       }
@@ -17047,6 +17098,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	      try {
 	        if (adapter.ready instanceof Promise) await adapter.ready;
 	        if (!adapter?.map) return;
+          let didInitialStopsRefresh = false;
+          const triggerInitialStopsRefresh = () => {
+            if (didInitialStopsRefresh) return;
+            didInitialStopsRefresh = true;
+            scheduleRefreshStops(true);
+          };
 	        const applyStopMarkerSize = () => {
 	          try {
 	            const z = Number(adapter.map.getZoom?.());
@@ -17071,6 +17128,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           adapter.map.on("movestart", cancelGlobalStopsFetch);
           adapter.map.on("zoomstart", cancelGlobalStopsFetch);
           applyStopMarkerSize();
+          requestAnimationFrame(() => requestAnimationFrame(triggerInitialStopsRefresh));
         } else if (adapter instanceof MapLibreAdapter) {
           const handleStopsUpdate = () => scheduleRefreshStops(false);
           adapter.map.on("zoomend", () => {
@@ -17090,6 +17148,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 	          adapter.map.on("zoomstart", cancelGlobalStopsFetch);
 	          applyStopMarkerSize();
 	          updateMapLibreStopLabels();
+            adapter.map.once("idle", triggerInitialStopsRefresh);
+            setTimeout(triggerInitialStopsRefresh, 1200);
 	        }
 	      } catch (err) {}
 	    }
@@ -17601,11 +17661,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const routes = sanitizeStopMiniPillRouteLabels(await resolveRoutesForStopIds(stopIds, { operator, initialRoutes }));
       if (!routes || routes.length === 0) return;
       const pillsHtml = routes.map(routeLabel => {
-        const code = displayRouteCode(routeLabel, resolveBaseIdFromLabel(routeLabel) || routeLabel);
+        const routeId = resolveBaseIdFromLabel(routeLabel) || routeLabel;
+        const code = displayRouteCode(routeLabel, routeId);
         if (isMalformedStopMiniPillLabel(code)) return "";
         if (shouldHideStopMiniPillForOperator(routeLabel, operator)) return "";
         if (shouldHideStopMiniPillForOperator(code, operator)) return "";
-        const style = pillStyleForRoute(routeLabel);
+        const style = pillStyleForRoute(stopMiniPillStyleRef(routeLabel, routeId, operator));
         const bg = style?.bg || "#444";
         const fg = style?.fg || "#fff";
         const border = style?.border || "rgba(0,0,0,0.2)";
@@ -17693,11 +17754,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (!routes || routes.length === 0 || !container) return;
         const displayRoutes = routes;
         const pillsHtml = displayRoutes.map(routeLabel => {
-          const code = displayRouteCode(routeLabel, resolveBaseIdFromLabel(routeLabel) || routeLabel);
+          const routeId = resolveBaseIdFromLabel(routeLabel) || routeLabel;
+          const code = displayRouteCode(routeLabel, routeId);
           if (isMalformedStopMiniPillLabel(code)) return "";
           if (shouldHideStopMiniPillForOperator(routeLabel, operator)) return "";
           if (shouldHideStopMiniPillForOperator(code, operator)) return "";
-          const style = pillStyleForRoute(routeLabel);
+          const style = pillStyleForRoute(stopMiniPillStyleRef(routeLabel, routeId, operator));
           const bg = style?.bg || "#444";
           const fg = style?.fg || "#fff";
           const border = style?.border || "rgba(0,0,0,0.2)";
@@ -21623,6 +21685,19 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return normalized === OPERATOR_CP || normalized === OPERATOR_FERTAGUS || normalized === OPERATOR_METRO;
     }
 
+    function shouldRenderStopForActiveOperators(stop) {
+      const normalizedOperator = normalizeOperator(stop?.operator || OPERATOR_CARRIS);
+      if (normalizedOperator === OPERATOR_CARRIS) return effectiveHasCarrisOperator();
+      if (normalizedOperator === OPERATOR_CMET) return effectiveHasCmetOperator();
+      if (normalizedOperator === OPERATOR_TCB) return effectiveHasTcbOperator();
+      if (normalizedOperator === OPERATOR_MOBICASCAIS) return effectiveHasMobiCascaisOperator();
+      if (normalizedOperator === OPERATOR_CP) return effectiveHasCpOperator();
+      if (normalizedOperator === OPERATOR_TTSL) return effectiveHasTtslOperator();
+      if (normalizedOperator === OPERATOR_METRO) return hasMetroOperator();
+      if (normalizedOperator === OPERATOR_FERTAGUS) return hasFertagusOperator();
+      return effectiveHasCarrisOperator();
+    }
+
     function isCarrisOrCmetOperatorValue(operator) {
       const normalized = normalizeOperator(operator || "");
       return hasCarrisOperator(normalized) || hasCmetOperator(normalized);
@@ -24081,7 +24156,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         return;
       }
       const rawStops = Array.isArray(payload.stops) ? payload.stops : [];
-      const stops = collapseMetroGlobalStopsForDisplay(rawStops);
+      const stops = collapseMetroGlobalStopsForDisplay(rawStops).filter((stop) => shouldRenderStopForActiveOperators(stop));
       const zoom = adapterZoom();
       const visibleStops = Number.isFinite(zoom)
         ? stops.filter((stop) => Number(zoom) >= globalStopsMinZoomForOperator(stop?.operator || ""))
