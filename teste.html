@@ -7421,6 +7421,12 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return /\.github\.io$/i.test(value);
     }
 
+    function isMoverLisboaDashboardOrigin(hostname = "") {
+      const value = String(hostname || "").trim().toLowerCase();
+      if (!value) return false;
+      return /(^|\.)moverlisboa\.com$/i.test(value);
+    }
+
     function resolveBackendBases() {
       const bases = [];
       const override = urlParams.get("backend") || urlParams.get("api_base");
@@ -7431,6 +7437,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
       const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
+      const isMoverLisboaOrigin = isMoverLisboaDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
 
       // On GitHub Pages, prefer the dedicated FastAPI backend origin first.
@@ -7450,6 +7457,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             bases.push(`${proto}//${loopHost}:${port}`);
           });
         });
+      }
+      if (isMoverLisboaOrigin && normalizedFallback) {
+        bases.push(normalizedFallback);
       }
       if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
@@ -7485,6 +7495,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const proto = originOk ? location.protocol : "http:";
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
       const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
+      const isMoverLisboaOrigin = isMoverLisboaDashboardOrigin(hostname);
       const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
       if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
@@ -7498,6 +7509,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             bases.push(`${proto}//${loopHost}:${port}`);
           });
         });
+      }
+      if (isMoverLisboaOrigin && normalizedFallback) {
+        bases.push(normalizedFallback);
       }
       if (isGithubPagesOrigin && normalizedFallback) {
         bases.push(normalizedFallback);
