@@ -13,7 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="shortcut icon" href="favicon.ico">
   <link rel="alternate icon" href="favicon.ico">
-  <link rel="apple-touch-icon" href="favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" crossorigin="">
@@ -2740,6 +2740,23 @@
       border-color: rgba(255, 255, 255, 0.12);
       box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
     }
+    body.theme-dark .map-layer-btn {
+      background: rgba(15, 23, 42, 0.92);
+      border-color: rgba(255, 255, 255, 0.14);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+    }
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .map-layer-btn {
+        background: rgba(15, 23, 42, 0.92);
+        border-color: rgba(255, 255, 255, 0.14);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      }
+      body.theme-auto .map-layer-popover {
+        background: rgba(15, 23, 42, 0.88);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+      }
+    }
     .map-render-filter__toggle {
       border: 1px solid var(--border-strong);
       border-radius: 999px;
@@ -2758,6 +2775,28 @@
       border-color: var(--accent);
       background: rgba(245, 159, 0, 0.12);
       color: var(--text-primary);
+    }
+    body.theme-dark .map-render-filter__toggle {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.16);
+      color: rgba(248, 250, 252, 0.92);
+    }
+    body.theme-dark .map-render-filter__toggle.is-active {
+      background: rgba(245, 159, 0, 0.24);
+      border-color: rgba(245, 159, 0, 0.72);
+      color: #fff7e6;
+    }
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .map-render-filter__toggle {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.16);
+        color: rgba(248, 250, 252, 0.92);
+      }
+      body.theme-auto .map-render-filter__toggle.is-active {
+        background: rgba(245, 159, 0, 0.24);
+        border-color: rgba(245, 159, 0, 0.72);
+        color: #fff7e6;
+      }
     }
     .map-render-filter__toggle:focus-visible {
       outline: 2px solid var(--accent);
@@ -2783,10 +2822,18 @@
       color: #0f172a;
     }
     body.theme-dark .map-credits {
-      background: rgba(255, 255, 255, 0.2);
+      background: rgba(15, 23, 42, 0.78);
       border-color: rgba(255, 255, 255, 0.18);
       box-shadow: none;
-      color: #0f172a;
+      color: rgba(248, 250, 252, 0.92);
+    }
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .map-credits {
+        background: rgba(15, 23, 42, 0.78);
+        border-color: rgba(255, 255, 255, 0.18);
+        box-shadow: none;
+        color: rgba(248, 250, 252, 0.92);
+      }
     }
     .map-credits a {
       color: inherit;
@@ -2821,6 +2868,22 @@
     }
     .map-north-btn {
       background: var(--surface-1);
+    }
+    body.theme-dark .user-location-btn,
+    body.theme-dark .map-north-btn,
+    body.theme-dark .map-dev-note-btn {
+      background: rgba(15, 23, 42, 0.92);
+      border-color: rgba(255, 255, 255, 0.14);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+    }
+    @media (prefers-color-scheme: dark) {
+      body.theme-auto .user-location-btn,
+      body.theme-auto .map-north-btn,
+      body.theme-auto .map-dev-note-btn {
+        background: rgba(15, 23, 42, 0.92);
+        border-color: rgba(255, 255, 255, 0.14);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      }
     }
     .map-dev-note-control {
       position: relative;
