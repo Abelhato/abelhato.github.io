@@ -4858,7 +4858,7 @@
         </div>
       </div>
       <div class="map-credits" aria-label="Créditos do mapa">
-        <a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a>
+        <a href="https://openfreemap.org/" target="_blank">&copy; OpenFreeMap</a>
         <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>
       </div>
     </div>
@@ -4934,9 +4934,9 @@
 
     const MAP_CENTER = [38.736946, -9.142685];
     const MAP_ZOOM = 13;
-    const LEAFLET_TILE_URL = "https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key=ABuixSSYWNdbrXeMdCrA";
-    const MAPLIBRE_STYLE_URL = "https://api.maptiler.com/maps/dataviz-v4/style.json?key=ABuixSSYWNdbrXeMdCrA";
-    const REFRESH_RATE_MS = 5000;
+    const LEAFLET_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const MAPLIBRE_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+    const REFRESH_RATE_MS = 8000;
     const VEHICLE_STALE_FORCE_MS = 12_000; // Force a refresh if we haven't applied new vehicles within this window.
     const VEHICLE_MAX_STALE_MS = 15_000; // If newest ping is older than this, try the next endpoint.
     const VEHICLE_CACHE_TTL_MS = 0; // disable vehicle cache to force fresh pulls each poll
@@ -7549,7 +7549,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       category: KPI_BASE_URLS.map(base => `${base}/api/kpis/category`)
     };
     const KPI_CACHE_TTL_MS = 25_000;
-    const KPI_REFRESH_INTERVAL_MS = 15_000;
+    const KPI_REFRESH_INTERVAL_MS = 30_000;
     const CHART_PATHS = ["/frota/charts/today"];
     const CHARTS_ENDPOINTS = KPI_BASE_URLS.flatMap(base =>
       CHART_PATHS.map(path => `${base}${path}`)
@@ -7777,6 +7777,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const routesCatalogStaticOperatorsLoaded = new Set();
     let routesCatalogBackgroundWarmupPromise = null;
     const routesCatalogBackgroundQueue = new Set();
+    const STATIC_GTFS_BACKGROUND_WARMUP_ENABLED = false;
     let staticGtfsFeedBackgroundWarmupPromise = null;
     const staticGtfsFeedBackgroundQueue = new Set();
     let cmetRoutesById = new Map();
@@ -8127,6 +8128,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function scheduleStaticGtfsFeedWarmup(operators = []) {
+      if (!STATIC_GTFS_BACKGROUND_WARMUP_ENABLED) return;
       const incoming = dedupeList((Array.isArray(operators) ? operators : []).map(normalizeOperator).filter(Boolean))
         .filter((operator) => isStaticGtfsOperator(operator) && !staticGtfsFeedCache.has(operator));
       incoming.forEach((operator) => staticGtfsFeedBackgroundQueue.add(operator));
@@ -8283,7 +8285,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       for (const url of list) {
         if (!url) continue;
         try {
-          const response = await fetch(url, { cache: "no-store" });
+          const response = await fetch(url, { cache: "force-cache" });
           if (response.ok) return await response.text();
         } catch (err) {}
       }
@@ -9355,6 +9357,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function stopsEnabledForOverlayPayload(payload) {
       if (stopRenderingEnabled) return payload;
+      return {
+        ...(payload || {}),
+        stops: []
+      };
+    }
+
+    function overlayPayloadWithoutStops(payload) {
       return {
         ...(payload || {}),
         stops: []
@@ -15028,10 +15037,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         this._interactionTimeout = null;
         this.animationDuration = Math.max(300, Math.min(ANIMATION_MS, REFRESH_RATE_MS - 150));
         L.tileLayer(LEAFLET_TILE_URL, {
-          attribution: '&copy; <a href="https://www.maptiler.com/copyright/" target="_blank">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>',
           maxZoom: 19,
-          tileSize: 512,
-          zoomOffset: -1,
+          tileSize: 256,
+          zoomOffset: 0,
           detectRetina: true,
           updateWhenIdle: true,
           updateWhenZooming: false,
@@ -18402,7 +18411,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return VEHICLE_DAY_ENDPOINTS.map(base => `${base}?date=${encodeURIComponent(day)}&line_id=${encoded}`);
     }
 
-    async function fetchRouteOverlayPayload(routeIds, { forceNetwork = false, signal, fastShapes = false, onStops } = {}) {
+    async function fetchRouteOverlayPayload(routeIds, { forceNetwork = false, signal, fastShapes = false, onStops, includeStops = true } = {}) {
       const now = Date.now();
       const ids = normalizeOverlayIds(routeIds);
       const cacheKey = JSON.stringify({ v: OVERLAY_CACHE_SCHEMA_VERSION, ids });
@@ -18448,15 +18457,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               .then(value => ({ ok: true, value, routeId, dirId, color }))
               .catch(() => ({ ok: false }))
           );
-          stopTasks.push(
-            fetchFromEndpoints(
-              stopsEndpoints(routeId),
-              { direction: String(serverDirectionForClientDirection(dirId)), limit: "220" },
-              { signal }
-            )
-              .then(value => ({ ok: true, value, routeId, dirId, color }))
-              .catch(() => ({ ok: false }))
-          );
+          if (includeStops) {
+            stopTasks.push(
+              fetchFromEndpoints(
+                stopsEndpoints(routeId),
+                { direction: String(serverDirectionForClientDirection(dirId)), limit: "220" },
+                { signal }
+              )
+                .then(value => ({ ok: true, value, routeId, dirId, color }))
+                .catch(() => ({ ok: false }))
+            );
+          }
         }
       }
 
@@ -18498,6 +18509,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         }
         return failed;
       };
+
+      if (!includeStops) {
+        const payload = { routeIds: ids, shapes, stops: [] };
+        return finalizePayload(payload, fetchFailed);
+      }
 
       if (fastShapes) {
         const partialPayload = { routeIds: ids, shapes, stops: [] };
@@ -18656,6 +18672,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return ids.some((id) => routeBelongsToOperator(id, OPERATOR_CARRIS));
     }
 
+    function shouldSuppressStopsForMixedOperatorOverlay(routeIds = []) {
+      return false;
+    }
+
     function effectiveHasCarrisOperator() {
       if (!hasRouteSelection()) return hasCarrisOperator();
       return selectionHasCarrisRoutes();
@@ -18768,7 +18788,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return Array.from(out);
     }
 
-    async function fetchStaticGtfsRouteOverlayPayload(routeIds = []) {
+    async function fetchStaticGtfsRouteOverlayPayload(routeIds = [], { includeStops = true } = {}) {
       const ids = normalizeOverlayIds(routeIds);
       const shapes = [];
       const stops = [];
@@ -18956,39 +18976,41 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               if (!dirStopAngles.has(angleKey)) dirStopAngles.set(angleKey, Number(angle));
             }
           });
-          for (const row of routeStopTimes) {
-            const stopId = String(row?.stop_id || "").trim();
-            const tripId = String(row?.trip_id || "").trim();
-            const tripMeta = tripId ? feed.tripsById.get(tripId) : null;
-            const directionId = normalizeDirectionId(row?.direction_id ?? tripMeta?.directionId);
-            const stopMeta = feed.stopsById.get(stopId);
-            const lat = Number(stopMeta?.stop_lat);
-            const lon = Number(stopMeta?.stop_lon);
-            if (!stopId || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-            const key = `${resolvedRouteId}|${directionId ?? "x"}|${stopId}`;
-            if (seenStop.has(key)) continue;
-            seenStop.add(key);
-            const routeLabel = resolvePublicRouteLabel(resolvedRouteId) || routeMeta?.shortName || routeMeta?.longName || resolvedRouteId;
-            stops.push({
-              stop_id: stopId,
-              stop_name: String(stopMeta?.stop_name || stopId),
-              stop_lat: lat,
-              stop_lon: lon,
-              operator: routeOperator,
-              routeId: resolvedRouteId,
-              directionId,
-              color: (
-                hasRouteSelection() &&
-                (routeBelongsToOperator(resolvedRouteId, OPERATOR_TCB) || routeBelongsToOperator(resolvedRouteId, OPERATOR_MOBICASCAIS))
-              )
-                ? (routeOverlayShapeColor(resolvedRouteId, directionId) || routeColor)
-                : (routeDirectionColor(resolvedRouteId, directionId) || routeColor),
-              routes: [routeLabel],
-              direction_angle: Number.isFinite(Number(dirStopAngles.get(`${directionId ?? "x"}|${stopId}`)))
-                ? Number(dirStopAngles.get(`${directionId ?? "x"}|${stopId}`))
-                : null,
-              is_terminal: dirTerminalStops.has(`${directionId ?? "x"}|${stopId}`)
-            });
+          if (includeStops) {
+            for (const row of routeStopTimes) {
+              const stopId = String(row?.stop_id || "").trim();
+              const tripId = String(row?.trip_id || "").trim();
+              const tripMeta = tripId ? feed.tripsById.get(tripId) : null;
+              const directionId = normalizeDirectionId(row?.direction_id ?? tripMeta?.directionId);
+              const stopMeta = feed.stopsById.get(stopId);
+              const lat = Number(stopMeta?.stop_lat);
+              const lon = Number(stopMeta?.stop_lon);
+              if (!stopId || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+              const key = `${resolvedRouteId}|${directionId ?? "x"}|${stopId}`;
+              if (seenStop.has(key)) continue;
+              seenStop.add(key);
+              const routeLabel = resolvePublicRouteLabel(resolvedRouteId) || routeMeta?.shortName || routeMeta?.longName || resolvedRouteId;
+              stops.push({
+                stop_id: stopId,
+                stop_name: String(stopMeta?.stop_name || stopId),
+                stop_lat: lat,
+                stop_lon: lon,
+                operator: routeOperator,
+                routeId: resolvedRouteId,
+                directionId,
+                color: (
+                  hasRouteSelection() &&
+                  (routeBelongsToOperator(resolvedRouteId, OPERATOR_TCB) || routeBelongsToOperator(resolvedRouteId, OPERATOR_MOBICASCAIS))
+                )
+                  ? (routeOverlayShapeColor(resolvedRouteId, directionId) || routeColor)
+                  : (routeDirectionColor(resolvedRouteId, directionId) || routeColor),
+                routes: [routeLabel],
+                direction_angle: Number.isFinite(Number(dirStopAngles.get(`${directionId ?? "x"}|${stopId}`)))
+                  ? Number(dirStopAngles.get(`${directionId ?? "x"}|${stopId}`))
+                  : null,
+                is_terminal: dirTerminalStops.has(`${directionId ?? "x"}|${stopId}`)
+              });
+            }
           }
         }
       }
@@ -18997,17 +19019,18 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function fetchMixedRouteOverlayPayload(routeIds = [], options = {}) {
       const { carris, cmet, externalGtfs } = splitOverlayRouteIdsByOperator(routeIds);
+      const includeStops = options.includeStops !== false;
       const payloads = [];
       if (carris.length) {
-        const carrisPayload = await fetchRouteOverlayPayload(carris, options);
+        const carrisPayload = await fetchRouteOverlayPayload(carris, { ...options, includeStops });
         if (carrisPayload) payloads.push(carrisPayload);
       }
       if (cmet.length) {
-        const cmetPayload = await fetchCmetRouteOverlayPayload(cmet);
+        const cmetPayload = await fetchCmetRouteOverlayPayload(cmet, { includeStops });
         if (cmetPayload) payloads.push(cmetPayload);
       }
       if (externalGtfs.length) {
-        const staticPayload = await fetchStaticGtfsRouteOverlayPayload(externalGtfs);
+        const staticPayload = await fetchStaticGtfsRouteOverlayPayload(externalGtfs, { includeStops });
         if (staticPayload) payloads.push(staticPayload);
       }
       return mergeRouteOverlayPayloads(payloads, routeIds);
@@ -19024,12 +19047,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       routeOverlayPrefetchAbortController = controller;
       try {
         const { carris, cmet, externalGtfs } = splitOverlayRouteIdsByOperator(unseen);
+        const includeStops = !shouldSuppressStopsForMixedOperatorOverlay(unseen);
         if ((carris.length && cmet.length) || externalGtfs.length) {
-          await fetchMixedRouteOverlayPayload(unseen, { signal: controller.signal });
+          await fetchMixedRouteOverlayPayload(unseen, { signal: controller.signal, includeStops });
         } else if (cmet.length) {
-          await fetchCmetRouteOverlayPayload(unseen);
+          await fetchCmetRouteOverlayPayload(unseen, { includeStops });
         } else {
-          await fetchRouteOverlayPayload(unseen, { signal: controller.signal });
+          await fetchRouteOverlayPayload(unseen, { signal: controller.signal, includeStops });
         }
       } catch (err) {
         // Ignore failures to keep popup interactions fast.
@@ -19105,18 +19129,20 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       overlayInflight = (async () => {
         try {
           if (adapter.ready instanceof Promise) await adapter.ready;
+          const includeStops = !shouldSuppressStopsForMixedOperatorOverlay(ids);
           const payload = ((carrisIds.length && cmetIds.length) || externalGtfsIds.length)
-            ? await fetchMixedRouteOverlayPayload(ids, { forceNetwork: force })
+            ? await fetchMixedRouteOverlayPayload(ids, { forceNetwork: force, includeStops })
             : await fetchRouteOverlayPayload(ids, {
                 forceNetwork: force,
+                includeStops,
                 fastShapes: true,
                 onStops: (fullPayload) => {
                   if (currentOverlayKey !== wantKey) return;
-                  adapter?.setRouteOverlay?.(stopsEnabledForOverlayPayload(fullPayload), { fit: false });
+                  adapter?.setRouteOverlay?.(stopsEnabledForOverlayPayload(includeStops ? fullPayload : overlayPayloadWithoutStops(fullPayload)), { fit: false });
                 }
               });
           const shouldFit = currentOverlayFitKey !== wantKey;
-          adapter?.setRouteOverlay?.(stopsEnabledForOverlayPayload(payload), { fit: shouldFit });
+          adapter?.setRouteOverlay?.(stopsEnabledForOverlayPayload(includeStops ? payload : overlayPayloadWithoutStops(payload)), { fit: shouldFit });
           if (shouldFit) currentOverlayFitKey = wantKey;
         } catch (err) {
           console.warn("Falha ao carregar overlay de rota:", err);
@@ -19352,7 +19378,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return null;
     }
 
-    async function fetchCmetRouteOverlayPayload(routeIds = []) {
+    async function fetchCmetRouteOverlayPayload(routeIds = [], { includeStops = true } = {}) {
       await Promise.all([loadRoutesCatalog(), ensureCmetStopsCatalog()]);
       const ids = normalizeOverlayIds(routeIds);
       const patterns = [];
@@ -19413,44 +19439,46 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           }
         }
       }
-      for (const matchedRouteId of matchedRouteIds) {
-        try {
-          const payload = await fetchFromEndpoints(
-            CM_ROUTE_STOPS_ENDPOINTS(matchedRouteId),
-            {},
-            { timeoutMs: 20000, cacheKey: `cm-route-stops:${matchedRouteId}` }
-          );
-          const rows = Array.isArray(payload) ? payload : [];
-          rows.forEach((row) => {
-            const stopId = String(row?.stop_id || "").trim();
-            const lat = Number(row?.stop_lat);
-            const lon = Number(row?.stop_lon);
-            const resolvedRouteId = String(row?.route_id ?? row?.routeId ?? matchedRouteId).trim();
-            const directionId = normalizeDirectionId(
-              row?.direction_id ?? row?.directionId ?? row?.direction ?? row?.sentido
+      if (includeStops) {
+        for (const matchedRouteId of matchedRouteIds) {
+          try {
+            const payload = await fetchFromEndpoints(
+              CM_ROUTE_STOPS_ENDPOINTS(matchedRouteId),
+              {},
+              { timeoutMs: 20000, cacheKey: `cm-route-stops:${matchedRouteId}` }
             );
-            if (!stopId || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
-            const stopKey = `${resolvedRouteId}|${directionId ?? "x"}|${stopId}`;
-            if (seenStops.has(stopKey)) return;
-            seenStops.add(stopKey);
-            stops.push({
-              stop_id: stopId,
-              stop_name: String(row?.stop_name || stopId),
-              stop_lat: lat,
-              stop_lon: lon,
-              operator: OPERATOR_CMET,
-              routeId: resolvedRouteId,
-              directionId,
-              color: routeOverlayShapeColor(resolvedRouteId, directionId)
-                || routeDirectionColor(resolvedRouteId, directionId)
-                || normalizeHexColor(row?.color),
-              routes: Array.isArray(row?.routes) ? row.routes : [],
-              direction_angle: Number.isFinite(Number(row?.direction_angle)) ? Number(row.direction_angle) : null,
-              is_terminal: Boolean(row?.is_terminal)
+            const rows = Array.isArray(payload) ? payload : [];
+            rows.forEach((row) => {
+              const stopId = String(row?.stop_id || "").trim();
+              const lat = Number(row?.stop_lat);
+              const lon = Number(row?.stop_lon);
+              const resolvedRouteId = String(row?.route_id ?? row?.routeId ?? matchedRouteId).trim();
+              const directionId = normalizeDirectionId(
+                row?.direction_id ?? row?.directionId ?? row?.direction ?? row?.sentido
+              );
+              if (!stopId || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+              const stopKey = `${resolvedRouteId}|${directionId ?? "x"}|${stopId}`;
+              if (seenStops.has(stopKey)) return;
+              seenStops.add(stopKey);
+              stops.push({
+                stop_id: stopId,
+                stop_name: String(row?.stop_name || stopId),
+                stop_lat: lat,
+                stop_lon: lon,
+                operator: OPERATOR_CMET,
+                routeId: resolvedRouteId,
+                directionId,
+                color: routeOverlayShapeColor(resolvedRouteId, directionId)
+                  || routeDirectionColor(resolvedRouteId, directionId)
+                  || normalizeHexColor(row?.color),
+                routes: Array.isArray(row?.routes) ? row.routes : [],
+                direction_angle: Number.isFinite(Number(row?.direction_angle)) ? Number(row.direction_angle) : null,
+                is_terminal: Boolean(row?.is_terminal)
+              });
             });
-          });
-        } catch (err) {
-          console.warn("Falha ao carregar route stops CM:", matchedRouteId, err);
+          } catch (err) {
+            console.warn("Falha ao carregar route stops CM:", matchedRouteId, err);
+          }
         }
       }
       return { routeIds: ids, shapes, stops };
@@ -22567,7 +22595,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       refreshCharts(true).catch(() => {});
       refreshKpis(true);
       renderFloatingRoutePreview(floatingRouteInput?.value || "");
-      fetchData().catch(() => {});
       refreshActiveStopSchedule();
       updateRouteChartHintVisibility();
       setHashFilters({ category: selectedCategory, variant: selectedVariant });
@@ -22591,7 +22618,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       refreshCharts(true).catch(() => {});
       refreshKpis(true);
       renderFloatingRoutePreview(floatingRouteInput?.value || "");
-      fetchData().catch(() => {});
       refreshActiveStopSchedule();
       if (hasSingleRouteSelection()) {
         setHashFocus({ type: "route", id: singleSelectedRouteId() });
@@ -22620,7 +22646,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       refreshCharts(true).catch(() => {});
       refreshKpis(true);
       renderFloatingRoutePreview(floatingRouteInput?.value || "");
-      fetchData().catch(() => {});
       refreshActiveStopSchedule();
       if (hasSingleRouteSelection()) {
         setHashFocus({ type: "route", id: singleSelectedRouteId() });
@@ -23820,6 +23845,23 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     async function openStopScheduleFromSearch(stopEntry) {
       const stopId = (stopEntry?.stopId || "").trim();
       if (!stopId) return;
+      if (hasRouteSelection() || (selectedVariant && selectedVariant !== VARIANT_FILTER_ALL)) {
+        selectedRouteSet.clear();
+        selectedRoute = ROUTE_FILTER_ALL;
+        selectedVariant = VARIANT_FILTER_ALL;
+        syncRouteInputValue();
+        updateVariantOptions();
+        renderVehicles();
+        refreshRouteOverlay(true).catch(() => {});
+        refreshGlobalStops(true).catch(() => {});
+        refreshCharts(true).catch(() => {});
+        refreshKpis(true);
+        updateRouteClearVisibility();
+        renderSelectedRoutePill();
+        updateFloatingContext();
+        updateRouteChartHintVisibility();
+        setHashFilters({ category: selectedCategory, variant: selectedVariant });
+      }
       closeFloatingSearch();
       hideMobileStopCard();
       focusMapOnCoordinates(stopEntry?.lat, stopEntry?.lon);
