@@ -1730,10 +1730,10 @@
   </style>
 </head>
 <body class="theme-auto">
-  <div id="app-shell">
-    <div id="map" aria-label="Mapa de trânsito"></div>
+    <div id="app-shell">
+      <div id="map" aria-label="Mapa de trânsito"></div>
     <div class="map-credits" aria-label="Créditos do mapa">
-      <a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a>
+      <a href="https://openfreemap.org/" target="_blank">&copy; OpenFreeMap</a>
       <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>
     </div>
     <div class="kpi-floating-context" id="kpi-floating-context">
@@ -1997,8 +1997,8 @@
       const MAP_CENTER = [38.736946, -9.142685];
       const MAP_ZOOM = 13;
       const body = document.body;
-      const LEAFLET_TILE_URL = "https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key=ABuixSSYWNdbrXeMdCrA";
-      const MAPLIBRE_STYLE_URL = "https://api.maptiler.com/maps/dataviz-v4/style.json?key=ABuixSSYWNdbrXeMdCrA";
+      const LEAFLET_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+      const MAPLIBRE_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
       const sidebarToggle = document.getElementById("sidebar-toggle");
       const sidebarClose = document.getElementById("sidebar-close");
       const modeButtons = Array.from(document.querySelectorAll(".mode-card[data-mode]"));
@@ -2182,8 +2182,8 @@
           this.selectedSegmentKey = "";
           L.tileLayer(LEAFLET_TILE_URL, {
             maxZoom: 19,
-            tileSize: 512,
-            zoomOffset: -1,
+            tileSize: 256,
+            zoomOffset: 0,
             detectRetina: true,
             updateWhenIdle: true,
             updateWhenZooming: false,
