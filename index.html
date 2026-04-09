@@ -7543,14 +7543,14 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const BACKEND_BASES = resolveBackendBases();
     const KPI_BASE_URLS = BACKEND_BASES;
     const KPI_ENDPOINTS = {
-      global: KPI_BASE_URLS.map(base => `${base}/api/kpis`),
-      route: KPI_BASE_URLS.map(base => `${base}/api/kpis/route`),
-      routeVariant: KPI_BASE_URLS.map(base => `${base}/api/kpis/route_variant`),
-      category: KPI_BASE_URLS.map(base => `${base}/api/kpis/category`)
+      global: KPI_BASE_URLS.map(base => `${base}/api/carris/kpis`),
+      route: KPI_BASE_URLS.map(base => `${base}/api/carris/kpis/route`),
+      routeVariant: KPI_BASE_URLS.map(base => `${base}/api/carris/kpis/route_variant`),
+      category: KPI_BASE_URLS.map(base => `${base}/api/carris/kpis/category`)
     };
     const KPI_CACHE_TTL_MS = 25_000;
     const KPI_REFRESH_INTERVAL_MS = 30_000;
-    const CHART_PATHS = ["/frota/charts/today"];
+    const CHART_PATHS = ["/api/carris/frota/charts/today"];
     const CHARTS_ENDPOINTS = KPI_BASE_URLS.flatMap(base =>
       CHART_PATHS.map(path => `${base}${path}`)
     );
@@ -7597,7 +7597,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     })();
     // Vehicle positions: prefer worker feed first; local API remains fallback.
     const VEHICLE_ENDPOINTS = (() => {
-      const backendEndpoints = (LOCAL_BACKENDS || []).map(base => `${base}/api/vehicle-positions`);
+      const backendEndpoints = (LOCAL_BACKENDS || []).map(base => `${base}/carris/vehicles`);
       const workerEndpoints = [
         "https://rt.jdcp.workers.dev/",
         "https://rt.jdcp.workers.dev/api/vehicle-positions"
@@ -7609,7 +7609,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     const CHARTS_CACHE_TTL_MS = 60_000;
     const CHARTS_MIN_INTERVAL_MS = 35_000;
     const CHARTS_REFRESH_INTERVAL_MS = 45_000;
-    const VEHICLE_DAY_ENDPOINTS = KPI_BASE_URLS.map(base => `${base}/frota/resumo-diario/veiculos`);
+    const VEHICLE_DAY_ENDPOINTS = KPI_BASE_URLS.map(base => `${base}/api/carris/frota/resumo-diario/veiculos`);
     const HEALTH_ENDPOINTS = KPI_BASE_URLS.map(base => `${base}/health`);
     const CHAPA_SNAPSHOTS_ENDPOINT = "https://carris.pt/umbraco/surface/Vehicles/GetSnapshots";
     const CM_VEHICLES_ENDPOINTS = dedupeList(
@@ -7637,7 +7637,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       (CM_BACKEND_BASES || []).map(base => `${base}/api/cm/shapes/${encodeURIComponent(String(shapeId || ""))}`)
     );
     const TCB_VEHICLES_ENDPOINTS = dedupeList([
-      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/realtime`),
       ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/vehicles`),
       "https://backend.tcbarreiro.pt/api/realtime?locale=en-US"
     ]);
@@ -7647,7 +7646,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       "https://backend.tcbarreiro.pt/api/bus-stops?locale=pt-PT"
     ]);
     const MOBICASCAIS_VEHICLES_ENDPOINTS = dedupeList([
-      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/mobicascais/realtime`),
       ...(LOCAL_BACKENDS || []).map(base => `${base}/api/mobicascais/vehicles`)
     ]);
     const CP_BACKEND_BASES = (() => {
@@ -7670,7 +7668,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       (LOCAL_BACKENDS || []).map(base => `${base}/api/metro/arrivals/${encodeURIComponent(String(stationId || ""))}`)
     );
     const TTSL_VEHICLES_ENDPOINTS = dedupeList([
-      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/ttsl/realtime`),
       ...(LOCAL_BACKENDS || []).map(base => `${base}/api/ttsl/vehicles`),
       "https://go.tmlmobilidade.pt/fleet/api/vehicles/positions?agency_id=4"
     ]);
@@ -7787,6 +7784,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     let cmetStopsCatalog = null;
     let cmetVisibleStopsCatalog = [];
     let tcbStopsCatalog = null;
+    const tcbVisibleStopsCache = new Map();
     let cmetStopsById = new Map();
     let cpStationsCatalog = null;
     let cpStationsCatalogLoadedAt = 0;
@@ -11787,7 +11785,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       }
       const activeCutoff = Date.now() - 10 * 60 * 1000;
       for (const v of lastVehicles) {
-        const vid = v?.id ?? v?.vehicle_id ?? v?.vehicleId ?? v?.vehicle;
+        const vid = v?.id ?? v?.vehicleId ?? v?.vehicle;
         if (!vid) continue;
         const variantKey = normalizeOptionKey(v?.routeId || v?.routeLabel || v?.linha || "");
         const baseKey = getBaseRouteKey(variantKey);
@@ -14075,7 +14073,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         ? (routePillStyle?.border || realtimeRouteColor || style?.border || "rgba(255,255,255,0.18)")
         : (style?.border || realtimeRouteColor || "rgba(255,255,255,0.18)");
       const pill = `<span class="route-pill route-pill--clickable popup-route-link" data-route-label="${safeLabel}" data-route-id="${safeRouteId}" data-operator="${safeOperator}" title="${safeTitle}" style="--pill-bg:${pillBg};--pill-fg:${pillFg};--pill-border:${pillBorder}">${escapeHtml(routeCode)}</span>`;
-      const rawVehicleId = v.id ?? v.vehicleId ?? v.vehicle ?? v.id_veiculo ?? "";
+      const rawVehicleId = v.id ?? v.vehicleId ?? v.vehicle ?? "";
       const normalizedVehicleId = (rawVehicleId == null) ? "" : String(rawVehicleId).trim().replace(/^#/, "");
       const vehicleIdLabel = isCmetVehicle
         ? cmetVehicleDisplayId(normalizedVehicleId)
@@ -14346,7 +14344,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function decorateVehicle(vehicle, routeDecorationCache = null) {
       if (!vehicle) return vehicle;
       const enriched = { ...vehicle };
-      const vehicleIdForChapa = enriched.id ?? enriched.vehicleId ?? enriched.vehicle ?? enriched.vehicle_id ?? enriched.id_veiculo ?? "";
+      const vehicleIdForChapa = enriched.id ?? enriched.vehicleId ?? enriched.vehicle ?? "";
       const normalizedVehicleIdForChapa = normalizeVehicleChapaId(vehicleIdForChapa);
       const chapaEntry = getVehicleChapaEntryById(
         vehicleIdForChapa
@@ -14374,19 +14372,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const routeRaw = normalizeRouteKey(resolveRouteId(vehicle));
       const tripIdRaw = extractTripIdValue(
         vehicle?.tripId,
-        vehicle?.trip_id,
         vehicle?.tripID,
         vehicle?.trip?.tripId,
-        vehicle?.trip?.trip_id,
         vehicle?.trip
       );
       const currentStopSequenceRaw =
         vehicle?.currentStopSequence ??
-        vehicle?.current_stop_sequence ??
         vehicle?.currentStopSeq ??
-        vehicle?.current_stop_seq ??
         vehicle?.vehicle?.currentStopSequence;
-      const stopIdRaw = vehicle?.stopId ?? vehicle?.stop_id ?? vehicle?.current_stop_id ?? "";
+      const stopIdRaw = vehicle?.stopId ?? "";
       const cpCanonicalRouteId = normalizeOperator(enriched?.operator || "") === OPERATOR_CP
         ? cpResolveCanonicalRouteId({
             routeIdRaw: routeRaw,
@@ -14486,17 +14480,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
       const props = feature.properties || {};
       const fallbackId = `offline-${index}`;
-      const rawId = props.id_veiculo ?? props.id ?? props.vehicle_id ?? fallbackId;
+      const rawId = props.id ?? props.vehicleId ?? fallbackId;
       const toNumber = (value, fallback = 0) => {
         const num = Number(value);
         return Number.isFinite(num) ? num : fallback;
       };
-      const routeId = props.route_id ?? props.route ?? props.linha ?? props.line ?? "";
-      const tripId = props.trip_id ?? props.tripId ?? props.trip ?? "";
-      const currentStopSequence = props.current_stop_sequence ?? props.currentStopSequence ?? props.stop_sequence ?? null;
-      const stopId = props.stop_id ?? props.stopId ?? props.current_stop_id ?? "";
+      const routeId = props.routeId ?? props.route ?? props.linha ?? props.line ?? "";
+      const tripId = props.tripId ?? props.trip ?? "";
+      const currentStopSequence = props.currentStopSequence ?? props.stopSequence ?? null;
+      const stopId = props.stopId ?? "";
       const tsValue = props.timestamp ?? props.ts ?? props.time ?? Date.now();
-      const directionRaw = props.directionId ?? props.direction_id ?? props.direction ?? props.sentido ?? null;
+      const directionRaw = props.directionId ?? props.direction ?? props.sentido ?? null;
       const directionId = (() => {
         const parsed = Number.parseInt(String(directionRaw), 10);
         return Number.isFinite(parsed) ? parsed : null;
@@ -14511,7 +14505,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         tripId,
         currentStopSequence,
         stopId,
-        currentStatus: normalizeVehicleCurrentStatus(props.current_status ?? props.currentStatus ?? ""),
+        currentStatus: normalizeVehicleCurrentStatus(props.currentStatus ?? ""),
         directionId,
         bearing: toNumber(props.heading ?? props.bearing ?? props.azimuth ?? props.course ?? 0, 0),
         speed: toNumber(props.velocidade ?? props.speed ?? props.velocity ?? 0, 0),
@@ -14666,10 +14660,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         tripCandidates.push(tripId);
       };
       addTripCandidate(vehicle?.tripId);
-      addTripCandidate(vehicle?.trip_id);
       addTripCandidate(vehicle?.tripID);
       addTripCandidate(vehicle?.trip?.tripId);
-      addTripCandidate(vehicle?.trip?.trip_id);
       if (!tripCandidates.length) return null;
 
       const operatorCandidates = [];
@@ -14754,10 +14746,8 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       ) return true;
       const directTripId =
         vehicle?.tripId ??
-        vehicle?.trip_id ??
         vehicle?.tripID ??
         vehicle?.trip?.tripId ??
-        vehicle?.trip?.trip_id ??
         "";
       const tripId = normalizeTripId(directTripId);
       if (!tripId) return false;
@@ -17790,9 +17780,9 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       candidateIds.forEach((id) => {
         cachedRoutesForStopId(id, operator).forEach((route) => out.add(route));
       });
-      const routeLists = await Promise.all(candidateIds.map((id) => ensureStopRoutes(id, { operator }).catch(() => [])));
-      routeLists.forEach((list) => {
-        dedupeRouteLabels(Array.isArray(list) ? list : []).forEach((route) => out.add(route));
+      const routeMap = await ensureStopRoutesBatch(candidateIds, { operator }).catch(() => new Map());
+      candidateIds.forEach((id) => {
+        dedupeRouteLabels(Array.isArray(routeMap.get(id)) ? routeMap.get(id) : []).forEach((route) => out.add(route));
       });
       if (normalizeOperator(operator) === OPERATOR_METRO && out.size <= 1) {
         try {
@@ -18146,7 +18136,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function shapeEndpoints(routeId) {
       const encoded = encodeURIComponent(String(routeId || ""));
-      return (LOCAL_BACKENDS || []).map(base => `${base}/api/shapes/${encoded}`);
+      return (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/shapes/${encoded}`);
     }
 
     function routeCategoryForId(routeId) {
@@ -18373,7 +18363,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     function stopsEndpoints(routeId) {
       const encoded = encodeURIComponent(String(routeId || ""));
-      return (LOCAL_BACKENDS || []).map(base => `${base}/api/stops/${encoded}`);
+      return (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/stops/${encoded}`);
     }
 
     function stopsTileTemplates() {
@@ -19154,12 +19144,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     }
 
     function stopsBboxEndpoints() {
-      return (LOCAL_BACKENDS || []).map(base => `${base}/api/stops_bbox`);
+      return (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/stops_bbox`);
     }
 
     function stopRoutesEndpoints(stopId) {
       const encoded = encodeURIComponent(String(stopId || ""));
-      return (LOCAL_BACKENDS || []).map(base => `${base}/api/stop_routes/${encoded}`);
+      return (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/stop_routes/${encoded}`);
+    }
+
+    function stopRoutesBatchEndpoints() {
+      return (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/stop_routes`);
     }
 
     async function ensureCmetStopsCatalog() {
@@ -19195,7 +19189,59 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         ? payload
         : (Array.isArray(payload?.results) ? payload.results : (Array.isArray(payload?.stops) ? payload.stops : []));
       tcbStopsCatalog = rows;
+      tcbVisibleStopsCache.clear();
       return tcbStopsCatalog;
+    }
+
+    async function getVisibleTcbStops(bounds, limit, { cacheSuffix = "default" } = {}) {
+      if (!bounds) return [];
+      const roundedBounds = roundBoundsForStops(bounds, GLOBAL_STOPS_KEY_PRECISION);
+      const safeLimit = Math.max(1, Number(limit) || GLOBAL_STOPS_LIMIT_MIN);
+      const cacheKey = JSON.stringify({
+        bounds: roundedBounds,
+        limit: safeLimit,
+        scope: cacheSuffix
+      });
+      const cached = tcbVisibleStopsCache.get(cacheKey);
+      if (cached && (Date.now() - cached.ts) < CM_VISIBLE_STOPS_CACHE_TTL_MS) {
+        return cached.value;
+      }
+      const rows = await ensureTcbStopsCatalog();
+      const visibleStops = [];
+      const source = Array.isArray(rows) ? rows : [];
+      for (let idx = 0; idx < source.length; idx += 1) {
+        const stop = source[idx];
+        const stopId = String(stop?.id ?? stop?.stop_id ?? stop?.code ?? "").trim();
+        const lat = Number(stop?.lat ?? stop?.latitude ?? stop?.stop_lat);
+        const lon = Number(stop?.lon ?? stop?.lng ?? stop?.longitude ?? stop?.stop_lon);
+        if (
+          !stopId ||
+          !Number.isFinite(lat) ||
+          !Number.isFinite(lon) ||
+          lat < bounds.minLat ||
+          lat > bounds.maxLat ||
+          lon < bounds.minLon ||
+          lon > bounds.maxLon
+        ) {
+          continue;
+        }
+        visibleStops.push({
+          stop_id: stopId,
+          stop_name: String(stop?.name ?? stop?.title ?? stop?.long_name ?? stop?.short_name ?? stopId),
+          stop_lat: lat,
+          stop_lon: lon,
+          operator: OPERATOR_TCB,
+          routes: [],
+          direction_angle: Number.isFinite(Number(stop?.direction_angle)) ? Number(stop.direction_angle) : null,
+          is_terminal: false
+        });
+        if (visibleStops.length >= safeLimit) break;
+        if (idx > 0 && idx % 500 === 0) {
+          await yieldToMainThread();
+        }
+      }
+      tcbVisibleStopsCache.set(cacheKey, { ts: Date.now(), value: visibleStops });
+      return visibleStops;
     }
 
     async function getVisibleCmetStops(bounds, limit, { cacheSuffix = "default" } = {}) {
@@ -19495,6 +19541,20 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return [];
     }
 
+    function stopRoutesBatchMapFromPayload(payload) {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+      const mapped = payload?.stops && typeof payload.stops === "object" && !Array.isArray(payload.stops)
+        ? payload.stops
+        : payload;
+      const out = {};
+      Object.entries(mapped).forEach(([stopId, routes]) => {
+        const sid = String(stopId || "").trim();
+        if (!sid) return;
+        out[sid] = dedupeRouteLabels((Array.isArray(routes) ? routes : []).map(routeLabelFromStopRouteRow).filter(Boolean));
+      });
+      return out;
+    }
+
     function routeLabelFromStopRouteRow(row) {
       if (row == null) return "";
       if (typeof row === "string" || typeof row === "number") {
@@ -19602,10 +19662,74 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       return promise;
     }
 
-    const GTFS_TRIPS_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/trips`);
-    const GTFS_STOP_TIMES_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/gtfs/stop_times`);
-    const TRANSIT_STATS_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/transit-stats`);
-    const TRIPS_DAY_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/frota/resumo-diario/viagens`);
+    async function ensureStopRoutesBatch(stopIds = [], options = {}) {
+      const ids = dedupeList((Array.isArray(stopIds) ? stopIds : []).map((id) => String(id || "").trim()).filter(Boolean));
+      if (!ids.length) return new Map();
+      const requestedOperator = normalizeOperatorStrict(options.operator || activeStopPopup?.operator || "");
+      const result = new Map();
+      const batchIds = [];
+      const batchCacheKeys = new Map();
+      const singleIds = [];
+
+      ids.forEach((key) => {
+        const scopedOperator = key.includes(":")
+          ? normalizeOperatorStrict(String(key).split(":", 1)[0] || "")
+          : "";
+        const catalogOperator = normalizeOperatorStrict(stopCatalogEntryByStopId(key)?.operator || "");
+        const stopOperator =
+          firstOperatorToken(scopedOperator) ||
+          firstOperatorToken(catalogOperator) ||
+          firstOperatorToken(requestedOperator) ||
+          OPERATOR_CARRIS;
+        const cacheKey = stopRoutesCacheKey(key, stopOperator);
+        if (stopRoutesCache.has(cacheKey)) {
+          result.set(key, stopRoutesCache.get(cacheKey) || []);
+          return;
+        }
+        if (stopOperator === OPERATOR_CARRIS) {
+          batchIds.push(key);
+          batchCacheKeys.set(key, cacheKey);
+          return;
+        }
+        singleIds.push(key);
+      });
+
+      if (batchIds.length) {
+        try {
+          const payload = await fetchFromEndpoints(
+            stopRoutesBatchEndpoints(),
+            { stop_ids: batchIds.join(",") },
+            { cacheKey: `stop-routes-batch:${batchIds.slice().sort().join(",")}`, timeoutMs: 5000 }
+          );
+          const mapped = stopRoutesBatchMapFromPayload(payload);
+          batchIds.forEach((stopId) => {
+            const routes = dedupeRouteLabels(Array.isArray(mapped[stopId]) ? mapped[stopId] : []);
+            const cacheKey = batchCacheKeys.get(stopId);
+            if (cacheKey) stopRoutesCache.set(cacheKey, routes);
+            result.set(stopId, routes);
+          });
+        } catch (_err) {
+          await Promise.all(batchIds.map(async (stopId) => {
+            const routes = await ensureStopRoutes(stopId, options).catch(() => []);
+            result.set(stopId, routes);
+          }));
+        }
+      }
+
+      if (singleIds.length) {
+        await Promise.all(singleIds.map(async (stopId) => {
+          const routes = await ensureStopRoutes(stopId, options).catch(() => []);
+          result.set(stopId, routes);
+        }));
+      }
+
+      return result;
+    }
+
+    const GTFS_TRIPS_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/gtfs/trips`);
+    const GTFS_STOP_TIMES_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/gtfs/stop_times`);
+    const TRANSIT_STATS_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/transit-stats`);
+    const TRIPS_DAY_ENDPOINTS = (LOCAL_BACKENDS || []).map(base => `${base}/api/carris/frota/resumo-diario/viagens`);
     const TRIPS_CACHE_TTL_MS = 10 * 60_000;
     const STOP_TIMES_CACHE_TTL_MS = 3 * 60_000;
     const STOP_TIMES_FETCH_LIMIT = 320;
@@ -19737,7 +19861,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
           }
           cacheGtfsTripIds(ids);
         } catch (err) {
-          console.warn("Falha ao carregar trip_ids de /api/gtfs/trips:", err);
+          console.warn("Falha ao carregar trip_ids de /api/carris/gtfs/trips:", err);
         }
 
         return gtfsTripIds;
@@ -20338,8 +20462,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         vehicle?.id ??
         vehicle?.vehicleId ??
         vehicle?.vehicle ??
-        vehicle?.vehicle_id ??
-        vehicle?.id_veiculo ??
         "";
       const baseId = String(raw || "").trim();
       if (!baseId) return "";
@@ -20731,8 +20853,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     function vehicleShapeDistanceFromProgress(vehicle, profile) {
       const raw = Number(
         vehicle?.shapeProgress ??
-        vehicle?.shape_progress ??
-        vehicle?.progresso_shape ??
         vehicle?.progress
       );
       if (!Number.isFinite(raw)) return null;
@@ -20810,7 +20930,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const nowTs = Date.now();
       const activeTripIds = Array.from(new Set(
         (Array.isArray(lastVehicles) ? lastVehicles : [])
-          .map(vehicle => normalizeTripId(vehicle?.tripId ?? vehicle?.trip_id ?? vehicle?.tripID ?? ""))
+          .map(vehicle => normalizeTripId(vehicle?.tripId ?? vehicle?.tripID ?? ""))
           .filter(tripId => tripId && tripIndex.has(tripId))
       ));
       await warmTripStopProfiles(activeTripIds);
@@ -20818,7 +20938,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       for (const vehicle of Array.isArray(lastVehicles) ? lastVehicles : []) {
         const vLat = Number(vehicle?.lat ?? vehicle?.latitude);
         const vLon = Number(vehicle?.lon ?? vehicle?.longitude);
-        const vehicleTripId = normalizeTripId(vehicle?.tripId ?? vehicle?.trip_id ?? vehicle?.tripID ?? "");
+        const vehicleTripId = normalizeTripId(vehicle?.tripId ?? vehicle?.tripID ?? "");
         if (!vehicleTripId) continue;
         const matchedStopTime = tripIndex.get(vehicleTripId);
         if (!matchedStopTime) continue;
@@ -20838,12 +20958,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const targetStopSequenceRaw = normalizeStopSequence(matchedStopTime.stopSequence);
         const vehicleStopSequenceRaw = normalizeStopSequence(
           vehicle?.currentStopSequence ??
-          vehicle?.current_stop_sequence ??
-          vehicle?.currentStopSeq ??
-          vehicle?.current_stop_seq
+          vehicle?.currentStopSeq
         );
-        const vehicleStopId = normalizeStopId(vehicle?.stopId ?? vehicle?.stop_id ?? vehicle?.current_stop_id ?? "");
-        const vehicleCurrentStatus = normalizeVehicleCurrentStatus(vehicle?.currentStatus ?? vehicle?.current_status ?? "");
+        const vehicleStopId = normalizeStopId(vehicle?.stopId ?? "");
+        const vehicleCurrentStatus = normalizeVehicleCurrentStatus(vehicle?.currentStatus ?? "");
         const prevCoords = previousVehicleCoords(vehicle);
         const geoDistanceNow = (hasStopCoords && Number.isFinite(vLat) && Number.isFinite(vLon))
           ? distanceBetweenCoords(vLat, vLon, lat, lon)
@@ -20858,7 +20976,7 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         const directionForSpeed = (matchedStopTime.directionId === 0 || matchedStopTime.directionId === 1)
           ? matchedStopTime.directionId
           : vehicleDirectionId;
-        const shapeId = normalizeShapeId(matchedStopTime.shapeId || vehicle?.shapeId || vehicle?.shape_id || "");
+        const shapeId = normalizeShapeId(matchedStopTime.shapeId || vehicle?.shapeId || "");
         const transitSpeed = resolveTransitSpeedForTrip(speedIndex, { routeBase, directionId: directionForSpeed, shapeId });
         let speedKmh = Number.isFinite(transitSpeed) && transitSpeed > 0 ? transitSpeed : NaN;
         if (!Number.isFinite(speedKmh) || speedKmh <= 0) continue;
@@ -24643,6 +24761,46 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         }
         return;
       }
+      if (currentOperator === OPERATOR_TCB) {
+        if (hasRouteSelection()) {
+          if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer, 0);
+          if (adapter instanceof MapLibreAdapter) {
+            adapter.setGlobalStops({ stops: [] });
+            clearMapLibreStopLabels();
+          }
+          globalStopsKey = null;
+          lastRenderedGlobalStopsKey = null;
+          return;
+        }
+        const b = adapterBounds();
+        const z = adapterZoom();
+        if (!b || !Number.isFinite(z) || z < STOPS_MIN_ZOOM) {
+          if (adapter instanceof LeafletAdapter && adapter.globalStopsLayer) fadeOutLeafletLayer(adapter.globalStopsLayer, 0);
+          if (adapter instanceof MapLibreAdapter) {
+            adapter.setGlobalStops({ stops: [] });
+            clearMapLibreStopLabels();
+          }
+          return;
+        }
+        try {
+          const effLimit = dynamicGlobalStopsLimit(z);
+          const roundedBounds = roundBoundsForStops(b, GLOBAL_STOPS_KEY_PRECISION);
+          const key = JSON.stringify({
+            ...(roundedBounds || {}),
+            z: Math.round(z * 10) / 10,
+            limit: effLimit,
+            operator: OPERATOR_TCB
+          });
+          globalStopsKey = key;
+          if (!force && lastRenderedGlobalStopsKey === key) return;
+          const visibleStops = await getVisibleTcbStops(b, effLimit, { cacheSuffix: OPERATOR_TCB });
+          renderGlobalStops({ stops: visibleStops });
+          lastRenderedGlobalStopsKey = key;
+        } catch (err) {
+          console.warn("Falha ao carregar paragens TCB:", err);
+        }
+        return;
+      }
       if (globalStopsFetchInFlight) {
         globalStopsRefreshQueued = true;
         globalStopsQueuedForce = globalStopsQueuedForce || Boolean(force);
@@ -25503,33 +25661,24 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
               item.trip?.route
             );
             return {
-              id: item.id ?? item.vehicleId ?? item.vehicle_id ?? item.id_veiculo ?? item.veiculo ?? `local-${idx}`,
+              id: item.id ?? `local-${idx}`,
               operator: baseOperator,
               lat,
               lon,
               routeId,
               tripId,
-              currentStopSequence:
-                item.currentStopSequence ??
-                item.current_stop_sequence ??
-                item.current_stop_seq ??
-                item.currentStopSeq ??
-                null,
-              stopId: item.stopId ?? item.stop_id ?? item.current_stop_id ?? "",
-              currentStatus: normalizeVehicleCurrentStatus(
-                item.currentStatus ??
-                item.current_status ??
-                item.vehicle?.currentStatus ??
-                item.vehicle?.current_status
-              ),
-              linha: item.linha ?? routeId ?? "",
-              directionId: (directionIdParsed === 0 || directionIdParsed === 1)
-                ? directionIdParsed
-                : (item.directionId ?? item.direction_id ?? item.direction ?? item.sentido ?? null),
+              currentStopSequence: item.currentStopSequence ?? null,
+              stopId: item.stopId ?? "",
+              currentStatus: normalizeVehicleCurrentStatus(item.currentStatus ?? ""),
+              scheduleRelationship: item.scheduleRelationship ?? "",
+              shapeId: item.shapeId ?? "",
+              shapeProgress: item.shapeProgress ?? null,
+              linha: routeId ?? "",
+              directionId: (directionIdParsed === 0 || directionIdParsed === 1) ? directionIdParsed : null,
               routeColor,
-              bearing: item.bearing ?? item.heading ?? item.azimuth ?? item.course ?? 0,
-              speed: item.speed ?? item.velocidade ?? item.velocity ?? 0,
-              ts: item.ts ?? item.timestamp ?? item.timestamp_captura ?? Date.now(),
+              bearing: item.bearing ?? 0,
+              speed: item.speed ?? 0,
+              ts: item.ts ?? Date.now(),
             };
           }
           return null;
@@ -25564,7 +25713,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         || vehicle?.vehicleId
         || vehicle?.vehicle
         || vehicle?.vehicle_id
-        || vehicle?.id_veiculo
         || "";
       const key = normalizeVehicleChapaId(rawId);
       const chapaEntry = key ? (vehicleChapaMap.get(key) || null) : null;

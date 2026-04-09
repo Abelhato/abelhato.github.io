@@ -3692,7 +3692,7 @@
               if (cached && (Date.now() - cached.ts) <= TRANSIT_CACHE_TTL_MS && Array.isArray(cached.groups)) {
                 groups = cached.groups;
               } else {
-                const rows = await fetchFromBackends("/api/transit-stats", queryParams, { signal: transitFetchController.signal });
+                const rows = await fetchFromBackends("/api/carris/transit-stats", queryParams, { signal: transitFetchController.signal });
                 groups = aggregateSegments(Array.isArray(rows) ? rows : []);
                 transitResponseCache.set(cacheKey, { ts: Date.now(), groups });
                 if (transitResponseCache.size > 24) {

@@ -3569,7 +3569,7 @@
         if (!Number.isFinite(parsed)) return 10;
         return Math.max(1, Math.min(180, parsed));
       })();
-      const HISTORY_HOURLY_METRICS_PATH = "/historico/hourly/metrics";
+      const HISTORY_HOURLY_METRICS_PATH = "/api/carris/historico/hourly/metrics";
       const historyChartCache = { key: "", rows: [] };
       let historyCharts = { speed: null, volume: null };
       let chartsAbortController = null;
@@ -4655,15 +4655,15 @@
         setKpiPlaceholders();
       }
 
-      const HISTORIC_METRICS_PATH = "/historico/daily/metrics";
-      const HISTORY_DAILY_VEHICLES_PATH = "/historico/daily/vehicles";
-      const REALTIME_DAILY_VEHICLES_PATH = "/frota/resumo-diario/veiculos";
-      const REALTIME_RANKINGS_FROTA_PATH = "/frota/resumo-diario/rankings";
+      const HISTORIC_METRICS_PATH = "/api/carris/historico/daily/metrics";
+      const HISTORY_DAILY_VEHICLES_PATH = "/api/carris/historico/daily/vehicles";
+      const REALTIME_DAILY_VEHICLES_PATH = "/api/carris/frota/resumo-diario/veiculos";
+      const REALTIME_RANKINGS_FROTA_PATH = "/api/carris/frota/resumo-diario/rankings";
       const REALTIME_KPI_PATHS = {
-        global: "/api/kpis",
-        route: "/api/kpis/route",
-        variant: "/api/kpis/route_variant",
-        category: "/api/kpis/category"
+        global: "/api/carris/kpis",
+        route: "/api/carris/kpis/route",
+        variant: "/api/carris/kpis/route_variant",
+        category: "/api/carris/kpis/category"
       };
 
       async function fetchHistoricMetricsPayload(targetDate, scope, signal) {
