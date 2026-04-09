@@ -7642,7 +7642,6 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
     ]);
     const TCB_STOPS_ENDPOINTS = dedupeList([
       ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/stops`),
-      ...(LOCAL_BACKENDS || []).map(base => `${base}/api/tcb/bus-stops`),
       "https://backend.tcbarreiro.pt/api/bus-stops?locale=pt-PT"
     ]);
     const MOBICASCAIS_VEHICLES_ENDPOINTS = dedupeList([
@@ -21746,10 +21745,17 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
             }
           }
           const hasRealtime = realtimeDepartures.length > 0;
+          const metroRealtimeOnly = staticScheduleOperator === OPERATOR_METRO;
+          const visibleDepartures = metroRealtimeOnly
+            ? []
+            : (hasRealtime ? [] : departures);
+          const visibleRealtimeDepartures = hasRealtime
+            ? realtimeDepartures.slice(0, STOP_SCHEDULE_LIMIT)
+            : [];
           return {
-            status: (departures.length || hasRealtime) ? "success" : "empty",
-            departures: hasRealtime ? [] : departures,
-            realtimeDepartures: hasRealtime ? realtimeDepartures.slice(0, STOP_SCHEDULE_LIMIT) : [],
+            status: (visibleDepartures.length || visibleRealtimeDepartures.length) ? "success" : "empty",
+            departures: visibleDepartures,
+            realtimeDepartures: visibleRealtimeDepartures,
             contextKey
           };
         } catch (err) {
@@ -22608,15 +22614,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         if (resolved) {
           const previous = scheduleState;
           const popupOperator = normalizeOperator(operator || activeStopPopup?.operator || "");
-          const isMetroPopup = popupOperator === OPERATOR_METRO;
-          const previousHasRealtime = scheduleRowsList(previous, "realtimeDepartures").length > 0;
-          const resolvedHasRealtime = scheduleRowsList(resolved, "realtimeDepartures").length > 0;
-          const resolvedHasScheduled = scheduleRowsList(resolved, "departures").length > 0;
-          const metroFallbackOnly = isMetroPopup && !resolvedHasRealtime && resolvedHasScheduled;
           const keepPrevious =
             preferIncrementalDesktop &&
+            popupOperator !== OPERATOR_METRO &&
             scheduleHasRows(previous) &&
-            (!scheduleHasRows(resolved) || (metroFallbackOnly && previousHasRealtime));
+            !scheduleHasRows(resolved);
           scheduleState = keepPrevious ? previous : resolved;
         } else if (
           scheduleState?.status === "loading" ||
