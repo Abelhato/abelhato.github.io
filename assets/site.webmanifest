@@ -1,0 +1,19 @@
+{
+  "name": "Mover Lisboa",
+  "short_name": "Mover Lisboa",
+  "description": "Acompanhamento de frota, transito e historico da mobilidade em Lisboa.",
+  "icons": [
+    {
+      "src": "/assets/icons/app/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/assets/icons/app/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ],
+  "background_color": "#f6f8fb",
+  "display": "standalone"
+}
