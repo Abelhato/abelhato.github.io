@@ -4,7 +4,7 @@ ID_Inicio,ID_Fim,Modelo,Tipo,Categoria,Energia
 541,585,Elétricos Remodelados (541-585),Elétrico,Remodelado,Elétrico
 201,240,Mini Mercedes Sprinter (201-240),Autocarro,Mini,Gasóleo
 251,284,Mini MAN (251-283),Autocarro,Mini,Gasóleo
-401,414,Mini Karsan (401-414),Autocarro,Mini,Elétrico
+401,430,Mini Karsan (401-414),Autocarro,Mini,Elétrico
 1700,1799,Standard Volvo (1701-1780),Autocarro,Standard,Gasóleo
 2201,2500,Standard MAN (2201-2500),Autocarro,Standard,Gasóleo
 2601,2820,Standard MAN GNC (2601-2820),Autocarro,Standard,Gás
