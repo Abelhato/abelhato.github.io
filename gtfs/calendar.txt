@@ -1,0 +1,7 @@
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+Inverno_Util_20260101,1,1,1,1,1,0,0,20260101,20260605
+Inverno_Util_20260606,1,1,1,1,1,0,0,20260606,20261231
+Inverno_Sabado_20260606,0,0,0,0,0,1,0,20260606,20261231
+Inverno_DomingoFeriado_20260606,0,0,0,0,0,0,1,20260606,20261231
+Inverno_DomingoFeriado_20260101,0,0,0,0,0,0,1,20260101,20260605
+Inverno_Sabado_20260101,0,0,0,0,0,1,0,20260101,20260605
