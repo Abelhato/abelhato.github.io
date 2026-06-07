@@ -1,0 +1,316 @@
+{
+    "knownBackendPorts": [
+        8002,
+        2026
+    ],
+    "githubDefaultBackend": "https://api.moverlisboa.com",
+    "defaultRemoteBackends": [
+        "https://api.moverlisboa.com"
+    ],
+    "metroDestinationNameById": {
+        "33": "Reboleira",
+        "34": "Amadora Este",
+        "35": "Pontinha",
+        "36": "Colégio Militar/Luz",
+        "37": "Laranjeiras",
+        "38": "São Sebastião",
+        "39": "Avenida",
+        "40": "Baixa-Chiado",
+        "41": "Terreiro do Paço",
+        "42": "Santa Apolónia",
+        "43": "Odivelas",
+        "44": "Lumiar",
+        "45": "Campo Grande",
+        "46": "Campo Pequeno",
+        "48": "Rato",
+        "50": "Telheiras",
+        "51": "Alvalade",
+        "52": "Alameda",
+        "53": "Martim Moniz",
+        "54": "Cais do Sodré",
+        "56": "Bela Vista",
+        "57": "Chelas",
+        "59": "Moscavide",
+        "60": "Aeroporto"
+    },
+    "staticGtfsOperators": {
+        "tcb": {
+            "key": "tcb",
+            "label": "TCB",
+            "folder": "TCB",
+            "color": "#16a34a"
+        },
+        "mobicascais": {
+            "key": "mobicascais",
+            "label": "MobiCascais",
+            "folder": "cascais",
+            "color": "#35b3a8"
+        },
+        "cp": {
+            "key": "cp",
+            "label": "CP",
+            "folder": "CP",
+            "color": "#374151"
+        },
+        "metro": {
+            "key": "metro",
+            "label": "Metro de Lisboa",
+            "folder": "Metro",
+            "color": "#f59e0b"
+        },
+        "ttsl": {
+            "key": "ttsl",
+            "label": "TTSL",
+            "folder": "TTSL",
+            "color": "#ff6600"
+        },
+        "fertagus": {
+            "key": "fertagus",
+            "label": "Fertagus",
+            "folder": "Fertagus",
+            "color": "#dc2626"
+        },
+        "mts": {
+            "key": "mts",
+            "label": "MTS",
+            "folder": "MTS",
+            "color": "#0f766e",
+            "routeDetailEndpoint": "/api/mts/route"
+        }
+    },
+    "operatorConfig": {
+        "carris": {
+            "key": "carris",
+            "label": "Carris",
+            "logoSrc": "/assets/logos/Carris.svg?v=20260405b",
+            "alwaysOn": false,
+            "enabledByDefault": true,
+            "group": "featured"
+        },
+        "cmet": {
+            "key": "cmet",
+            "label": "Carris Metropolitana",
+            "logoSrc": "/assets/logos/carris metroplitana.svg?v=20260405",
+            "alwaysOn": false,
+            "enabledByDefault": false,
+            "group": "realtime"
+        },
+        "tcb": {
+            "key": "tcb",
+            "label": "TCB",
+            "logoSrc": "/assets/logos/tcb.png?v=20260405",
+            "alwaysOn": false,
+            "enabledByDefault": false,
+            "group": "realtime"
+        },
+        "mobicascais": {
+            "key": "mobicascais",
+            "label": "MobiCascais",
+            "logoSrc": "/assets/logos/mobicascais.png?v=20260405",
+            "alwaysOn": false,
+            "enabledByDefault": false,
+            "group": "realtime"
+        },
+        "metro": {
+            "key": "metro",
+            "label": "Metro de Lisboa",
+            "logoSrc": "/assets/logos/Metro.svg?v=20260405",
+            "alwaysOn": false,
+            "enabledByDefault": true,
+            "group": "realtime"
+        },
+        "cp": {
+            "key": "cp",
+            "label": "CP",
+            "logoSrc": "/assets/logos/CP.svg?v=20260405",
+            "alwaysOn": false,
+            "enabledByDefault": false,
+            "group": "realtime"
+        },
+        "ttsl": {
+            "key": "ttsl",
+            "label": "TTSL",
+            "logoSrc": "/assets/logos/TTSL.png?v=20260405",
+            "alwaysOn": false,
+            "enabledByDefault": false,
+            "group": "realtime"
+        },
+        "fertagus": {
+            "key": "fertagus",
+            "label": "Fertagus",
+            "logoSrc": "/assets/logos/Fertagus.svg?v=20260405",
+            "alwaysOn": false,
+            "enabledByDefault": true,
+            "group": "static"
+        },
+        "mts": {
+            "key": "mts",
+            "label": "MTS",
+            "logoSrc": "/assets/logos/MTS.png?v=20260607",
+            "alwaysOn": false,
+            "enabledByDefault": false,
+            "group": "static"
+        }
+    },
+    "storageKeys": {
+        "dashboardOperator": "dashboard.operator",
+        "dashboardMapCenter": "dashboard.map.center.v1"
+    },
+    "standardRouteCategories": [
+        "Autocarros Diurnos",
+        "Carreiras de Bairro",
+        "Elétricos",
+        "Rede Madrugada"
+    ],
+    "categoryPalettes": {
+        "Autocarros Diurnos": {
+            "icon": "/assets/icons/transport/autocarro.svg",
+            "color0": "#2ECC71",
+            "color1": "#0B5D38"
+        },
+        "Carreiras de Bairro": {
+            "icon": "/assets/icons/transport/bairro.svg",
+            "color0": "#C084FC",
+            "color1": "#4C1D95"
+        },
+        "Elétricos": {
+            "icon": "/assets/icons/transport/eletrico.svg",
+            "color0": "#F39C12",
+            "color1": "#FF6B6B"
+        },
+        "Rede Madrugada": {
+            "icon": "/assets/icons/transport/madrugada.svg",
+            "color0": "#3498DB",
+            "color1": "#2C3E90"
+        }
+    },
+    "zoneColorByName": {
+        "Bairro": "#FFE113",
+        "Centro": "#FF7F00",
+        "Ocidental": "#FF0078",
+        "Madrugada": "#0060A9",
+        "Transversal": "#808080",
+        "Oriental": "#F70002",
+        "Noroeste": "#00A0EF",
+        "Norte": "#39BA2E"
+    },
+    "zoneRouteBases": {
+        "Centro": [
+            "12E",
+            "24E",
+            "25E",
+            "28E",
+            "51E",
+            "52E",
+            "53E",
+            "54E",
+            "55E",
+            "702",
+            "706",
+            "709",
+            "712",
+            "713",
+            "730",
+            "734",
+            "737",
+            "740",
+            "773",
+            "774",
+            "790",
+            "797"
+        ],
+        "Ocidental": [
+            "15E",
+            "18E",
+            "714",
+            "723",
+            "732",
+            "748",
+            "751",
+            "760",
+            "776",
+            "784",
+            "786"
+        ],
+        "Madrugada": [
+            "201",
+            "202",
+            "203",
+            "204",
+            "205",
+            "206",
+            "207",
+            "208",
+            "209",
+            "210"
+        ],
+        "Transversal": [
+            "701",
+            "703",
+            "720",
+            "727",
+            "728",
+            "728F",
+            "738",
+            "742",
+            "750",
+            "752",
+            "753",
+            "756",
+            "767"
+        ],
+        "Oriental": [
+            "16E",
+            "705",
+            "708",
+            "718",
+            "722",
+            "725",
+            "731",
+            "744",
+            "745",
+            "749",
+            "755",
+            "759",
+            "779",
+            "781",
+            "782",
+            "783",
+            "793",
+            "794"
+        ],
+        "Noroeste": [
+            "711",
+            "716",
+            "724",
+            "726",
+            "729",
+            "746",
+            "754",
+            "758",
+            "763",
+            "764",
+            "765",
+            "768",
+            "770",
+            "771",
+            "780",
+            "799"
+        ],
+        "Norte": [
+            "717",
+            "735",
+            "736",
+            "747",
+            "757",
+            "777",
+            "778",
+            "796",
+            "798"
+        ]
+    },
+    "defaults": {
+        "defaultCategoryPalette": "Autocarros Diurnos",
+        "fallbackOperator": "carris"
+    }
+}
