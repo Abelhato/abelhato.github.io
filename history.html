@@ -3412,56 +3412,22 @@
       });
     })();
   </script>
+  <script src="config-loader.js"></script>
   <script>
     (function () {
+      const APP_CONFIG = window.MOVER_CONFIG || {};
+      const buildConfigRouteBaseSets = typeof window.buildMoverRouteBaseSets === "function"
+        ? window.buildMoverRouteBaseSets
+        : (() => ({}));
+      const CARRIS_HELPERS = window.MOVER_CARRIS || (typeof window.buildMoverCarrisHelpers === "function"
+        ? window.buildMoverCarrisHelpers(APP_CONFIG)
+        : null);
       const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href).href;
       const ROUTE_TRANSLATOR_URL = ROUTES_DATA_URL;
       const CATEGORY_PREVIEW_LIMIT = 7;
-      const STANDARD_ROUTE_CATEGORIES = [
-        "Autocarros Diurnos",
-        "Carreiras de Bairro",
-        "Elétricos",
-        "Rede Madrugada"
-      ];
-      const ZONE_COLOR_BY_NAME = {
-        Bairro: "#FFE113",
-        Centro: "#FF7F00",
-        Ocidental: "#FF0078",
-        Madrugada: "#0060A9",
-        Transversal: "#808080",
-        Oriental: "#F70002",
-        Noroeste: "#00A0EF",
-        Norte: "#39BA2E"
-      };
-      const ZONE_ROUTE_BASES = {
-        Centro: new Set([
-          "12E", "24E", "25E", "28E", "51E", "52E", "53E", "54E", "55E",
-          "702", "706", "709", "712", "713", "730", "734", "737", "740",
-          "773", "774", "790", "797"
-        ]),
-        Ocidental: new Set([
-          "15E", "18E", "714", "723", "732", "748", "751", "760", "776",
-          "784", "786"
-        ]),
-        Madrugada: new Set([
-          "201", "202", "203", "204", "205", "206", "207", "208", "209", "210"
-        ]),
-        Transversal: new Set([
-          "701", "703", "720", "727", "728", "728F", "738", "742", "750", "752",
-          "753", "756", "767"
-        ]),
-        Oriental: new Set([
-          "16E", "705", "708", "718", "722", "725", "731", "744", "745", "749",
-          "755", "759", "779", "781", "782", "783", "793", "794"
-        ]),
-        Noroeste: new Set([
-          "711", "716", "724", "726", "729", "746", "754", "758", "763", "764",
-          "765", "768", "770", "771", "780", "799"
-        ]),
-        Norte: new Set([
-          "717", "735", "736", "747", "757", "777", "778", "796", "798"
-        ])
-      };
+      const STANDARD_ROUTE_CATEGORIES = Array.isArray(APP_CONFIG.standardRouteCategories) ? [...APP_CONFIG.standardRouteCategories] : [];
+      const ZONE_COLOR_BY_NAME = Object.freeze({ ...(APP_CONFIG.zoneColorByName || {}) });
+      const ZONE_ROUTE_BASES = buildConfigRouteBaseSets(APP_CONFIG.zoneRouteBases);
       const ROUTE_TRANSLATOR = { byId: {}, base: {} };
       const ROUTE_DETAILS = new Map();
       const BASE_ROUTE_DETAILS = new Map();
@@ -3654,8 +3620,8 @@
           });
       }
 
-      const KNOWN_BACKEND_PORTS = [8002, 2026];
-      const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
+      const KNOWN_BACKEND_PORTS = Array.isArray(APP_CONFIG.knownBackendPorts) ? APP_CONFIG.knownBackendPorts : [8002, 2026];
+      const GITHUB_DEFAULT_BACKEND = APP_CONFIG.githubDefaultBackend || "https://api.moverlisboa.com";
 
       function resolveHistoricBases() {
         const bases = [];
@@ -5559,18 +5525,11 @@
       }
 
       function definirZona(routeIdOrName) {
-        const { code, codeBase } = parseRouteCodeParts(routeIdOrName);
-        if (!code && !codeBase) return null;
-        if (code.endsWith("B")) return "Bairro";
-        if (ZONE_ROUTE_BASES.Madrugada.has(codeBase)) return "Madrugada";
-        for (const [zone, routes] of Object.entries(ZONE_ROUTE_BASES)) {
-          if (routes.has(code) || routes.has(codeBase)) return zone;
-        }
-        return null;
+        return CARRIS_HELPERS?.definirZona(routeIdOrName) || null;
       }
 
       function getZoneColor(zoneName) {
-        return ZONE_COLOR_BY_NAME[zoneName] || null;
+        return CARRIS_HELPERS?.getZoneColor(zoneName) || null;
       }
 
       function resolveRouteZone(label) {
