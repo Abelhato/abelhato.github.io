@@ -1961,16 +1961,8 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js" crossorigin=""></script>
-  <script src="config-loader.js"></script>
   <script>
     (function () {
-      const APP_CONFIG = window.MOVER_CONFIG || {};
-      const buildConfigRouteBaseSets = typeof window.buildMoverRouteBaseSets === "function"
-        ? window.buildMoverRouteBaseSets
-        : (() => ({}));
-      const CARRIS_HELPERS = window.MOVER_CARRIS || (typeof window.buildMoverCarrisHelpers === "function"
-        ? window.buildMoverCarrisHelpers(APP_CONFIG)
-        : null);
       function extractHashQuery(rawHash) {
         const raw = String(rawHash || "").replace(/^#/, "").replace(/^\?/, "").trim();
         if (!raw) return "";
@@ -2018,7 +2010,6 @@
       const kpiFloatingChip = document.getElementById("kpi-floating-chip");
       const kpiFloatingText = document.getElementById("kpi-floating-text");
       const kpiFloatingClear = document.getElementById("kpi-floating-clear");
-
       const floatingSearch = document.getElementById("floating-search");
       const floatingRouteInput = document.getElementById("floating-route-input");
       const floatingRoutePreview = document.getElementById("floating-route-preview");
@@ -2062,8 +2053,9 @@
       let sidebarInfoBackdrop = null;
       const mql = window.matchMedia("(max-width: 900px)");
 
-      const KNOWN_BACKEND_PORTS = Array.isArray(APP_CONFIG.knownBackendPorts) ? APP_CONFIG.knownBackendPorts : [8002, 2026];
-      const GITHUB_DEFAULT_BACKEND = APP_CONFIG.githubDefaultBackend || "https://api.moverlisboa.com";
+      const ROUTES_DATA_URL = new URL("gtfs/routes.txt", location.href).href;
+      const KNOWN_BACKEND_PORTS = [8002, 2026];
+      const GITHUB_DEFAULT_BACKEND = "https://4belhato.trade";
       function normalizeBackendUrl(raw) {
         if (!raw) return null;
         const value = raw.trim();
@@ -2110,9 +2102,51 @@
       const allRoutes = [];
       const routeById = new Map();
       const selectedRouteSet = new Set();
-      const STANDARD_ROUTE_CATEGORIES = Array.isArray(APP_CONFIG.standardRouteCategories) ? [...APP_CONFIG.standardRouteCategories] : [];
-      const ZONE_COLOR_BY_NAME = Object.freeze({ ...(APP_CONFIG.zoneColorByName || {}) });
-      const ZONE_ROUTE_BASES = buildConfigRouteBaseSets(APP_CONFIG.zoneRouteBases);
+      const STANDARD_ROUTE_CATEGORIES = [
+        "Autocarros Diurnos",
+        "Carreiras de Bairro",
+        "Elétricos",
+        "Rede Madrugada"
+      ];
+      const ZONE_COLOR_BY_NAME = {
+        Bairro: "#FFE113",
+        Centro: "#FF7F00",
+        Ocidental: "#FF0078",
+        Madrugada: "#0060A9",
+        Transversal: "#808080",
+        Oriental: "#F70002",
+        Noroeste: "#00A0EF",
+        Norte: "#39BA2E"
+      };
+      const ZONE_ROUTE_BASES = {
+        Centro: new Set([
+          "12E", "24E", "25E", "28E", "51E", "52E", "53E", "54E", "55E",
+          "702", "706", "709", "712", "713", "730", "734", "737", "740",
+          "773", "774", "790", "797"
+        ]),
+        Ocidental: new Set([
+          "15E", "18E", "714", "723", "732", "748", "751", "760", "776",
+          "784", "786"
+        ]),
+        Madrugada: new Set([
+          "201", "202", "203", "204", "205", "206", "207", "208", "209", "210"
+        ]),
+        Transversal: new Set([
+          "701", "703", "720", "727", "728", "728F", "738", "742", "750", "752",
+          "753", "756", "767"
+        ]),
+        Oriental: new Set([
+          "16E", "705", "708", "718", "722", "725", "731", "744", "745", "749",
+          "755", "759", "779", "781", "782", "783", "793", "794"
+        ]),
+        Noroeste: new Set([
+          "711", "716", "724", "726", "729", "746", "754", "758", "763", "764",
+          "765", "768", "770", "771", "780", "799"
+        ]),
+        Norte: new Set([
+          "717", "735", "736", "747", "757", "777", "778", "796", "798"
+        ])
+      };
       const observedCategories = new Set(STANDARD_ROUTE_CATEGORIES);
       let selectedCategory = "";
       let autoApplyReady = false;
@@ -2794,6 +2828,26 @@
       syncHourSliderLabel();
       if (hourFilterSelect && hourFilterSelect.value === "") hourFilterSelect.value = "0";
 
+      function parseCsvLine(line) {
+        const out = [];
+        let cur = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              cur += '"';
+              i += 1;
+            } else inQuotes = !inQuotes;
+          } else if (ch === "," && !inQuotes) {
+            out.push(cur);
+            cur = "";
+          } else cur += ch;
+        }
+        out.push(cur);
+        return out;
+      }
+
       function escapeHtml(value = "") {
         return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       }
@@ -2841,7 +2895,15 @@
       }
 
       function defineRouteZone(label) {
-        return CARRIS_HELPERS?.definirZona(label) || null;
+        const { code, rest } = parseRouteCodeParts(label);
+        const upper = String(code || "").toUpperCase();
+        const numeric = upper.match(/\d{1,3}/)?.[0] || upper;
+        if (upper.endsWith("B")) return "Bairro";
+        if (ZONE_ROUTE_BASES.Madrugada.has(numeric)) return "Madrugada";
+        for (const [zone, routes] of Object.entries(ZONE_ROUTE_BASES)) {
+          if (routes.has(upper) || routes.has(numeric)) return zone;
+        }
+        return null;
       }
 
       function pillStyleForRoute(label) {
@@ -2862,27 +2924,20 @@
       }
 
       async function loadRoutes() {
-        let payload = null;
-        let lastError = null;
-        for (const base of API_BASES) {
-          try {
-            const resp = await fetch(`${base}/api/carris/bootstrap`, { cache: "force-cache" });
-            if (!resp.ok) {
-              lastError = new Error(`Falha ao carregar rotas (${resp.status})`);
-              continue;
-            }
-            payload = await resp.json();
-            break;
-          } catch (err) {
-            lastError = err;
-          }
-        }
-        if (!payload) throw lastError || new Error("Falha ao carregar rotas.");
-        const rows = Array.isArray(payload?.routes) ? payload.routes : [];
+        const resp = await fetch(ROUTES_DATA_URL, { cache: "force-cache" });
+        if (!resp.ok) throw new Error(`Falha ao carregar rotas (${resp.status})`);
+        const text = await resp.text();
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        const headers = parseCsvLine(lines[0] || "");
+        const ridIdx = headers.indexOf("route_id");
+        const shortIdx = headers.indexOf("route_short_name");
+        const longIdx = headers.indexOf("route_long_name");
+        if (ridIdx < 0) return [];
 
         const byBase = new Map();
-        for (const row of rows) {
-          const routeId = String(row?.route_id || row?.id || "").trim();
+        for (let i = 1; i < lines.length; i += 1) {
+          const cols = parseCsvLine(lines[i]);
+          const routeId = String(cols[ridIdx] || "").trim();
           if (!routeId) continue;
           const routeIdParts = routeId.split("_");
           const base = routeIdParts[0];
@@ -2890,8 +2945,8 @@
           const variantRaw = routeIdParts.length > 1 ? routeIdParts[routeIdParts.length - 1] : "";
           const variant = Number.parseInt(variantRaw, 10);
           const variantRank = Number.isFinite(variant) ? (variant === 0 ? 0 : 1) : 2;
-          const shortName = String(row?.route_short_name || row?.short_name || base).trim() || base;
-          const longName = String(row?.route_long_name || row?.long_name || "").trim();
+          const shortName = String(cols[shortIdx] || base).trim() || base;
+          const longName = String(cols[longIdx] || "").trim();
           const label = longName ? `${shortName} ${longName}` : shortName;
           const existing = byBase.get(base);
           if (!existing || variantRank < existing.variantRank) {

@@ -2481,16 +2481,8 @@
   </div>
   <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Mostrar filtros">☰</button>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="config-loader.js"></script>
   <script>
     (function () {
-      const APP_CONFIG = window.MOVER_CONFIG || {};
-      const buildConfigRouteBaseSets = typeof window.buildMoverRouteBaseSets === "function"
-        ? window.buildMoverRouteBaseSets
-        : (() => ({}));
-      const CARRIS_HELPERS = window.MOVER_CARRIS || (typeof window.buildMoverCarrisHelpers === "function"
-        ? window.buildMoverCarrisHelpers(APP_CONFIG)
-        : null);
       const body = document.body;
       const sidebarToggle = document.getElementById('sidebar-toggle');
       const sidebarClose = document.getElementById('sidebar-close');
@@ -2634,10 +2626,11 @@
       const FLEET_VEHICLES_PATH = "/api/carris/frota/resumo-diario/veiculos";
       const FLEET_HISTORY_VEHICLES_PATH = "/api/carris/frota/vehicles";
       const HISTORY_DAILY_MODEL_ACTIVITY_PATH = "/api/carris/historico/daily/model-activity";
-      const KNOWN_BACKEND_PORTS = Array.isArray(APP_CONFIG.knownBackendPorts) ? APP_CONFIG.knownBackendPorts : [8002, 2026];
-      const DEFAULT_REMOTE_BACKENDS = Array.isArray(APP_CONFIG.defaultRemoteBackends)
-        ? [...APP_CONFIG.defaultRemoteBackends]
-        : [APP_CONFIG.githubDefaultBackend || "https://api.moverlisboa.com"];
+      const KNOWN_BACKEND_PORTS = [8002, 2026];
+      const DEFAULT_REMOTE_BACKENDS = [
+        "https://4belhato.trade",
+        "https://4belhato.trade"
+      ];
       const FLEET_MODEL_CSV_URL = new URL("frota.csv", location.href);
       function extractHashQuery(rawHash) {
         const raw = String(rawHash || "").replace(/^#/, "").replace(/^\?/, "").trim();
@@ -2895,9 +2888,46 @@
       let routesCatalogLoaded = false;
       const STORAGE_PREFIX = "fleet-overview:";
 
-      const ZONE_COLOR_BY_NAME = Object.freeze({ ...(APP_CONFIG.zoneColorByName || {}) });
+      const ZONE_COLOR_BY_NAME = {
+        Bairro: "#FFE113",
+        Centro: "#FF7F00",
+        Ocidental: "#FF0078",
+        Madrugada: "#0060A9",
+        Transversal: "#808080",
+        Oriental: "#F70002",
+        Noroeste: "#00A0EF",
+        Norte: "#39BA2E"
+      };
 
-      const ZONE_ROUTE_BASES = buildConfigRouteBaseSets(APP_CONFIG.zoneRouteBases);
+      const ZONE_ROUTE_BASES = {
+        Centro: new Set([
+          "12E", "24E", "25E", "28E", "51E", "52E", "53E", "54E", "55E",
+          "702", "706", "709", "712", "713", "730", "734", "737", "740",
+          "773", "774", "790", "797"
+        ]),
+        Ocidental: new Set([
+          "15E", "18E", "714", "723", "732", "748", "751", "760", "776",
+          "784", "786"
+        ]),
+        Madrugada: new Set([
+          "201", "202", "203", "204", "205", "206", "207", "208", "209", "210"
+        ]),
+        Transversal: new Set([
+          "701", "703", "720", "727", "728", "728F", "738", "742", "750", "752",
+          "753", "756", "767"
+        ]),
+        Oriental: new Set([
+          "16E", "705", "708", "718", "722", "725", "731", "744", "745", "749",
+          "755", "759", "779", "781", "782", "783", "793", "794"
+        ]),
+        Noroeste: new Set([
+          "711", "716", "724", "726", "729", "746", "754", "758", "763", "764",
+          "765", "768", "770", "771", "780", "799"
+        ]),
+        Norte: new Set([
+          "717", "735", "736", "747", "757", "777", "778", "796", "798"
+        ])
+      };
 
       function parseFleetModelCsv(text) {
         if (!text) return [];
@@ -3032,11 +3062,18 @@
       }
 
       function definirZona(routeIdOrName) {
-        return CARRIS_HELPERS?.definirZona(routeIdOrName) || "";
+        const { code, codeBase } = parseRouteCodeParts(routeIdOrName);
+        if (!code && !codeBase) return "";
+        if (code.endsWith("B")) return "Bairro";
+        if (ZONE_ROUTE_BASES.Madrugada.has(codeBase)) return "Madrugada";
+        for (const [zone, routes] of Object.entries(ZONE_ROUTE_BASES)) {
+          if (routes.has(code) || routes.has(codeBase)) return zone;
+        }
+        return "";
       }
 
       function getZoneColor(zoneName) {
-        return CARRIS_HELPERS?.getZoneColor(zoneName) || null;
+        return ZONE_COLOR_BY_NAME[zoneName] || null;
       }
 
       function pillStyleForRoute(label) {
