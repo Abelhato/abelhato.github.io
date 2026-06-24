@@ -4994,7 +4994,15 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       ]
     };
 
-    const DASHBOARD_STYLE_JSON_URL = new URL("assets/map/dashboard-style.json", location.href).href;
+    function getDashboardStyleJsonUrl() {
+      const originOk = typeof location !== "undefined" && location.origin && location.origin !== "null" && location.protocol !== "file:";
+      const hostname = originOk ? location.hostname : "";
+      const isGithubPages = /\.github\.io$/i.test(hostname) || /(^|\.)moverlisboa\.com$/i.test(hostname);
+      const styleBase = isGithubPages
+        ? (APP_CONFIG.githubDefaultBackend || "https://api.moverlisboa.com")
+        : location.href;
+      return new URL("assets/map/dashboard-style.json", styleBase).href;
+    }
 
     function cloneDashboardStyle(value) {
       return typeof structuredClone === "function"
@@ -5035,12 +5043,13 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
 
     async function loadDashboardMapStyle() {
       try {
-        const response = await fetch(DASHBOARD_STYLE_JSON_URL, { mode: "cors", cache: "no-store" });
+        const styleUrl = getDashboardStyleJsonUrl();
+        const response = await fetch(styleUrl, { mode: "cors", cache: "no-store" });
         if (!response.ok) {
           throw new Error(`Style request failed with HTTP ${response.status}`);
         }
         const style = await response.json();
-        return normalizeDashboardMapStyle(style, DASHBOARD_STYLE_JSON_URL);
+        return normalizeDashboardMapStyle(style, styleUrl);
       } catch (error) {
         console.warn("Dashboard custom style unavailable, using bundled fallback:", error);
         const source = window.MAPLIBRE_DASHBOARD_STYLE || window.MAPLIBRE_CARRIS_STYLE;

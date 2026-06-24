@@ -2006,7 +2006,15 @@
       const MAP_ZOOM = 13;
       const body = document.body;
       const LEAFLET_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-      const TRANSITO_STYLE_JSON_URL = new URL("assets/map/dashboard-style.json", location.href).href;
+      function getTransitStyleJsonUrl() {
+        const originOk = typeof location !== "undefined" && location.origin && location.origin !== "null" && location.protocol !== "file:";
+        const hostname = originOk ? location.hostname : "";
+        const isGithubPages = /\.github\.io$/i.test(hostname) || /(^|\.)moverlisboa\.com$/i.test(hostname);
+        const styleBase = isGithubPages
+          ? (APP_CONFIG.githubDefaultBackend || "https://api.moverlisboa.com")
+          : location.href;
+        return new URL("assets/map/dashboard-style.json", styleBase).href;
+      }
       const sidebarToggle = document.getElementById("sidebar-toggle");
       const sidebarClose = document.getElementById("sidebar-close");
       const modeButtons = Array.from(document.querySelectorAll(".mode-card[data-mode]"));
@@ -2341,11 +2349,12 @@
         }
 
         async init() {
-          const response = await fetch(TRANSITO_STYLE_JSON_URL, { mode: "cors", cache: "no-store" });
+          const styleUrl = getTransitStyleJsonUrl();
+          const response = await fetch(styleUrl, { mode: "cors", cache: "no-store" });
           if (!response.ok) {
             throw new Error(`Style request failed with HTTP ${response.status}`);
           }
-          const style = normalizeMapStyle(await response.json(), TRANSITO_STYLE_JSON_URL);
+          const style = normalizeMapStyle(await response.json(), styleUrl);
           this.map = new maplibregl.Map({
             container: "map",
             style,
