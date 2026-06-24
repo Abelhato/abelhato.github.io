@@ -2006,7 +2006,7 @@
       const MAP_ZOOM = 13;
       const body = document.body;
       const LEAFLET_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-      const MAPLIBRE_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+      const TRANSITO_STYLE_JSON_URL = new URL("assets/map/dashboard-style.json", location.href).href;
       const sidebarToggle = document.getElementById("sidebar-toggle");
       const sidebarClose = document.getElementById("sidebar-close");
       const modeButtons = Array.from(document.querySelectorAll(".mode-card[data-mode]"));
@@ -2295,6 +2295,37 @@
       }
 
       // --- MAPLIBRE ADAPTER (same architecture used in dashboard.html) ---
+      function cloneMapStyle(value) {
+        return typeof structuredClone === "function"
+          ? structuredClone(value)
+          : JSON.parse(JSON.stringify(value));
+      }
+
+      function resolveMapStyleUrl(value, baseUrl) {
+        if (!value) return value;
+        const text = String(value);
+        if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(text) || text.startsWith("//")) {
+          return text;
+        }
+        return new URL(text, baseUrl).href;
+      }
+
+      function normalizeMapStyle(style, baseUrl) {
+        const clone = cloneMapStyle(style);
+        if (clone.sprite) clone.sprite = resolveMapStyleUrl(clone.sprite, baseUrl);
+        if (clone.glyphs) clone.glyphs = resolveMapStyleUrl(clone.glyphs, baseUrl);
+        if (clone.sources && typeof clone.sources === "object") {
+          for (const source of Object.values(clone.sources)) {
+            if (!source || typeof source !== "object") continue;
+            if (typeof source.url === "string") source.url = resolveMapStyleUrl(source.url, baseUrl);
+            if (Array.isArray(source.tiles)) {
+              source.tiles = source.tiles.map((tile) => typeof tile === "string" ? resolveMapStyleUrl(tile, baseUrl) : tile);
+            }
+          }
+        }
+        return clone;
+      }
+
       class MapLibreAdapter {
         constructor() {
           this.map = null;
@@ -2310,9 +2341,14 @@
         }
 
         async init() {
+          const response = await fetch(TRANSITO_STYLE_JSON_URL, { mode: "cors", cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`Style request failed with HTTP ${response.status}`);
+          }
+          const style = normalizeMapStyle(await response.json(), TRANSITO_STYLE_JSON_URL);
           this.map = new maplibregl.Map({
             container: "map",
-            style: MAPLIBRE_STYLE_URL,
+            style,
             center: [MAP_CENTER[1], MAP_CENTER[0]],
             zoom: MAP_ZOOM,
             attributionControl: false

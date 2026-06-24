@@ -4880,7 +4880,7 @@
         </div>
       </div>
       <div class="map-credits" aria-label="Créditos do mapa">
-        <a href="https://openfreemap.org/" target="_blank">&copy; OpenFreeMap</a>
+        <a href="https://maps.carrismetropolitana.pt/data/openmaptiles.json" target="_blank">Carris Metropolitana</a>
         <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>
       </div>
     </div>
@@ -4893,6 +4893,7 @@
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="config-loader.js"></script>
+  <script src="assets/vendor/maplibre/dashboard-carris-style.js"></script>
   <script>
     const APP_CONFIG = window.MOVER_CONFIG || {};
     const CONFIG_STORAGE_KEYS = APP_CONFIG.storageKeys || {};
@@ -4901,6 +4902,9 @@
       : (() => ({}));
     const KNOWN_BACKEND_PORTS = Array.isArray(APP_CONFIG.knownBackendPorts) ? APP_CONFIG.knownBackendPorts : [8002, 2026];
     const GITHUB_DEFAULT_BACKEND = APP_CONFIG.githubDefaultBackend || "https://api.moverlisboa.com";
+    const DEFAULT_REMOTE_BACKENDS = Array.isArray(APP_CONFIG.defaultRemoteBackends) && APP_CONFIG.defaultRemoteBackends.length
+      ? APP_CONFIG.defaultRemoteBackends
+      : [GITHUB_DEFAULT_BACKEND];
     const MODE_REALTIME = "realtime";
     const HISTORY_PAGE_URL = (() => {
       if (location.protocol === "file:" || location.origin === "null") {
@@ -4961,7 +4965,6 @@
 
     const MAP_CENTER = [38.736946, -9.142685];
     const MAP_ZOOM = 13;
-    const MAPLIBRE_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
     const REFRESH_RATE_MS = 5000;
     const VEHICLE_STALE_FORCE_MS = 12_000; // Force a refresh if we haven't applied new vehicles within this window.
     const VEHICLE_MAX_STALE_MS = 15_000; // If newest ping is older than this, try the next endpoint.
@@ -4990,6 +4993,63 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         }
       ]
     };
+
+    const DASHBOARD_STYLE_JSON_URL = new URL("assets/map/dashboard-style.json", location.href).href;
+
+    function cloneDashboardStyle(value) {
+      return typeof structuredClone === "function"
+        ? structuredClone(value)
+        : JSON.parse(JSON.stringify(value));
+    }
+
+    function resolveStyleUrl(value, baseUrl) {
+      if (!value) return value;
+      const text = String(value);
+      if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(text) || text.startsWith("//")) {
+        return text;
+      }
+      return new URL(text, baseUrl).href;
+    }
+
+    function normalizeDashboardMapStyle(style, baseUrl) {
+      const clone = cloneDashboardStyle(style);
+      if (clone.sprite) {
+        clone.sprite = resolveStyleUrl(clone.sprite, baseUrl);
+      }
+      if (clone.glyphs) {
+        clone.glyphs = resolveStyleUrl(clone.glyphs, baseUrl);
+      }
+      if (clone.sources && typeof clone.sources === "object") {
+        for (const source of Object.values(clone.sources)) {
+          if (!source || typeof source !== "object") continue;
+          if (typeof source.url === "string") {
+            source.url = resolveStyleUrl(source.url, baseUrl);
+          }
+          if (Array.isArray(source.tiles)) {
+            source.tiles = source.tiles.map((tile) => typeof tile === "string" ? resolveStyleUrl(tile, baseUrl) : tile);
+          }
+        }
+      }
+      return clone;
+    }
+
+    async function loadDashboardMapStyle() {
+      try {
+        const response = await fetch(DASHBOARD_STYLE_JSON_URL, { mode: "cors", cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Style request failed with HTTP ${response.status}`);
+        }
+        const style = await response.json();
+        return normalizeDashboardMapStyle(style, DASHBOARD_STYLE_JSON_URL);
+      } catch (error) {
+        console.warn("Dashboard custom style unavailable, using bundled fallback:", error);
+        const source = window.MAPLIBRE_DASHBOARD_STYLE || window.MAPLIBRE_CARRIS_STYLE;
+        if (!source) {
+          throw error;
+        }
+        return normalizeDashboardMapStyle(source, location.href);
+      }
+    }
 
     const CARRIS_STOP_CATALOG_URL = new URL("api/carris/stops", location.href).href;
     const GTFS_STATIC_FEED_PATHS = Object.freeze({
@@ -5175,11 +5235,11 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
       const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
       const isMoverLisboaOrigin = isMoverLisboaDashboardOrigin(hostname);
-      const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
+      const remoteBases = DEFAULT_REMOTE_BACKENDS.map(normalizeBaseUrl).filter(Boolean);
 
-      // On GitHub Pages, prefer the dedicated FastAPI backend origin first.
-      if (isGithubPagesOrigin && normalizedFallback) {
-        bases.push(normalizedFallback);
+      // On hosted pages, prefer the dedicated FastAPI backend origin first.
+      if ((isGithubPagesOrigin || isMoverLisboaOrigin) && remoteBases.length) {
+        remoteBases.forEach(base => bases.push(base));
       }
 
       // Prefer same-origin first so that dashboards served by the API itself stay on the same port.
@@ -5187,19 +5247,16 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         bases.push(location.origin);
       }
 
+      // On loopback, keep the local backend ports but also fall back to the remote API.
       if (isLoopback) {
-        // Also try both loopback hostnames for the known ports when running locally.
+        remoteBases.forEach(base => bases.push(base));
         ["127.0.0.1", "localhost"].forEach(loopHost => {
           KNOWN_BACKEND_PORTS.forEach(port => {
             bases.push(`${proto}//${loopHost}:${port}`);
           });
         });
-      }
-      if (isMoverLisboaOrigin && normalizedFallback) {
-        bases.push(normalizedFallback);
-      }
-      if (isGithubPagesOrigin && normalizedFallback) {
-        bases.push(normalizedFallback);
+      } else if (remoteBases.length) {
+        remoteBases.forEach(base => bases.push(base));
       }
       return dedupeList(bases);
     }
@@ -5236,25 +5293,22 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
       const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
       const isGithubPagesOrigin = isGithubPagesDashboardOrigin(hostname);
       const isMoverLisboaOrigin = isMoverLisboaDashboardOrigin(hostname);
-      const normalizedFallback = normalizeBaseUrl(GITHUB_DEFAULT_BACKEND);
-      if (isGithubPagesOrigin && normalizedFallback) {
-        bases.push(normalizedFallback);
+      const remoteBases = DEFAULT_REMOTE_BACKENDS.map(normalizeBaseUrl).filter(Boolean);
+      if ((isGithubPagesOrigin || isMoverLisboaOrigin) && remoteBases.length) {
+        remoteBases.forEach(base => bases.push(base));
       }
       if (originOk && hostname) {
         bases.push(location.origin);
       }
       if (isLoopback) {
+        remoteBases.forEach(base => bases.push(base));
         ["127.0.0.1", "localhost"].forEach(loopHost => {
           KNOWN_BACKEND_PORTS.forEach(port => {
             bases.push(`${proto}//${loopHost}:${port}`);
           });
         });
-      }
-      if (isMoverLisboaOrigin && normalizedFallback) {
-        bases.push(normalizedFallback);
-      }
-      if (isGithubPagesOrigin && normalizedFallback) {
-        bases.push(normalizedFallback);
+      } else if (remoteBases.length) {
+        remoteBases.forEach(base => bases.push(base));
       }
       return dedupeList(bases);
     })();
@@ -13838,9 +13892,10 @@ const FLOATING_SEARCH_MULTILINE_THRESHOLD = 56;
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
           try {
+            const style = await loadDashboardMapStyle();
             this.map = new maplibregl.Map({
               container: "map",
-              style: MAPLIBRE_STYLE_URL,
+              style,
               center: [BOOTSTRAP_MAP_VIEW.lon, BOOTSTRAP_MAP_VIEW.lat],
               zoom: BOOTSTRAP_MAP_VIEW.zoom,
               attributionControl: false
