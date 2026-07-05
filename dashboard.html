@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fim da Carreira!</title>
+    <title>Fim de Carreira!</title>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
       :root {
         color-scheme: light;
-        --bg: #f6f8fb;
-        --panel: rgba(255, 255, 255, 0.95);
-        --text: #0f172a;
-        --muted: rgba(15, 23, 42, 0.68);
+        --bg: #f4f6f8;
+        --panel: #ffffff;
+        --text: #111827;
+        --muted: #4b5563;
         --accent: #f59f00;
-        --border: rgba(15, 23, 42, 0.1);
-        --shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+        --border: #e5e7eb;
+        --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
       }
 
       * { box-sizing: border-box; }
@@ -24,27 +24,26 @@
         margin: 0;
         min-height: 100vh;
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: radial-gradient(circle at top, #ffffff 0%, var(--bg) 55%, #eef2f7 100%);
+        background: var(--bg);
         color: var(--text);
         display: grid;
         place-items: center;
-        padding: 24px;
+        padding: 16px;
       }
 
       .card {
-        width: min(1100px, 100%);
+        width: min(980px, 100%);
         display: grid;
-        grid-template-columns: 1.15fr 0.85fr;
+        grid-template-columns: 1.1fr 0.9fr;
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 28px;
+        border-radius: 18px;
         box-shadow: var(--shadow);
         overflow: hidden;
-        backdrop-filter: blur(16px);
       }
 
       .content {
-        padding: clamp(24px, 4vw, 42px);
+        padding: 24px 24px 20px;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -53,32 +52,32 @@
       .eyebrow {
         display: inline-flex;
         width: fit-content;
-        padding: 8px 12px;
+        padding: 6px 10px;
         border-radius: 999px;
-        background: rgba(245, 159, 0, 0.12);
-        color: var(--accent);
-        font-size: 0.9rem;
+        background: #fef3c7;
+        color: #92400e;
+        font-size: 0.8rem;
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
       }
 
       h1 {
-        margin: 0 0 14px;
-        font-size: clamp(2rem, 3.4vw, 2.8rem);
-        line-height: 1.1;
+        margin: 0 0 10px;
+        font-size: clamp(1.7rem, 2.8vw, 2.2rem);
+        line-height: 1.15;
       }
 
       p {
-        margin: 0 0 14px;
-        font-size: 1rem;
-        line-height: 1.75;
+        margin: 0 0 12px;
+        font-size: 0.97rem;
+        line-height: 1.65;
         color: var(--muted);
       }
 
       .links {
-        margin: 10px 0 18px;
+        margin: 8px 0 14px;
         padding-left: 18px;
         color: var(--muted);
       }
@@ -98,23 +97,23 @@
       }
 
       .image-panel {
-        background: linear-gradient(135deg, rgba(245, 159, 0, 0.16), rgba(15, 23, 42, 0.06));
+        background: #f8fafc;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 24px;
+        padding: 18px;
       }
 
       .image-panel img {
-        width: min(100%, 320px);
-        max-width: 320px;
-        border-radius: 24px;
-        box-shadow: 0 24px 45px rgba(15, 23, 42, 0.16);
+        width: min(100%, 240px);
+        max-width: 240px;
+        border-radius: 14px;
+        box-shadow: none;
       }
 
       .footer {
-        margin-top: 8px;
-        font-size: 0.95rem;
+        margin-top: 6px;
+        font-size: 0.94rem;
         color: var(--muted);
       }
 
@@ -130,11 +129,11 @@
 
         .image-panel {
           order: -1;
-          padding-bottom: 8px;
+          padding-bottom: 4px;
         }
 
         .image-panel img {
-          max-width: 220px;
+          max-width: 180px;
         }
       }
     </style>
@@ -143,7 +142,7 @@
     <main class="card">
       <section class="content">
         <div class="eyebrow">Encerramento</div>
-        <h1>Fim da Carreira!</h1>
+        <h1>Fim de Carreira!</h1>
         <p>
           Decidi interromper este projeto pessoal. Agradeço a todos os mais de 15 mil utilizadores únicos que o acompanharam ao longo do tempo.
         </p>
@@ -162,7 +161,7 @@
         <p class="footer"><span class="heart">❤️</span>Obrigado por tudo.</p>
       </section>
       <aside class="image-panel" aria-label="Ícone do projeto">
-        <img src="./assets/icons/app/favicon.png" alt="Ícone do Mover Lisboa" />
+        <img src="./favicon.png" alt="Ícone do Mover Lisboa" />
       </aside>
     </main>
   </body>
