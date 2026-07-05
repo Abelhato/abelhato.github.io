@@ -1,29 +1,169 @@
 <!DOCTYPE html>
 <html lang="pt-PT">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mover Lisboa</title>
-  <meta name="description" content="Transportes de Lisboa em tempo real">
-  <meta name="application-name" content="Mover Lisboa">
-  <meta name="apple-mobile-web-app-title" content="Mover Lisboa">
-  <meta property="og:site_name" content="Mover Lisboa">
-  <meta property="og:title" content="Mover Lisboa">
-  <meta property="og:description" content="Transportes de Lisboa em tempo real">
-  <meta name="twitter:title" content="Mover Lisboa">
-  <meta name="twitter:description" content="Transportes de Lisboa em tempo real">
-  <link rel="icon" type="image/svg+xml" href="/assets/icons/app/favicon.svg">
-  <link rel="shortcut icon" href="/assets/icons/app/favicon.ico">
-  <link rel="alternate icon" href="/assets/icons/app/favicon.ico">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/app/apple-touch-icon.png">
-  <link rel="manifest" href="/assets/site.webmanifest">
-  <link rel="canonical" href="/dashboard.html">
-  <meta http-equiv="refresh" content="0; url=/dashboard.html">
-  <script>
-    window.location.replace("/dashboard.html");
-  </script>
-</head>
-<body>
-  <p>Redirecionando para <a href="/dashboard.html">dashboard.html</a>…</p>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fim da Carreira!</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --panel: rgba(255, 255, 255, 0.95);
+        --text: #0f172a;
+        --muted: rgba(15, 23, 42, 0.68);
+        --accent: #f59f00;
+        --border: rgba(15, 23, 42, 0.1);
+        --shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: radial-gradient(circle at top, #ffffff 0%, var(--bg) 55%, #eef2f7 100%);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .card {
+        width: min(1100px, 100%);
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        backdrop-filter: blur(16px);
+      }
+
+      .content {
+        padding: clamp(24px, 4vw, 42px);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        width: fit-content;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(245, 159, 0, 0.12);
+        color: var(--accent);
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: clamp(2rem, 3.4vw, 2.8rem);
+        line-height: 1.1;
+      }
+
+      p {
+        margin: 0 0 14px;
+        font-size: 1rem;
+        line-height: 1.75;
+        color: var(--muted);
+      }
+
+      .links {
+        margin: 10px 0 18px;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      .links li {
+        margin: 8px 0;
+      }
+
+      a {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .image-panel {
+        background: linear-gradient(135deg, rgba(245, 159, 0, 0.16), rgba(15, 23, 42, 0.06));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .image-panel img {
+        width: min(100%, 320px);
+        max-width: 320px;
+        border-radius: 24px;
+        box-shadow: 0 24px 45px rgba(15, 23, 42, 0.16);
+      }
+
+      .footer {
+        margin-top: 8px;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+
+      .heart {
+        color: #ef4444;
+        margin-right: 4px;
+      }
+
+      @media (max-width: 800px) {
+        .card {
+          grid-template-columns: 1fr;
+        }
+
+        .image-panel {
+          order: -1;
+          padding-bottom: 8px;
+        }
+
+        .image-panel img {
+          max-width: 220px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <section class="content">
+        <div class="eyebrow">Encerramento</div>
+        <h1>Fim da Carreira!</h1>
+        <p>
+          Decidi interromper este projeto pessoal. Agradeço a todos os mais de 15 mil utilizadores únicos que o acompanharam ao longo do tempo.
+        </p>
+        <p>
+          Se estiveres à procura de alternativas, sugiro estas opções:
+        </p>
+        <ul class="links">
+          <li><a href="https://ride.carris-prod.realcity.io" target="_blank" rel="noopener noreferrer">Carris</a></li>
+          <li><a href="https://go.tmlmobilidade.pt/hub/navegante-app" target="_blank" rel="noopener noreferrer">AML</a></li>
+        </ul>
+        <p>
+          Continuo a recolher dados e estou 100% disponível para os fornecer e falar por e-mail
+          <a href="mailto:moverlisboa@icloud.com">moverlisboa@icloud.com</a>
+          ou no Discord <a href="https://discord.com" target="_blank" rel="noopener noreferrer">@Abelhato</a>.
+        </p>
+        <p class="footer"><span class="heart">❤️</span>Obrigado por tudo.</p>
+      </section>
+      <aside class="image-panel" aria-label="Ícone do projeto">
+        <img src="./assets/icons/app/favicon.png" alt="Ícone do Mover Lisboa" />
+      </aside>
+    </main>
+  </body>
 </html>
